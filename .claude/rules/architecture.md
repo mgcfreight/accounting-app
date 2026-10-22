@@ -15,24 +15,27 @@ Mandatory.
 
 Last reviewed: 2026-10-20
 
-## Current state: screens on mock data
+## Current state: sign-in and users on the API, the rest on mock data
 
-The screens are built, but nothing talks to an API yet. Every page reads from
-`src/lib/mock/`, and actions (issue, record payment, save settings, export)
-show a "demo only" toast. There is no session check.
+Sign-in (with 2FA), sign-out, forgot/reset password and Settings → Users &
+Roles call the Accounts API. Every other page still reads from
+`src/lib/mock/`, and its actions (issue, record payment, save settings,
+export) show a "demo only" toast.
 
-`services/` is in place with no endpoints wired yet: `apiClient` (the one
-axios instance — base URL and timeout from `VITE_API_URL` /
-`VITE_API_TIMEOUT_MS`, cookie session via `withCredentials`, an interceptor
-that turns every failure into `ApiError`), the TanStack Query `queryClient`
-provided in `app/providers.tsx`, and the not-yet-called auth endpoints in
-`services/auth.ts`. It is the only path to the API: never create another
-axios instance or call `fetch`. When an endpoint arrives, add one typed
-function for it in `services/` on `apiClient` (query values in `params`,
-never spliced into the URL) that validates the response and throws on
-failure — never returns `undefined` to mean "it failed" — call it from the
-container through `useQuery` / `useMutation` in place of the mock import,
-and move sorting/paging from `useClientTable` to the request.
+`services/` is the only path to the API: `apiClient` (the one axios
+instance — base URL and timeout from `VITE_API_URL` / `VITE_API_TIMEOUT_MS`,
+the Bearer token from `services/session.ts`, one refresh-and-retry on a 401,
+an interceptor that turns every failure into `ApiError`), the TanStack Query
+`queryClient` provided in `app/providers.tsx`, and the endpoints in
+`services/auth.ts` and `services/users.ts`. Never create another axios
+instance or call `fetch`. When an endpoint arrives, add one typed function
+for it in `services/` on `apiClient` (query values in `params`, never
+spliced into the URL) that checks the response with the parsers in
+`services/parse.ts` (every body is `{ message, data }`; `unwrap` returns
+`data`) and throws on failure — never returns `undefined` to mean "it
+failed" — call it from the container through `useQuery` / `useMutation` in
+place of the mock import, and move sorting/paging from `useClientTable` to
+the request.
 
 ## This app is static files
 
@@ -108,16 +111,25 @@ need each other, the shared part belongs in `lib/`.
 
 ## Auth
 
-Not wired to the API yet. `UserProvider` (`components/providers/
-user-provider.tsx`, mounted in `app/providers.tsx`) holds the signed-in user
-in memory: it starts as the mock user, the login form sets it, Sign Out
-clears it, and `AppLayout` sends a signed-out visitor to `/login/`. Read it
-with `useUser()`, or `useCurrentUser()` on pages behind `AppLayout`. When
-sign-in is wired, the API owns the session as an httpOnly cookie; the login
-form calls `signIn()` and `AppLayout` loads `getMe()`, redirecting on a 401. That check decides
-only what renders — the API enforces session and role on every endpoint.
-Hiding a menu item or a Settings form by role is presentation, not access
-control.
+The API's session is a Bearer token pair held in memory by
+`services/session.ts` (security.md). `UserProvider` (`components/providers/
+user-provider.tsx`, mounted in `app/providers.tsx`) holds the signed-in user,
+also in memory: it starts empty, the login form sets it once sign-in
+completes, Sign Out clears it (and calls `signOut()` through the
+`endSession` prop, since components/ can't import services/), and so does
+`apiClient` when the API refuses a refresh. `AppLayout` sends a signed-out
+visitor to `/login/` — including after a page reload. Read the user with
+`useUser()`, or `useCurrentUser()` on pages behind `AppLayout`.
+
+Sign-in (`containers/login/`) is one or two steps: `signIn()` either signs
+in or returns a challenge — `TWO_FACTOR` (app, recovery or email code) or
+`TWO_FACTOR_SETUP` (an Admin without 2FA sets it up first; setting up an app
+ends on the one-time recovery codes). The user's role is the API's `Role`
+(`Admin`, `Accountant`, `Viewer`).
+
+The session check decides only what renders — the API enforces session and
+role on every endpoint. Hiding a menu item or a Settings form by role is
+presentation, not access control.
 
 ## Money
 

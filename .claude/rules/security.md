@@ -51,10 +51,22 @@ deliveries.
 
 ## Sessions and tokens
 
-The session is an httpOnly cookie set by the Accounts API. Never read, store,
-or attach a token in JavaScript, and never put one in `localStorage`,
-`sessionStorage`, or a non-httpOnly cookie. The session check in
-`AppLayout` decides only what to render; the API is the authority.
+The Accounts API's session is a Bearer token pair — an access token and a
+single-use refresh token — returned in the sign-in response body. (The
+team chose this over httpOnly cookies on 2026-10-22, to match the API as
+built. The cost: any XSS can read a live token, so the output rules above
+matter even more.)
+
+- The tokens live only in memory, in `services/session.ts`. Never put one in
+  `localStorage`, `sessionStorage`, a cookie, a URL, a log, or a toast. A
+  page reload signs the user out; that is the price of not persisting them.
+- Only `services/` touches a token: sign-in stores the pair, `apiClient`
+  attaches the access token and rotates the pair, sign-out clears it.
+  Containers and components get the user, never a token.
+- Refresh through `apiClient` only. It serialises refreshes, because the API
+  treats a reused refresh token as theft and signs the user out everywhere.
+- The session check in `AppLayout` decides only what to render; the API is
+  the authority.
 
 ## Run the OWASP checklist before finishing
 
