@@ -7,6 +7,9 @@ export const createInitials = (name: string) =>
     .map((word) => word[0]?.toUpperCase())
     .join("");
 
+export const fullName = (person: { firstName: string; lastName: string }) =>
+  `${person.firstName} ${person.lastName}`;
+
 // Timestamps are stored in UTC and shown in Toronto time (design §11).
 const TIME_ZONE = "America/Toronto";
 

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { LOGIN_PATH } from "@/lib/constants";
 import { User } from "@/lib/interfaces";
 import { canAccessRoute } from "@/lib/routes.config";
-import { createInitials, humanize } from "@/lib/utils";
+import { createInitials, fullName, humanize } from "@/lib/utils";
 import { DownArrowSm, Logout, Setting2 } from "../icons";
 import { useUser } from "../providers/user-provider";
 
@@ -18,6 +18,7 @@ import { useUser } from "../providers/user-provider";
 export default function DropdownProfile({ user }: { user: User }) {
   const navigate = useNavigate();
   const { signOut } = useUser();
+  const name = fullName(user);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHoveringTrigger = useRef(false);
@@ -64,12 +65,10 @@ export default function DropdownProfile({ user }: { user: User }) {
           }}
         >
           <div className="ml-6 lg:ml-10 mr-2 w-8 h-8 rounded-full bg-[#71717a] flex items-center justify-center">
-            <span className="text-white text-xs">
-              {createInitials(user.name)}
-            </span>
+            <span className="text-white text-xs">{createInitials(name)}</span>
           </div>
           <div className="hidden sm:block mx-4">
-            <h2 className="text-sm font-bold text-base-primary">{user.name}</h2>
+            <h2 className="text-sm font-bold text-base-primary">{name}</h2>
             <p className="text-xs font-semibold">{humanize(user.role)}</p>
           </div>
           <div className="hidden sm:block">
@@ -86,11 +85,11 @@ export default function DropdownProfile({ user }: { user: User }) {
           <div className="flex justify-center items-center gap-3">
             <div className="w-20 h-20 rounded-full bg-[#71717a] flex items-center justify-center">
               <span className="text-white text-2xl">
-                {createInitials(user.name)}
+                {createInitials(name)}
               </span>
             </div>
             <div>
-              <p className="text-xl">{user.name}</p>
+              <p className="text-xl">{name}</p>
               <p className="text-sm opacity-70">{user.email}</p>
             </div>
           </div>

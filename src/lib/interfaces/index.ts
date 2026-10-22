@@ -11,18 +11,22 @@ import {
   UserRole,
 } from "../enums";
 
-// Shapes of the data the screens show. They are provisional — the Accounts API
-// does not exist yet — and today they are filled from lib/mock. Money is always
-// a 2-decimal string beside its currency, never a number; see lib/money.ts.
+// Shapes of the data the screens show. Most are provisional and filled from
+// lib/mock; User is the API's UserView. Money is always a 2-decimal string
+// beside its currency, never a number; see lib/money.ts.
 
+// The API's UserView (GET /auth/me, /user/all). Timestamps are ISO strings.
 export interface User {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   role: UserRole;
-  lastLoginAt?: string;
-  twoFactor: boolean;
-  active: boolean;
+  isEnabled: boolean;
+  twoFactorEnabled: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Address {

@@ -1,14 +1,20 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { User } from "@/lib/interfaces";
-import { mockCurrentUser } from "@/lib/mock";
 
 // The signed-in user, for the whole app (app/providers.tsx). Kept in memory
-// only — never in localStorage or a readable cookie (security.md); the API's
-// httpOnly session cookie is what keeps someone signed in.
+// only — never in localStorage or a cookie (security.md) — so it starts
+// empty: the login form sets it after signIn(), and Sign Out clears it.
 //
-// Today it starts as the mock user, the sign-in form sets it and Sign Out
-// clears it. When the API is ready, start it empty, set it from signIn() on
-// the login form and from getMe() in AppLayout (services/auth.ts).
+// The session itself (the API's tokens) lives in services/; app/providers.tsx
+// passes in how to end it and how to hear that the API ended it.
 //
 // Role checks made with this are presentation only; the API enforces access.
 type UserContextValue = {
@@ -19,11 +25,30 @@ type UserContextValue = {
 
 const UserContext = createContext<UserContextValue | null>(null);
 
-export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(mockCurrentUser);
+export function UserProvider({
+  children,
+  endSession,
+  onSessionExpired,
+}: {
+  children: ReactNode;
+  // Signs out on the API. The user is cleared at once, whether or not it
+  // succeeds.
+  endSession: () => Promise<void>;
+  // Subscribes to the API refusing the session; returns the unsubscribe.
+  onSessionExpired: (listener: () => void) => () => void;
+}) {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => onSessionExpired(() => setUser(null)), [onSessionExpired]);
+
+  const signOut = useCallback(() => {
+    setUser(null);
+    void endSession().catch(() => undefined);
+  }, [endSession]);
+
   const value = useMemo(
-    () => ({ user, setUser, signOut: () => setUser(null) }),
-    [user]
+    () => ({ user, setUser, signOut }),
+    [user, signOut]
   );
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }

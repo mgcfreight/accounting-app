@@ -9,6 +9,8 @@ import LoginForm from "@/containers/login/login-form";
 import NeedsReview from "@/containers/needs-review/needs-review";
 import PartyDetail from "@/containers/parties/party-detail";
 import PartyList from "@/containers/parties/party-list";
+import ForgotPasswordForm from "@/containers/password/forgot-password-form";
+import ResetPasswordForm from "@/containers/password/reset-password-form";
 import Payments from "@/containers/payments/payments";
 import Reports from "@/containers/reports/reports";
 import Settings from "@/containers/settings/settings";
@@ -54,6 +56,22 @@ export default function App() {
                 element={
                   <CarouselLayout>
                     <LoginForm />
+                  </CarouselLayout>
+                }
+              />
+              <Route
+                path="forgot-password"
+                element={
+                  <CarouselLayout>
+                    <ForgotPasswordForm />
+                  </CarouselLayout>
+                }
+              />
+              <Route
+                path="reset-password"
+                element={
+                  <CarouselLayout>
+                    <ResetPasswordForm />
                   </CarouselLayout>
                 }
               />

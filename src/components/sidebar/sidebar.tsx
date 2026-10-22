@@ -132,7 +132,7 @@ export default function Sidebar({
             <button
               type="button"
               className="rounded-2xl group relative h-14 flex items-center gap-2 px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] w-40 whitespace-nowrap"
-              // Clears the user; with the API this will also call signOut().
+              // Clears the user and ends the session on the API.
               onClick={() => {
                 signOut();
                 navigate(LOGIN_PATH);

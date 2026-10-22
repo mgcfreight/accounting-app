@@ -6,9 +6,10 @@ import { LOGIN_PATH } from "@/lib/constants";
 import RouteGuard from "./route-guard";
 
 // Signed-in pages render only with a user in UserProvider; signed out, they
-// go to /login/. Today the user is the mock user; when sign-in is wired to
-// the Accounts API, load it here with getMe() (services/auth.ts) and redirect
-// on a 401. This decides only what renders; the API checks the session.
+// go to /login/. The login form sets the user; Sign Out, or the API refusing
+// the session (services/api-client.ts), clears it. The session is in memory,
+// so a page reload also lands here. This decides only what renders; the API
+// checks the token on every request.
 //
 // The error boundary sits inside the layout, so a page that throws keeps the
 // sidebar and header usable, and clears when another page is opened.

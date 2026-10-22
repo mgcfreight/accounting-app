@@ -14,10 +14,12 @@ const root = fileURLToPath(new URL(".", import.meta.url));
 const outDir = resolve(root, "out");
 
 // Every path the router serves (src/app/app.tsx). routes.config.ts already
-// lists each screen for the header, so it is the source; /login/ is the only
-// screen without a header.
+// lists each screen for the header, so it is the source; the signed-out
+// screens have no header and are listed here.
 const routePaths = () => [
   "login",
+  "forgot-password",
+  "reset-password",
   ...Object.entries(routeConfig).flatMap(([path, config]) => [
     path,
     ...Object.keys(config.childRoutes ?? {}).map((child) => `${path}/${child}`),
