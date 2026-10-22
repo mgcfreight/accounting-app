@@ -1,0 +1,4 @@
+# Ignore specific files
+CLAUDE.md
+.claude/
+out/

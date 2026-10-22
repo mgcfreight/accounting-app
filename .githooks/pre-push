@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Project-wide type check, same gate as the pipeline. Runs on push rather than
+# commit because it covers the whole project and takes a while.
+set -e
+
+if [ ! -x node_modules/.bin/tsc ]; then
+  echo "pre-push: node_modules missing — run 'npm ci' first."
+  exit 1
+fi
+
+node_modules/.bin/tsc --noEmit

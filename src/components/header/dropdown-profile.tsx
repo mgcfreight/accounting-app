@@ -1,0 +1,120 @@
+import {
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
+} from "@heroui/react";
+import { useNavigate } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { LOGIN_PATH } from "@/lib/constants";
+import { User } from "@/lib/interfaces";
+import { canAccessRoute } from "@/lib/routes.config";
+import { createInitials, humanize } from "@/lib/utils";
+import { DownArrowSm, Logout, Setting2 } from "../icons";
+import { useUser } from "../providers/user-provider";
+
+// mokal-app's DropdownProfile: initials, name and role, opening on hover as
+// well as click (click keeps it usable on touch).
+export default function DropdownProfile({ user }: { user: User }) {
+  const navigate = useNavigate();
+  const { signOut } = useUser();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHoveringTrigger = useRef(false);
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const openMenu = () => {
+    cancelClose();
+    setIsMenuOpen(true);
+  };
+  // The popover sits a few pixels below the trigger, so closing waits long
+  // enough for the pointer to cross the gap.
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setIsMenuOpen(false), 150);
+  };
+
+  useEffect(() => cancelClose, []);
+
+  return (
+    <Dropdown
+      isOpen={isMenuOpen}
+      onOpenChange={(open) => {
+        if (!open && isHoveringTrigger.current) return;
+        cancelClose();
+        setIsMenuOpen(open);
+      }}
+    >
+      <DropdownTrigger>
+        <div
+          role="button"
+          className="flex items-center cursor-pointer"
+          onMouseEnter={() => {
+            isHoveringTrigger.current = true;
+            openMenu();
+          }}
+          onMouseLeave={() => {
+            isHoveringTrigger.current = false;
+            scheduleClose();
+          }}
+        >
+          <div className="ml-6 lg:ml-10 mr-2 w-8 h-8 rounded-full bg-[#71717a] flex items-center justify-center">
+            <span className="text-white text-xs">
+              {createInitials(user.name)}
+            </span>
+          </div>
+          <div className="hidden sm:block mx-4">
+            <h2 className="text-sm font-bold text-base-primary">{user.name}</h2>
+            <p className="text-xs font-semibold">{humanize(user.role)}</p>
+          </div>
+          <div className="hidden sm:block">
+            <DownArrowSm />
+          </div>
+        </div>
+      </DropdownTrigger>
+      <DropdownMenu
+        aria-label="Profile actions"
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleClose}
+      >
+        <DropdownItem key="profile" isReadOnly className="opacity-100">
+          <div className="flex justify-center items-center gap-3">
+            <div className="w-20 h-20 rounded-full bg-[#71717a] flex items-center justify-center">
+              <span className="text-white text-2xl">
+                {createInitials(user.name)}
+              </span>
+            </div>
+            <div>
+              <p className="text-xl">{user.name}</p>
+              <p className="text-sm opacity-70">{user.email}</p>
+            </div>
+          </div>
+        </DropdownItem>
+        {canAccessRoute("/settings/", user.role) ? (
+          <DropdownItem
+            key="settings"
+            startContent={<Setting2 />}
+            onPress={() => navigate("/settings/")}
+          >
+            Settings
+          </DropdownItem>
+        ) : null}
+        <DropdownItem
+          key="logout"
+          startContent={<Logout />}
+          onPress={() => {
+            signOut();
+            navigate(LOGIN_PATH);
+          }}
+        >
+          Log Out
+        </DropdownItem>
+      </DropdownMenu>
+    </Dropdown>
+  );
+}

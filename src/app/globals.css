@@ -1,0 +1,106 @@
+﻿@import "tailwindcss";
+@plugin "../../hero.mjs";
+@source "../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}";
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind v4 is configured here rather than in tailwind.config.ts. These are
+   the colours from mokal-app's Tailwind config, under the same names, so the
+   same classes (bg-base-primary-500, text-content-6, ...) look the same. */
+@theme {
+  /* Lato is bundled from @fontsource/lato (src/main.tsx). */
+  --font-sans: "Lato", sans-serif;
+
+  --color-layout-background: #ffffff;
+  --color-layout-foreground: #11181c;
+  --color-layout-divider: #dcdcdc;
+  --color-layout-focus: #324878;
+  --color-layout-stats: #e7efff;
+
+  --color-content-1: #ffffff;
+  --color-content-2: #f4f4f5;
+  --color-content-3: #e4e4e7;
+  --color-content-4: #d4d4d8;
+  --color-content-5: #9c9aa5;
+  --color-content-6: #202224;
+  --color-content-7: #f0fcff;
+  --color-content-8: #4263aa;
+  --color-content-9: #000000;
+  --color-content-10: #bacfff;
+  --color-content-11: #c3f4fd;
+  --color-content-12: #f5f8ff;
+  --color-content-13: #006fee;
+  --color-content-14: #f0f0f0;
+
+  --color-base-default: #d4d4d8;
+  --color-base-gray: #a1a1aa;
+  --color-base-primary: #324878;
+  --color-base-primary-50: #bacfff;
+  --color-base-primary-200: #587cca;
+  --color-base-primary-300: #4263aa;
+  --color-base-primary-500: #324878;
+  --color-base-primary-600: #2e416b;
+  --color-base-primary-900: #1e2a45;
+  --color-base-secondary-200: #d0a6ff;
+  --color-base-secondary-500: #7c4eaf;
+  --color-base-secondary-800: #58357f;
+  --color-base-success: #17c964;
+  --color-base-warning: #f5a524;
+  --color-base-danger: #f31260;
+  --color-base-alert: #fefce8;
+
+  --color-externalBg-iceBlue: #f8faff;
+
+  --color-icon-lightBlue: rgba(126, 231, 252, 0.21);
+  --color-icon-lightDarkBlue: rgba(88, 124, 202, 0.21);
+  --color-icon-lightRed: rgba(248, 113, 160, 0.21);
+  --color-icon-lightGreen: rgba(116, 223, 162, 0.21);
+  --color-icon-lightPurple: rgba(188, 142, 240, 0.21);
+}
+
+/* Tailwind v3 defaults that mokal-app's markup relies on. v4 changed them:
+   borders now default to currentColor, and buttons to the default cursor. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Colour an outline SVG icon's strokes, as in mokal-app. */
+.svg-black path {
+  stroke: #000000;
+}
+
+.svg-primary-light path {
+  stroke: #4263aa;
+}
+
+.svg-primary path {
+  stroke: #324878;
+}
+
+.svg-white path {
+  stroke: #ffffff;
+}
+
+table td {
+  border-bottom: 1px solid lightgray;
+  border-right: 1px solid lightgray;
+}
+
+table tbody > tr:nth-child(odd) {
+  background-color: #fafafa;
+}
+
+.apexcharts-tooltip.apexcharts-theme-light {
+  background-color: transparent !important;
+  border: none !important;
+}

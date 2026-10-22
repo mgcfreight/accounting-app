@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+# Mirrors the lint step in .github/workflows/ci.yml, but only on staged files
+# so commits stay fast. Autofixable problems are fixed and restaged.
+set -e
+
+if [ ! -x node_modules/.bin/eslint ]; then
+  echo "pre-commit: node_modules missing — run 'npm ci' first."
+  exit 1
+fi
+
+staged=$(mktemp)
+trap 'rm -f "$staged"' EXIT
+
+git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR \
+  -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' > "$staged"
+
+if [ ! -s "$staged" ]; then
+  exit 0
+fi
+
+# Staged paths become positional args so names with spaces survive.
+set --
+while IFS= read -r file; do
+  if [ -n "$file" ]; then
+    set -- "$@" "$file"
+  fi
+done < "$staged"
+
+node_modules/.bin/eslint --fix -- "$@"
+
+while IFS= read -r file; do
+  if [ -n "$file" ]; then
+    git add -- "$file"
+  fi
+done < "$staged"

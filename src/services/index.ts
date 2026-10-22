@@ -1,0 +1,9 @@
+// Adding an endpoint: write a typed function in services/ that calls
+// apiClient (get/post/put/delete, passing `params` rather than building query
+// strings) and validates what comes back, then call it from the container
+// with useQuery / useMutation. Query keys start with the resource name
+// (["invoices", { direction, page }]) so invalidating ["invoices"] refreshes
+// every view of it.
+export { ApiError, apiClient } from "./api-client";
+export * from "./auth";
+export { queryClient } from "./query-client";
