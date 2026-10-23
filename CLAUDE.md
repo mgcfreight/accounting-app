@@ -26,14 +26,16 @@ src/
 ├── containers/          page composition and page state
 ├── components/          reusable presentation (common/ = mokal-app's kit)
 ├── hooks/               reusable client behaviour
-├── services/            the only path to the Accounts API (auth, users so far)
+├── services/            the only path to the Accounts API (every endpoint)
 └── lib/                 constants, enums, interfaces, money, dates
-    └── mock/            the data the other screens run on today
+    └── mock/            the data the remaining screens run on today
 
-**Most screens run on mock data.** Sign-in (with 2FA), sign-out, password
-reset and Settings → Users & Roles call the Accounts API through `services/`
-(Bearer tokens, held in memory only). Every other screen reads `lib/mock`,
-and its actions show a "demo only" toast.
+**Some screens still run on mock data.** Sign-in (with 2FA), sign-out,
+password reset, Settings → Users & Roles, Shipper/Carrier Invoices,
+Shippers/Carriers, Shipments, My Profile and the Audit Log call the Accounts API through
+`services/` (Bearer tokens, held in memory only). The dashboard, Payments,
+Reports, Needs Review, Sync Status and the other Settings tabs read
+`lib/mock`, and their actions show a "demo only" toast.
 The design copies mokal-app's — same layout, components, theme and colours.
 
 Layer rules, static-hosting limits, the UI kit, and money and date rules are

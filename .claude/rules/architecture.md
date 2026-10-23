@@ -15,27 +15,39 @@ Mandatory.
 
 Last reviewed: 2026-10-20
 
-## Current state: sign-in and users on the API, the rest on mock data
+## Current state: invoices, parties, users and audit on the API
 
-Sign-in (with 2FA), sign-out, forgot/reset password and Settings → Users &
-Roles call the Accounts API. Every other page still reads from
-`src/lib/mock/`, and its actions (issue, record payment, save settings,
-export) show a "demo only" toast.
+Sign-in (with 2FA), sign-out, forgot/reset password, Settings → Users &
+Roles, Shipper/Carrier Invoices, Shippers/Carriers, Shipments, My Profile and
+the Audit Log call the Accounts API. The dashboard, Payments, Reports, Needs Review, Sync Status and
+the other Settings tabs still read from `src/lib/mock/`, and their actions
+show a "demo only" toast. Screens on the API show only what it sends: no
+lane, overdue/disputed flags, payments, invoice history or party balances until
+the API has them.
+
+Every Accounts API endpoint has a typed function in `services/` (`auth`,
+`users`, `parties`, `invoices`, `shipments`, `audit`), and every one has a
+screen: Shipments (list, view, and New Shipment, which makes the invoices),
+My Profile (password, 2FA, recovery codes, sign-in history), and a user's
+sign-in history in Users & Roles. Shipments carry party ids only, so their
+screens look the names up per party (`containers/shipments/use-party-names`).
 
 `services/` is the only path to the API: `apiClient` (the one axios
 instance — base URL and timeout from `VITE_API_URL` / `VITE_API_TIMEOUT_MS`,
 the Bearer token from `services/session.ts`, one refresh-and-retry on a 401,
 an interceptor that turns every failure into `ApiError`), the TanStack Query
-`queryClient` provided in `app/providers.tsx`, and the endpoints in
-`services/auth.ts` and `services/users.ts`. Never create another axios
+`queryClient` provided in `app/providers.tsx`, and the endpoint functions
+beside them. Never create another axios
 instance or call `fetch`. When an endpoint arrives, add one typed function
 for it in `services/` on `apiClient` (query values in `params`, never
 spliced into the URL) that checks the response with the parsers in
 `services/parse.ts` (every body is `{ message, data }`; `unwrap` returns
-`data`) and throws on failure — never returns `undefined` to mean "it
-failed" — call it from the container through `useQuery` / `useMutation` in
-place of the mock import, and move sorting/paging from `useClientTable` to
-the request.
+`data`; `parseShape` checks a view field by field) and throws on failure —
+never returns `undefined` to mean "it failed" — call it from the container
+through `useQuery` / `useMutation` in place of the mock import, and move
+sorting/paging from `useClientTable` to the request with `useServerTable`.
+Invoice changes send the invoice's `version`; a 409 means someone changed it
+first, so refetch.
 
 ## This app is static files
 
