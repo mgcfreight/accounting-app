@@ -20,7 +20,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <Sidebar
           collapsed={collapsed}
           setCollapsed={setCollapsed}
-          userRole={user.role}
+          user={user}
         />
         {!collapsed && (
           <div

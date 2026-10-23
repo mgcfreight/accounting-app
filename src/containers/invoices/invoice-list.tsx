@@ -10,6 +10,7 @@ import {
   RowActions,
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
+import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
 import { Invoice } from "@/lib/interfaces";
@@ -68,6 +69,7 @@ export default function InvoiceList({
   direction: InvoiceDirection;
 }) {
   const navigate = useNavigate();
+  const { can } = useCan();
   const [active, setActive] = useState<{
     action: InvoiceAction;
     invoice: Invoice;
@@ -123,7 +125,7 @@ export default function InvoiceList({
             icon: <EyeIcon />,
             onPress: () => navigate(invoiceHref(invoice)),
           },
-          ...availableActions(invoice).map((action) => ({
+          ...availableActions(invoice, can).map((action) => ({
             ...action,
             onPress: () => setActive({ action: action.key, invoice }),
           })),

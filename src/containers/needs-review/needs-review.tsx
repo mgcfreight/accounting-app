@@ -9,7 +9,8 @@ import {
   PartyAvatar,
   StatusChip,
 } from "@/components/common";
-import { ReviewKind } from "@/lib/enums";
+import { useCan } from "@/components/providers/user-provider";
+import { Permission, ReviewKind } from "@/lib/enums";
 import { ReviewItem } from "@/lib/interfaces";
 import { findInvoiceByNumber, mockReviewItems } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
@@ -32,6 +33,11 @@ const columns: BaseTableColumn[] = [
 export default function NeedsReview() {
   const resolve = (what: string) =>
     toast.info(`${what} — demo only, nothing was saved.`);
+  // A credit or debit note is a new adjustment (create); keeping the fee or
+  // dismissing resolves the invoice without one (edit).
+  const { can } = useCan();
+  const canNote = can(Permission.CustomerInvoicesCreate);
+  const canResolve = can(Permission.CustomerInvoicesEdit);
 
   const renderCell = (item: ReviewItem, key: string) => {
     switch (key) {
@@ -68,13 +74,13 @@ export default function NeedsReview() {
       case "actions":
         return item.kind === ReviewKind.Cancellation ? (
           <div className="flex gap-2">
-            <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve("Credit note approved")} />
-            <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Cancellation fee kept")} />
+            {canNote && <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve("Credit note approved")} />}
+            {canResolve && <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Cancellation fee kept")} />}
           </div>
         ) : (
           <div className="flex gap-2">
-            <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve("Debit note issued")} />
-            <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Dismissed")} />
+            {canNote && <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve("Debit note issued")} />}
+            {canResolve && <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Dismissed")} />}
           </div>
         );
       default:

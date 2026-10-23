@@ -1,5 +1,18 @@
 export const LOGIN_PATH = "/login/";
 export const HOME_PATH = "/dashboard/";
+export const FORGOT_PASSWORD_PATH = "/forgot-password/";
+// The API's reset email links here with ?token=.
+export const RESET_PASSWORD_PATH = "/reset-password/";
+export const ACCOUNT_PATH = "/account/";
+
+// The API's password rule (users.password): shown and checked before sending,
+// so the form can say what's wrong; the API checks it again.
+export const PASSWORD_RULE =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[\x20-\x7E]{12,64}$/;
+export const PASSWORD_RULE_TEXT =
+  "12-64 characters, with at least one upper-case letter, one lower-case letter and one number.";
+
+export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const PAGE_SIZES = [10, 20, 30];
 

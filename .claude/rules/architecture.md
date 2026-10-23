@@ -15,24 +15,25 @@ Mandatory.
 
 Last reviewed: 2026-10-20
 
-## Current state: screens on mock data
+## Current state: partly on the API
 
-The screens are built, but nothing talks to an API yet. Every page reads from
-`src/lib/mock/`, and actions (issue, record payment, save settings, export)
-show a "demo only" toast. There is no session check.
+Sign-in (with 2FA and password reset), My Account, Users, Roles &
+Permissions, Sessions, the Audit Report and Settings (company, notifications, tax rates, charge types) run on
+the Accounts API. Every other page still reads from `src/lib/mock/`, and its
+actions (issue, record payment, export) show a "demo only" toast.
 
-`services/` is in place with no endpoints wired yet: `apiClient` (the one
-axios instance — base URL and timeout from `VITE_API_URL` /
-`VITE_API_TIMEOUT_MS`, cookie session via `withCredentials`, an interceptor
-that turns every failure into `ApiError`), the TanStack Query `queryClient`
-provided in `app/providers.tsx`, and the not-yet-called auth endpoints in
-`services/auth.ts`. It is the only path to the API: never create another
-axios instance or call `fetch`. When an endpoint arrives, add one typed
-function for it in `services/` on `apiClient` (query values in `params`,
-never spliced into the URL) that validates the response and throws on
-failure — never returns `undefined` to mean "it failed" — call it from the
-container through `useQuery` / `useMutation` in place of the mock import,
-and move sorting/paging from `useClientTable` to the request.
+`services/` is the only path to the API: `apiClient` (the one axios
+instance — base URL and timeout from `VITE_API_URL` / `VITE_API_TIMEOUT_MS`,
+cookie session via `withCredentials`, one single-flight refresh and retry on
+a 401, and an interceptor that turns every failure into `ApiError`) and the
+TanStack Query `queryClient` provided in `app/providers.tsx`. Never create
+another axios instance or call `fetch`. For each endpoint, add one typed
+function in `services/` on `apiClient` (query values in `params`, never
+spliced into the URL) that checks the response with a zod schema from
+`services/schemas.ts` through `parseBody` and throws on failure — never
+returns `undefined` to mean "it failed" — call it from the container through
+`useQuery` / `useMutation` in place of the mock import, and page on the
+server with `useServerPaging` instead of `useClientTable`.
 
 ## This app is static files
 
@@ -47,9 +48,12 @@ from the API.
   (`vite.config.ts`). The API serves files only, with no fallback to
   `index.html`, so a route missing from routes.config renders when clicked
   but 404s on refresh or from a bookmark.
-- **Roles** for a route go in its `routes.config` entry (`roles`). `RouteGuard`
-  (in `AppLayout`), the sidebar and the profile menu all read them through
-  `canAccessRoute`; don't check a route's role inside a container.
+- **Access** for a route goes in its `routes.config` entry (`access`:
+  `anyUser`, `adminOnly`, `allOf` or `anyOf` permissions). `RouteGuard` (in
+  `AppLayout`), the sidebar and the profile menu all read it through
+  `canAccessRoute`; don't check a page's access inside a container. Buttons
+  use `useCan()` (`lib/access.ts`), and roles are checked by `SystemRoleId`
+  or `me.isAdmin`, never by name — custom role names are free text.
 - **URLs** have a trailing slash, and detail pages are
   `<list>/view/?id=…`, read with `useSearchParams` from `react-router` —
   the shape the per-route `index.html` files and existing links rely on.
@@ -108,16 +112,26 @@ need each other, the shared part belongs in `lib/`.
 
 ## Auth
 
-Not wired to the API yet. `UserProvider` (`components/providers/
-user-provider.tsx`, mounted in `app/providers.tsx`) holds the signed-in user
-in memory: it starts as the mock user, the login form sets it, Sign Out
-clears it, and `AppLayout` sends a signed-out visitor to `/login/`. Read it
-with `useUser()`, or `useCurrentUser()` on pages behind `AppLayout`. When
-sign-in is wired, the API owns the session as an httpOnly cookie; the login
-form calls `signIn()` and `AppLayout` loads `getMe()`, redirecting on a 401. That check decides
-only what renders — the API enforces session and role on every endpoint.
-Hiding a menu item or a Settings form by role is presentation, not access
-control.
+The API owns the session as two httpOnly cookies: `mgc_at` (access, 15 min)
+and `mgc_rt` (refresh, path `/v1/auth/tokens`). No code here reads, stores
+or attaches a token. On a 401, `apiClient` calls `POST /auth/tokens` once —
+shared by every waiting request, because the refresh token is single use —
+and repeats the request; if that fails it tells `onSessionExpired`
+listeners.
+
+`UserProvider` (`components/providers/user-provider.tsx`, mounted in
+`app/providers.tsx`) loads the signed-in user from `GET /auth/me` into the
+TanStack cache (`["auth","me"]`): `undefined` while loading, `null` when
+signed out. The login form calls `refreshUser()` after the API signs in;
+Sign Out calls `logout()` and clears every cached query. `AppLayout` shows a
+spinner, a retry on a network failure, or sends a signed-out visitor to
+`/login/` (and back afterwards). Read the user with `useUser()`, or
+`useCurrentUser()` on pages behind `AppLayout`.
+
+All of that decides only what renders — the API enforces session and role on
+every endpoint, and scopes Sessions and the Audit Report to the caller's own
+rows unless they're an Admin. Hiding a menu item or a form by role is
+presentation, not access control.
 
 ## Money
 

@@ -1,34 +1,108 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
-import { User } from "@/lib/interfaces";
-import { mockCurrentUser } from "@/lib/mock";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
+import { toast } from "sonner";
+import { can, canAny } from "@/lib/access";
+import { Permission } from "@/lib/enums";
+import { Me } from "@/lib/interfaces";
+import { ApiError, getMe, logout, onSessionExpired } from "@/services";
 
-// The signed-in user, for the whole app (app/providers.tsx). Kept in memory
-// only — never in localStorage or a readable cookie (security.md); the API's
-// httpOnly session cookie is what keeps someone signed in.
+// The signed-in user, for the whole app (app/providers.tsx), loaded from
+// GET /auth/me. Kept in memory only — the session itself is the API's
+// httpOnly cookies, which the browser sends and this code never reads
+// (security.md).
 //
-// Today it starts as the mock user, the sign-in form sets it and Sign Out
-// clears it. When the API is ready, start it empty, set it from signIn() on
-// the login form and from getMe() in AppLayout (services/auth.ts).
-//
-// Role checks made with this are presentation only; the API enforces access.
+// Permission checks made with this are presentation only; the API enforces
+// access. Permissions live only in this query, never in localStorage.
+
+export const ME_QUERY_KEY = ["auth", "me"] as const;
+
 type UserContextValue = {
-  user: User | null;
-  setUser: (user: User) => void;
-  signOut: () => void;
+  // undefined while the first /auth/me is in flight; null when signed out.
+  user: Me | null | undefined;
+  // /auth/me failed for a reason other than "not signed in" (offline, 5xx).
+  loadError: unknown;
+  retry: () => void;
+  // Reloads the user after sign-in or a change to their own account.
+  refreshUser: () => Promise<unknown>;
+  signOut: () => Promise<void>;
 };
 
 const UserContext = createContext<UserContextValue | null>(null);
 
+// A 401 here has already been through one refresh attempt (api-client), so
+// it means nobody is signed in: that is an answer, not a failure.
+const loadMe = async ({ signal }: { signal: AbortSignal }) => {
+  try {
+    return await getMe(signal);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
+};
+
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(mockCurrentUser);
-  const value = useMemo(
-    () => ({ user, setUser, signOut: () => setUser(null) }),
-    [user]
+  const queryClient = useQueryClient();
+  const me = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: loadMe,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const user = me.data;
+
+  // Every other cached response belongs to the user who just left.
+  const clearSession = useCallback(() => {
+    queryClient.removeQueries({
+      predicate: (query) => query.queryKey[0] !== ME_QUERY_KEY[0],
+    });
+    queryClient.setQueryData(ME_QUERY_KEY, null);
+  }, [queryClient]);
+
+  // The API couldn't renew the session (expired, signed in elsewhere,
+  // disabled, role changed). Say so only if someone was signed in.
+  const signedIn = useRef(false);
+  useEffect(() => {
+    signedIn.current = !!user;
+  }, [user]);
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        if (signedIn.current) {
+          toast.warning("Your session has ended. Please sign in again.");
+        }
+        clearSession();
+      }),
+    [clearSession]
   );
+
+  const value = useMemo<UserContextValue>(
+    () => ({
+      user,
+      loadError: me.error,
+      retry: () => void me.refetch(),
+      refreshUser: () =>
+        queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
+      signOut: async () => {
+        // Signed out locally even if the request fails: the API ends the
+        // session on its side when it can, and the cookies expire anyway.
+        await logout().catch(() => undefined);
+        clearSession();
+      },
+    }),
+    [user, me, queryClient, clearSession]
+  );
+
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }
 
-// The user (or null when signed out) and the functions that change it.
 export function useUser() {
   const context = useContext(UserContext);
   if (!context) throw new Error("useUser must be used inside UserProvider.");
@@ -36,8 +110,19 @@ export function useUser() {
 }
 
 // For pages behind AppLayout, which only renders them for a signed-in user.
-export function useCurrentUser(): User {
+export function useCurrentUser(): Me {
   const { user } = useUser();
   if (!user) throw new Error("useCurrentUser needs a signed-in user.");
   return user;
+}
+
+// `can(…)` / `canAny(…)` for the signed-in user, to show or hide a button.
+// Presentation only: the API answers 403 to anything the role doesn't allow.
+export function useCan() {
+  const me = useCurrentUser();
+  return {
+    me,
+    can: (...needed: Permission[]) => can(me, ...needed),
+    canAny: (...options: Permission[]) => canAny(me, ...options),
+  };
 }

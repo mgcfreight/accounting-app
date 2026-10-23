@@ -26,13 +26,15 @@ src/
 ├── containers/          page composition and page state
 ├── components/          reusable presentation (common/ = mokal-app's kit)
 ├── hooks/               reusable client behaviour
-├── services/            the only path to the Accounts API (no endpoints yet)
+├── services/            the only path to the Accounts API (zod-checked)
 └── lib/                 constants, enums, interfaces, money, dates
-    └── mock/            the data every screen runs on today
+    └── mock/            the data the not-yet-wired screens run on
+```
 
-**The screens run on mock data.** `services/` holds the axios instance
-(`apiClient`) and TanStack Query client, but no endpoints are wired yet: the
-signed-in user is the mock user (`UserProvider`), and every action shows a
+**Sign-in, users, sessions, audit and settings run on the API; the rest
+still run on mock data.** The session is the API's httpOnly cookies, and
+the signed-in user comes from `GET /auth/me` (`UserProvider`). Invoice,
+payment, party and report screens read `lib/mock` and their actions show a
 "demo only" toast.
 The design copies mokal-app's — same layout, components, theme and colours.
 

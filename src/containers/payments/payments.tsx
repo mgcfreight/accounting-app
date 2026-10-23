@@ -16,9 +16,10 @@ import {
 } from "@/components/common";
 import { SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
+import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import { paymentMethodLabel, paymentMethodOptions } from "@/lib/constants";
-import { MatchStatus, PaymentDirection } from "@/lib/enums";
+import { MatchStatus, PaymentDirection, Permission } from "@/lib/enums";
 import { Payment } from "@/lib/interfaces";
 import { mockPayments } from "@/lib/mock";
 import { isZeroMoney } from "@/lib/money";
@@ -61,17 +62,37 @@ export default function Payments() {
   // The header's "Record Payment" button (routes.config.ts).
   useHeaderAction("record-payment", () => setRecording(true));
 
+  // Money in and money out are separate permissions; the page opens with
+  // either, and shows only the sides the role may view.
+  const { can } = useCan();
+  const canViewIn = can(Permission.CustomerPaymentsView);
+  const canViewOut = can(Permission.CarrierPaymentsView);
+  const visible = useMemo(
+    () =>
+      mockPayments.filter((p) =>
+        p.direction === PaymentDirection.In ? canViewIn : canViewOut
+      ),
+    [canViewIn, canViewOut]
+  );
+  // Allocating is part of recording a payment; there is no separate edit.
+  const canRecord = (direction: PaymentDirection) =>
+    can(
+      direction === PaymentDirection.In
+        ? Permission.CustomerPaymentsCreate
+        : Permission.CarrierPaymentsCreate
+    );
+
   const counts = {
-    all: mockPayments.length,
-    in: mockPayments.filter((p) => p.direction === PaymentDirection.In).length,
-    out: mockPayments.filter((p) => p.direction === PaymentDirection.Out).length,
-    unmatched: mockPayments.filter((p) => p.match === MatchStatus.Unmatched)
+    all: visible.length,
+    in: visible.filter((p) => p.direction === PaymentDirection.In).length,
+    out: visible.filter((p) => p.direction === PaymentDirection.Out).length,
+    unmatched: visible.filter((p) => p.match === MatchStatus.Unmatched)
       .length,
   };
 
   const filtered = useMemo(
     () =>
-      mockPayments.filter((payment) => {
+      visible.filter((payment) => {
         if (view === "in" && payment.direction !== PaymentDirection.In) return false;
         if (view === "out" && payment.direction !== PaymentDirection.Out) return false;
         if (view === "unmatched" && payment.match !== MatchStatus.Unmatched) {
@@ -83,7 +104,7 @@ export default function Payments() {
           (value) => value.toLowerCase().includes(search)
         );
       }),
-    [view, method, search]
+    [visible, view, method, search]
   );
 
   const table = useClientTable(filtered, columns, {
@@ -123,6 +144,9 @@ export default function Payments() {
       case "match":
         return <MatchStatusChip status={payment.match} />;
       case "actions":
+        if (payment.match === MatchStatus.Unmatched && !canRecord(payment.direction)) {
+          return null;
+        }
         return (
           <RowActions
             actions={

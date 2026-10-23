@@ -1,5 +1,6 @@
 export { default as AgingTable } from "./aging-table";
 export { default as AlertBanner } from "./alert-banner";
+export { default as AuthenticatorQr } from "./authenticator-qr";
 export { default as BaseButton } from "./base-button";
 export { default as BaseCardWrapper } from "./base-card-wrapper";
 export { default as BaseTable } from "./base-table";
@@ -13,6 +14,7 @@ export { default as InfoStrip } from "./info-strip";
 export { default as TableSkeleton } from "./loader/table-skeleton";
 export { default as Money } from "./money";
 export { default as PartyAvatar } from "./party-avatar";
+export { default as RecoveryCodes } from "./recovery-codes";
 export { default as RowActions } from "./row-actions";
 export { default as SectionTitle } from "./section-title";
 export { default as StatCard } from "./stat-card";

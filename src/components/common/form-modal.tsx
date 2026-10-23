@@ -27,7 +27,7 @@ export default function FormModal({
   confirmText?: string;
   onConfirm: () => void;
   isConfirming?: boolean;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "5xl";
 }) {
   return (
     // `inside`: on a short phone a long form scrolls within the body, keeping

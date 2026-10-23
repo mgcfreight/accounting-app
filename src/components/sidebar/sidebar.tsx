@@ -2,8 +2,8 @@ import { ReactNode, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useLocalStorage } from "@/hooks";
 import { LOGIN_PATH } from "@/lib/constants";
-import { UserRole } from "@/lib/enums";
-import { menuForRole, MenuIconName } from "@/lib/navigation";
+import { Me } from "@/lib/interfaces";
+import { menuForUser, MenuIconName } from "@/lib/navigation";
 import {
   CarrrierTruck,
   CashIcon,
@@ -28,6 +28,7 @@ const menuIcons: Record<MenuIconName, ReactNode> = {
   carriers: <CarrrierTruck />,
   reports: <ReportingIcon />,
   system: <TrackingIcon />,
+  users: <User />,
   settings: <SettingsIcon />,
 };
 
@@ -45,16 +46,16 @@ const isDrawer = () => window.matchMedia(DRAWER_QUERY).matches;
 export default function Sidebar({
   collapsed,
   setCollapsed,
-  userRole,
+  user,
 }: {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
-  userRole: UserRole;
+  user: Me;
 }) {
   const navigate = useNavigate();
   const { signOut } = useUser();
   const [openGroup, setOpenGroup] = useLocalStorage("selectedMenu", "");
-  const items = menuForRole(userRole);
+  const items = menuForUser(user);
 
   useEffect(() => {
     if (collapsed) return;
@@ -132,9 +133,10 @@ export default function Sidebar({
             <button
               type="button"
               className="rounded-2xl group relative h-14 flex items-center gap-2 px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] w-40 whitespace-nowrap"
-              // Clears the user; with the API this will also call signOut().
-              onClick={() => {
-                signOut();
+              // Ends the session on the API (which clears its cookies), then
+              // the user here.
+              onClick={async () => {
+                await signOut();
                 navigate(LOGIN_PATH);
               }}
             >

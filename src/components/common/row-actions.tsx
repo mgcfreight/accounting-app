@@ -12,6 +12,9 @@ export type RowAction = {
   label: string;
   icon?: ReactNode;
   danger?: boolean;
+  // Shown but not selectable; `hint` says why.
+  disabled?: boolean;
+  hint?: string;
   onPress: () => void;
 };
 
@@ -25,12 +28,18 @@ export default function RowActions({ actions }: { actions: RowAction[] }) {
             <MoreHoriz className="cursor-pointer" />
           </button>
         </DropdownTrigger>
-        <DropdownMenu aria-label="Row actions">
+        <DropdownMenu
+          aria-label="Row actions"
+          disabledKeys={actions
+            .filter((action) => action.disabled)
+            .map((action) => action.key)}
+        >
           {actions.map((action) => (
             <DropdownItem
               key={action.key}
               color={action.danger ? "danger" : "default"}
               className={action.danger ? "text-danger" : ""}
+              description={action.hint}
               classNames={{ title: "flex gap-2 items-center" }}
               onPress={action.onPress}
             >

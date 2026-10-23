@@ -19,7 +19,8 @@ import {
   Printer,
   Send,
 } from "@/components/icons";
-import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
+import { useCan } from "@/components/providers/user-provider";
+import { InvoiceDirection, InvoiceStatus, Permission } from "@/lib/enums";
 import { findInvoice, findParty } from "@/lib/mock";
 import { paymentMethodLabel } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -47,7 +48,19 @@ export default function InvoiceDetail({
   const id = searchParams.get("id");
   const invoice = findInvoice(id);
   const [action, setAction] = useState<InvoiceAction | null>(null);
+  const { can } = useCan();
   const isReceivable = direction === InvoiceDirection.Receivable;
+  const canExportPdf = can(
+    isReceivable
+      ? Permission.CustomerInvoicesExportPdf
+      : Permission.CarrierInvoicesExportPdf
+  );
+  // No permission covers documents yet; uploading changes the invoice.
+  const canUpload = can(
+    isReceivable
+      ? Permission.CustomerInvoicesEdit
+      : Permission.CarrierInvoicesEdit
+  );
   const listHref = isReceivable ? "/shipper-invoices/" : "/carrier-invoices/";
 
   if (!invoice || invoice.direction !== direction) {
@@ -72,7 +85,7 @@ export default function InvoiceDetail({
           <span className="text-base-primary-600 text-sm">#{invoice.number}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {availableActions(invoice).map((item) => (
+          {availableActions(invoice, can).map((item) => (
             <BaseButton
               key={item.key}
               text={item.label}
@@ -84,13 +97,15 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
-          <BaseButton
-            text="PDF"
-            varient="bordered"
-            className="rounded-xl px-4 text-base-primary"
-            startContent={<Printer />}
-            onPress={() => demoOnly("Invoice PDF")}
-          />
+          {canExportPdf && (
+            <BaseButton
+              text="PDF"
+              varient="bordered"
+              className="rounded-xl px-4 text-base-primary"
+              startContent={<Printer />}
+              onPress={() => demoOnly("Invoice PDF")}
+            />
+          )}
         </div>
       </div>
 
@@ -270,13 +285,15 @@ export default function InvoiceDetail({
         <BaseCardWrapper
           heading="Documents"
           action={
-            <BaseButton
-              text="Upload"
-              varient="light"
-              className="text-base-primary"
-              startContent={<DocumentUpload />}
-              onPress={() => demoOnly("Upload")}
-            />
+            canUpload ? (
+              <BaseButton
+                text="Upload"
+                varient="light"
+                className="text-base-primary"
+                startContent={<DocumentUpload />}
+                onPress={() => demoOnly("Upload")}
+              />
+            ) : undefined
           }
         >
           <div className="flex flex-col gap-3">

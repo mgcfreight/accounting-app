@@ -1,4 +1,4 @@
-import { UserRole } from "./enums";
+import { Me } from "./interfaces";
 import { canAccessRoute } from "./routes.config";
 
 export type MenuIconName =
@@ -9,6 +9,7 @@ export type MenuIconName =
   | "carriers"
   | "reports"
   | "system"
+  | "users"
   | "settings";
 
 export interface MenuItem {
@@ -40,23 +41,40 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: "system",
     label: "System",
     route: "/sync-status/",
+    children: [{ label: "Sync Status", route: "/sync-status/" }],
+  },
+  // Non-Admins see only Sessions here (their own) and only the Audit Report
+  // under Settings (their own events).
+  {
+    icon: "users",
+    label: "Users",
+    route: "/users/",
     children: [
-      { label: "Sync Status", route: "/sync-status/" },
-      { label: "Audit Log", route: "/audit-log/" },
+      { label: "Users", route: "/users/" },
+      { label: "Roles & Permissions", route: "/roles/" },
+      { label: "Sessions", route: "/users/sessions/" },
     ],
   },
-  { icon: "settings", label: "Settings", route: "/settings/" },
+  {
+    icon: "settings",
+    label: "Settings",
+    route: "/settings/",
+    children: [
+      { label: "Settings", route: "/settings/" },
+      { label: "Audit Report", route: "/settings/audit-log/" },
+    ],
+  },
 ];
 
-// The items a role may open, by the roles in routes.config. A group shows
-// while any of its children does. Hiding an item is presentation only — the
-// API enforces access on every endpoint.
-export const menuForRole = (
-  role: UserRole,
+// The items a user may open, by the access rules in routes.config. A group
+// shows while any of its children does. Hiding an item is presentation only —
+// the API enforces access on every endpoint.
+export const menuForUser = (
+  me: Pick<Me, "isAdmin" | "permissions">,
   items: MenuItem[] = MENU_ITEMS
 ): MenuItem[] =>
   items.flatMap((item) => {
-    if (!item.children) return canAccessRoute(item.route, role) ? [item] : [];
-    const children = menuForRole(role, item.children);
+    if (!item.children) return canAccessRoute(item.route, me) ? [item] : [];
+    const children = menuForUser(me, item.children);
     return children.length ? [{ ...item, children }] : [];
   });

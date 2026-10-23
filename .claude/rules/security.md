@@ -10,9 +10,9 @@ Every value from outside is validated where it arrives — form input, URL and
 search params, `localStorage`, cookies, and every backend or third-party
 response.
 
-- Validate with a schema rather than hand-rolled `if` chains. Note this repo
-  has no schema validation library yet — `react-hook-form` handles form state
-  only — so introducing zod or similar is a dependency decision. Ask first.
+- Validate with a schema rather than hand-rolled `if` chains. API responses
+  are checked with zod (`services/schemas.ts`, through `parseBody`);
+  `react-hook-form` handles form state only.
 - A backend response is untrusted input. Do not assume an array is non-empty or
   that an optional field is present; a `.map()` over `undefined` is a blank page.
 - Client-side validation is UX only. It improves the form experience and

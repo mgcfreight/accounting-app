@@ -24,6 +24,7 @@ import {
   mockShipperInvoices,
 } from "@/lib/mock";
 import { formatMoney } from "@/lib/money";
+import { fullName } from "@/lib/utils";
 import RecentInvoices from "./recent-invoices";
 
 type TotalsView = "CAD" | "USD" | "IN_CAD";
@@ -89,7 +90,7 @@ export default function Dashboard() {
     <div className="flex flex-col h-full gap-2">
       <div>
         <h3 className="text-base">
-          Welcome in <strong>{user.name}</strong>
+          Welcome in <strong>{fullName(user)}</strong>
         </h3>
         <h1 className="text-2xl sm:text-3xl">Your Dashboard</h1>
       </div>
