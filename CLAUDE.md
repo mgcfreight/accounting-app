@@ -50,8 +50,14 @@ npm run build       # static build to out/ (one index.html per route)
 npm run preview     # serve out/ on port 3001
 npm run lint        # ESLint
 npm run typecheck   # tsc --noEmit
-npm test            # currently just lint + typecheck — there are no tests
+npm test            # lint + typecheck + unit tests
+npm run test:unit   # Vitest + React Testing Library (jsdom), once
+npm run test:watch  # the same, re-running on change
 ```
+
+Tests sit next to the code they cover as `*.test.ts(x)`; config is
+`vitest.config.ts` (it reuses `vite.config.ts`), setup `src/test/setup.ts`.
+Import `describe`/`it`/`expect` from `vitest` — globals are off.
 
 **This repo uses npm.** Install with plain `npm ci` — unlike mokal-app, the
 dependency tree resolves without `--legacy-peer-deps`, so don't add the flag;
@@ -70,8 +76,9 @@ ESLint 10 yet.
 
 - **Say what you actually ran.** Never report that something works because it
   looks right. Name the command and give the real outcome. "I didn't run it" is
-  a fine answer; a false "it works" is not. There is no test suite here, so
-  passing lint and typecheck is not evidence that behaviour is correct.
+  a fine answer; a false "it works" is not. The unit tests cover only a few
+  modules so far, so passing them, lint and typecheck is not evidence that a
+  screen behaves correctly against the API.
 - **Read before writing.** Open the component and its container before
   changing either, and check `components/common` before writing a new one.
 - **Match the surrounding code.** If the surrounding pattern looks wrong, say so
