@@ -1,6 +1,7 @@
 import { AxiosResponse } from "axios";
-import { UserRole } from "@/lib/enums";
-import { User } from "@/lib/interfaces";
+import { SessionEndReason, SessionStatus, UserRole } from "@/lib/enums";
+import { SessionView, User } from "@/lib/interfaces";
+import { isMoneyString } from "@/lib/money";
 import { PaginationMeta } from "@/lib/types";
 import { ApiError } from "./api-error";
 import { Tokens } from "./session";
@@ -15,18 +16,41 @@ export type Parser<T> = (value: unknown) => T | null;
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const isString = (value: unknown): value is string => typeof value === "string";
+export const isString = (value: unknown): value is string =>
+  typeof value === "string";
 
-const isNonEmptyString = (value: unknown): value is string =>
+export const isNonEmptyString = (value: unknown): value is string =>
   isString(value) && value.length > 0;
 
-const isCount = (value: unknown): value is number =>
+export const isCount = (value: unknown): value is number =>
   Number.isInteger(value) && (value as number) >= 0;
 
-const isOneOf =
+export const isOneOf =
   <T extends string>(values: Record<string, T>) =>
   (value: unknown): value is T =>
     Object.values(values).includes(value as T);
+
+// `check`, or null.
+export const orNull =
+  <T>(check: (value: unknown) => value is T) =>
+  (value: unknown): value is T | null =>
+    value === null || check(value);
+
+// A 2-decimal amount, as lib/money.ts formats it. Anything else fails the
+// whole record rather than showing a wrong figure.
+export const isMoney = isMoneyString;
+
+// A quantity, unit price, FX or tax rate: digits with their own precision.
+export const isDecimal = (value: unknown): value is string =>
+  isString(value) && /^-?\d+(\.\d+)?$/.test(value);
+
+// A calendar date, "2026-10-14".
+export const isDateOnly = (value: unknown): value is string =>
+  isString(value) && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+// An ISO timestamp.
+export const isTimestamp = (value: unknown): value is string =>
+  isString(value) && !Number.isNaN(Date.parse(value));
 
 export const isUserRole = isOneOf(UserRole);
 
@@ -133,3 +157,47 @@ export const parsePage =
       meta: { totalItems, itemCount, itemsPerPage, totalPages, currentPage },
     };
   };
+
+// One check per field of T. Every key must be listed, so a field added to an
+// interface can't go unchecked.
+export type Shape<T> = { [K in keyof T]-?: (value: unknown) => boolean };
+
+// Copies exactly the fields in `shape`, each checked; null if any fails.
+// Nested records and lists are parsed by the caller and spread on top.
+export const parseShape =
+  <T>(shape: Shape<T>): Parser<T> =>
+  (value) => {
+    if (!isRecord(value)) return null;
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(shape) as (keyof T & string)[]) {
+      if (!shape[key](value[key])) return null;
+      result[key] = value[key];
+    }
+    return result as T;
+  };
+
+// For an optional nested field: undefined stays undefined, anything else must
+// parse. Returns null only on a failed parse.
+export const parseOptional = <T>(
+  parse: Parser<T>,
+  value: unknown
+): T | undefined | null => (value === undefined ? undefined : parse(value));
+
+// One sign-in, from /auth/sessions and /user/sessions.
+export const parseSession = parseShape<SessionView>({
+  id: isNonEmptyString,
+  ipAddress: orNull(isString),
+  userAgent: orNull(isString),
+  browser: orNull(isString),
+  os: orNull(isString),
+  deviceType: orNull(isString),
+  deviceName: orNull(isString),
+  startedAt: isTimestamp,
+  lastSeenAt: isTimestamp,
+  expiresAt: isTimestamp,
+  endedAt: orNull(isTimestamp),
+  endReason: orNull(isOneOf(SessionEndReason)),
+  status: isOneOf(SessionStatus),
+  durationSeconds: isCount,
+  isCurrent: (value) => typeof value === "boolean",
+});

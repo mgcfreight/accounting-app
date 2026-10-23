@@ -1,9 +1,12 @@
+import { AxiosResponse } from "axios";
 import { SignInStep, TwoFactorMethod } from "@/lib/enums";
 import { User } from "@/lib/interfaces";
 import { apiClient } from "./api-client";
 import {
   isRecord,
   parseCount,
+  parsePage,
+  parseSession,
   parseStrings,
   parseTokens,
   parseUser,
@@ -197,3 +200,115 @@ export const resetPassword = async (body: {
 }) => {
   await apiClient.post("/auth/reset-password", body);
 };
+
+// ------------------------------------------------- the signed-in user's own
+// account (profile). No screen uses these yet.
+
+const parseRecoveryCodes: Parser<string[]> = (value) =>
+  isRecord(value) ? parseStrings(value.recoveryCodes) : null;
+
+// The API signs out every other session and sends a fresh pair for this one.
+const keepSession = (res: AxiosResponse) => {
+  setSessionTokens(
+    unwrap(res, (data) => (isRecord(data) ? parseTokens(data.tokens) : null))
+  );
+};
+
+// Your sign-in history, newest first; `isCurrent` marks this one.
+export const getMySessions = async (
+  query: { page: number; limit: number },
+  signal?: AbortSignal
+) =>
+  unwrap(
+    await apiClient.get("/auth/sessions", { params: query, signal }),
+    parsePage(parseSession)
+  );
+
+// Signs out your other sessions.
+export const changePassword = async (body: {
+  currentPassword: string;
+  newPassword: string;
+}) => {
+  keepSession(await apiClient.put("/auth/change-password", body));
+};
+
+// Starts setting up an authenticator app. Calling it again replaces an
+// unfinished setup.
+export const startProfileAuthenticatorSetup = async () =>
+  unwrap(
+    await apiClient.post("/auth/2fa/authenticator/setup"),
+    parseAuthenticatorSetup
+  );
+
+// A code from the new app turns 2FA on. Returns the recovery codes, shown
+// this one time only.
+export const enableProfileAuthenticator = async (code: string) =>
+  unwrap(
+    await apiClient.post("/auth/2fa/authenticator/enable", { code }),
+    parseRecoveryCodes
+  );
+
+// Emails you a code: to turn email 2FA on, or to confirm turning 2FA off.
+export const sendProfileEmailCode = async () =>
+  unwrap(await apiClient.post("/auth/2fa/email/code"), parseEmailCodeSent);
+
+export const enableEmailTwoFactor = async (code: string) => {
+  await apiClient.post("/auth/2fa/email/enable", { code });
+};
+
+// Password and a current code (app, recovery or emailed). Not allowed for
+// Admins. Signs out your other sessions.
+export const disableTwoFactor = async (body: {
+  password: string;
+  code: string;
+}) => {
+  keepSession(await apiClient.post("/auth/2fa/disable", body));
+};
+
+// Replaces your recovery codes; confirmed with a current app code. Returns
+// the new ones, shown this one time only.
+export const regenerateRecoveryCodes = async (code: string) =>
+  unwrap(
+    await apiClient.post("/auth/2fa/recovery-codes", { code }),
+    parseRecoveryCodes
+  );
+
+export type TwoFactorOptions = {
+  // An authenticator app is set up (app and recovery codes work).
+  authenticatorSetUp: boolean;
+  // False for Admins: they must keep 2FA on.
+  canTurnOff: boolean;
+  // What this server offers.
+  availableMethods: TwoFactorMethod[];
+};
+
+export type MyAccount = {
+  user: User;
+  recoveryCodesRemaining: number;
+  twoFactor: TwoFactorOptions;
+};
+
+const parseMyAccount: Parser<MyAccount> = (value) => {
+  const user = parseUser(value);
+  if (!user || !isRecord(value) || !isRecord(value.twoFactor)) return null;
+  const remaining = parseCount(value.recoveryCodesRemaining);
+  const { authenticatorSetUp, canTurnOff, availableMethods } = value.twoFactor;
+  if (
+    remaining === null ||
+    typeof authenticatorSetUp !== "boolean" ||
+    typeof canTurnOff !== "boolean" ||
+    !Array.isArray(availableMethods) ||
+    !availableMethods.every(isTwoFactorMethod)
+  ) {
+    return null;
+  }
+  return {
+    user,
+    recoveryCodesRemaining: remaining,
+    twoFactor: { authenticatorSetUp, canTurnOff, availableMethods },
+  };
+};
+
+// The signed-in user with their 2FA options, for the profile page.
+export const getMyAccount = async (signal?: AbortSignal) =>
+  unwrap(await apiClient.get("/auth/me", { signal }), parseMyAccount);

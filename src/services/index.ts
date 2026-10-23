@@ -6,7 +6,12 @@
 // refreshes every view of it.
 export { ApiError, apiClient } from "./api-client";
 export { errorMessage } from "./api-error";
+export * from "./audit";
 export * from "./auth";
+export * from "./invoices";
+export type { Page } from "./parse";
+export * from "./parties";
 export { queryClient } from "./query-client";
 export { onSessionExpired } from "./session";
+export * from "./shipments";
 export * from "./users";

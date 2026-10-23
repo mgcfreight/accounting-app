@@ -1,3 +1,12 @@
+import {
+  AuditAction,
+  BillingTrigger,
+  InvoiceReviewFlag,
+  PaymentTerms,
+  TaxBasis,
+  TaxTreatment,
+} from "../enums";
+
 export const LOGIN_PATH = "/login/";
 export const HOME_PATH = "/dashboard/";
 export const FORGOT_PASSWORD_PATH = "/forgot-password/";
@@ -55,3 +64,97 @@ export const chargeKindOptions = [
   },
   { key: "OTHER", label: "Other", value: "OTHER" },
 ];
+
+// ---------------------------------------------------------------------------
+// Labels and options for the Accounts API's invoicing values.
+
+
+const optionsFrom = <T extends string>(labels: Record<T, string>) =>
+  (Object.entries(labels) as [T, string][]).map(([value, label]) => ({
+    key: value,
+    label,
+    value,
+  }));
+
+export const paymentTermsLabels: Record<PaymentTerms, string> = {
+  [PaymentTerms.COD]: "COD",
+  [PaymentTerms.Prepaid]: "Prepaid",
+  [PaymentTerms.Net7]: "Net 7",
+  [PaymentTerms.Net15]: "Net 15",
+  [PaymentTerms.Net30]: "Net 30",
+  [PaymentTerms.Net60]: "Net 60",
+};
+export const paymentTermsOptions = optionsFrom(paymentTermsLabels);
+
+export const taxTreatmentLabels: Record<TaxTreatment, string> = {
+  [TaxTreatment.Standard]: "Standard",
+  [TaxTreatment.ZeroRated]: "Zero-rated",
+  [TaxTreatment.Exempt]: "Exempt",
+};
+export const taxTreatmentOptions = optionsFrom(taxTreatmentLabels);
+
+export const taxBasisLabels: Record<TaxBasis, string> = {
+  [TaxBasis.BillTo]: "Bill-to address",
+  [TaxBasis.Destination]: "Shipment destination",
+};
+export const taxBasisOptions = optionsFrom(taxBasisLabels);
+
+export const billingTriggerLabels: Record<BillingTrigger, string> = {
+  [BillingTrigger.Prepaid]: "Prepaid",
+  [BillingTrigger.COD]: "COD",
+  [BillingTrigger.OnShipmentCreated]: "Bills when the shipment is booked",
+  [BillingTrigger.OnDeliveryWithPod]: "Bills on delivery, with POD",
+};
+export const billingTriggerOptions = optionsFrom(billingTriggerLabels);
+
+export const reviewFlagLabels: Record<InvoiceReviewFlag, string> = {
+  [InvoiceReviewFlag.TermsMismatch]:
+    "The TMS payment terms differ from the agreement",
+  [InvoiceReviewFlag.NoReferenceNumber]:
+    "No reference number (BOL, pickup, PO, SO, PRO, quote or bill)",
+  [InvoiceReviewFlag.NoTmsCode]: "No TMS invoice code, so no invoice number",
+  [InvoiceReviewFlag.NoFxRate]: "A USD invoice without a rate to CAD",
+};
+
+export const auditActionLabels: Record<AuditAction, string> = {
+  [AuditAction.SignedIn]: "Signed in",
+  [AuditAction.SignInFailed]: "Sign-in failed",
+  [AuditAction.TwoFactorCodeRejected]: "2FA code rejected",
+  [AuditAction.AccountLocked]: "Account locked",
+  [AuditAction.SignedOut]: "Signed out",
+  [AuditAction.RefreshTokenReused]: "Session token reused",
+  [AuditAction.PasswordChanged]: "Password changed",
+  [AuditAction.PasswordResetRequested]: "Password reset requested",
+  [AuditAction.PasswordReset]: "Password reset",
+  [AuditAction.TwoFactorEnabled]: "2FA turned on",
+  [AuditAction.TwoFactorDisabled]: "2FA turned off",
+  [AuditAction.TwoFactorEmailCodeSent]: "2FA email code sent",
+  [AuditAction.RecoveryCodesRegenerated]: "Recovery codes replaced",
+  [AuditAction.UserCreated]: "User added",
+  [AuditAction.UserUpdated]: "User changed",
+  [AuditAction.UserEnabled]: "User enabled",
+  [AuditAction.UserDisabled]: "User disabled",
+  [AuditAction.UserPasswordSet]: "User password set",
+  [AuditAction.UserTwoFactorReset]: "User 2FA reset",
+  [AuditAction.PartyCreated]: "Party added",
+  [AuditAction.AgreementCreated]: "Agreement added",
+  [AuditAction.ShipmentCreated]: "Shipment entered",
+  [AuditAction.CustomerInvoiceUpdated]: "Customer invoice changed",
+  [AuditAction.CustomerInvoiceIssued]: "Customer invoice issued",
+  [AuditAction.CarrierInvoiceUpdated]: "Carrier invoice changed",
+  [AuditAction.CarrierInvoiceReceived]: "Carrier bill entered",
+  [AuditAction.CarrierInvoiceApproved]: "Carrier invoice approved",
+};
+
+// The codes the API accepts for a Canadian address (its CANADIAN_PROVINCES).
+export const CANADIAN_PROVINCES = [
+  "AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT",
+];
+
+// The API's input rules for invoicing (its RegexConstants).
+export const TMS_INVOICE_CODE_PATTERN = /^[A-Za-z0-9]{6}$/;
+export const FX_RATE_PATTERN = /^(?!0+(\.0+)?$)\d{1,6}(\.\d{1,6})?$/;
+export const QUANTITY_PATTERN = /^(?!0+(\.0+)?$)\d{1,9}(\.\d{1,3})?$/;
+export const UNIT_PRICE_PATTERN = /^\d{1,10}(\.\d{1,4})?$/;
+export const COUNTRY_PATTERN = /^[A-Z]{2}$/;
+export const REGION_PATTERN = /^[A-Z]{2,3}$/;

@@ -1,9 +1,13 @@
 import {
+  CarrierInvoiceStatus,
+  CustomerInvoiceStatus,
   InvoiceStatus,
   MatchStatus,
   PaymentDirection,
+  PaymentStatus,
   SyncRunStatus,
 } from "@/lib/enums";
+import { isZeroMoney } from "@/lib/money";
 import StatusChip, { ChipTone } from "./status-chip";
 
 // One chip per status, so every table and detail page shows a status the same
@@ -72,3 +76,63 @@ const syncStatus: Record<SyncRunStatus, { label: string; tone: ChipTone }> = {
 export const SyncStatusChip = ({ status }: { status: SyncRunStatus }) => (
   <StatusChip text={syncStatus[status].label} tone={syncStatus[status].tone} />
 );
+
+// The Accounts API's invoice statuses. Payment is a separate chip beside
+// them: a part-payment stays UNPAID, so amountPaid tells "part paid".
+
+const customerInvoiceStatus: Record<
+  CustomerInvoiceStatus,
+  { label: string; tone: ChipTone }
+> = {
+  [CustomerInvoiceStatus.Draft]: { label: "Draft", tone: "neutral" },
+  [CustomerInvoiceStatus.Issued]: { label: "Issued", tone: "primary" },
+  [CustomerInvoiceStatus.Void]: { label: "Void", tone: "neutral" },
+};
+
+export const CustomerInvoiceStatusChip = ({
+  status,
+}: {
+  status: CustomerInvoiceStatus;
+}) => (
+  <StatusChip
+    text={customerInvoiceStatus[status].label}
+    tone={customerInvoiceStatus[status].tone}
+  />
+);
+
+const carrierInvoiceStatus: Record<
+  CarrierInvoiceStatus,
+  { label: string; tone: ChipTone }
+> = {
+  [CarrierInvoiceStatus.Expected]: { label: "Awaiting bill", tone: "neutral" },
+  [CarrierInvoiceStatus.Received]: { label: "Received", tone: "secondary" },
+  [CarrierInvoiceStatus.OnHold]: { label: "On hold", tone: "warning" },
+  [CarrierInvoiceStatus.Approved]: { label: "Approved", tone: "primary" },
+  [CarrierInvoiceStatus.Void]: { label: "Void", tone: "neutral" },
+};
+
+export const CarrierInvoiceStatusChip = ({
+  status,
+}: {
+  status: CarrierInvoiceStatus;
+}) => (
+  <StatusChip
+    text={carrierInvoiceStatus[status].label}
+    tone={carrierInvoiceStatus[status].tone}
+  />
+);
+
+export const PaymentStatusChip = ({
+  status,
+  amountPaid,
+}: {
+  status: PaymentStatus;
+  amountPaid: string;
+}) =>
+  status === PaymentStatus.Paid ? (
+    <StatusChip text="Paid" tone="success" />
+  ) : isZeroMoney(amountPaid) ? (
+    <StatusChip text="Unpaid" tone="neutral" />
+  ) : (
+    <StatusChip text="Part paid" tone="secondary" />
+  );
