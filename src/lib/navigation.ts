@@ -4,6 +4,7 @@ import { canAccessRoute } from "./routes.config";
 export type MenuIconName =
   | "dashboard"
   | "invoices"
+  | "shipments"
   | "payments"
   | "shippers"
   | "carriers"
@@ -32,6 +33,7 @@ export const MENU_ITEMS: MenuItem[] = [
       { label: "Needs Review", route: "/needs-review/" },
     ],
   },
+  { icon: "shipments", label: "Shipments", route: "/shipments/" },
   { icon: "payments", label: "Payments", route: "/payments/" },
   { icon: "shippers", label: "Shippers", route: "/shippers/" },
   { icon: "carriers", label: "Carriers", route: "/carriers/" },

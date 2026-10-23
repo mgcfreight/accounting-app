@@ -10,7 +10,7 @@ import { LOGIN_PATH } from "@/lib/constants";
 import { User } from "@/lib/interfaces";
 import { canAccessRoute } from "@/lib/routes.config";
 import { createInitials, fullName, humanize } from "@/lib/utils";
-import { DownArrowSm, Logout, Setting2 } from "../icons";
+import { DownArrowSm, Logout, Setting2, User as UserIcon } from "../icons";
 import { useUser } from "../providers/user-provider";
 
 // mokal-app's DropdownProfile: initials, name and role, opening on hover as
@@ -93,6 +93,13 @@ export default function DropdownProfile({ user }: { user: User }) {
               <p className="text-sm opacity-70">{user.email}</p>
             </div>
           </div>
+        </DropdownItem>
+        <DropdownItem
+          key="my-profile"
+          startContent={<UserIcon />}
+          onPress={() => navigate("/profile/")}
+        >
+          My Profile
         </DropdownItem>
         {canAccessRoute("/settings/", user.role) ? (
           <DropdownItem

@@ -4,6 +4,7 @@ import {
   BaseButton,
   BaseTable,
   ErrorState,
+  FormModal,
   PartyAvatar,
   RowActions,
   StatusChip,
@@ -16,7 +17,13 @@ import { UserRole } from "@/lib/enums";
 import { User } from "@/lib/interfaces";
 import { BaseTableColumn, PaginationMeta } from "@/lib/types";
 import { formatDateTime, fullName, humanize } from "@/lib/utils";
-import { getUsers, resetUserTwoFactor, setUserEnabled } from "@/services";
+import {
+  getUsers,
+  getUserSessions,
+  resetUserTwoFactor,
+  setUserEnabled,
+} from "@/services";
+import SessionsTable from "../profile/sessions-table";
 import {
   ConfirmUserActionModal,
   SetPasswordModal,
@@ -37,7 +44,8 @@ type OpenModal =
   | { kind: "edit"; user: User }
   | { kind: "password"; user: User }
   | { kind: "reset-2fa"; user: User }
-  | { kind: "set-enabled"; user: User };
+  | { kind: "set-enabled"; user: User }
+  | { kind: "sessions"; user: User };
 
 // Design §9 roles, from the API's /user routes (Admin only). Paged on the
 // server: `paging` is what to ask for, the response's meta is what's shown.
@@ -69,6 +77,7 @@ export default function UsersSection() {
     return [
       { key: "edit", label: "Edit name or role", onPress: () => setModal({ kind: "edit", user: row }) },
       { key: "password", label: "Set password", onPress: () => setModal({ kind: "password", user: row }) },
+      { key: "sessions", label: "Sign-in history", onPress: () => setModal({ kind: "sessions", user: row }) },
       ...(!isSelf && row.twoFactorEnabled
         ? [{ key: "reset-2fa", label: "Reset 2FA", onPress: () => setModal({ kind: "reset-2fa", user: row }) }]
         : []),
@@ -149,6 +158,23 @@ export default function UsersSection() {
       ) : null}
       {modal?.kind === "password" ? (
         <SetPasswordModal user={modal.user} onClose={close} />
+      ) : null}
+      {modal?.kind === "sessions" ? (
+        <FormModal
+          isOpen
+          onOpenChange={(open) => !open && close()}
+          title={`Sign-in History: ${fullName(modal.user)}`}
+          confirmText="Close"
+          onConfirm={close}
+          size="2xl"
+        >
+          <SessionsTable
+            queryKey={["users", "sessions", modal.user.id]}
+            fetchPage={(query, signal) =>
+              getUserSessions({ ...query, userId: modal.user.id }, signal)
+            }
+          />
+        </FormModal>
       ) : null}
       {modal?.kind === "reset-2fa" ? (
         <ConfirmUserActionModal

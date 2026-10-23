@@ -52,6 +52,20 @@ export const routeConfig: Record<string, RouteConfig> = {
       },
     },
   },
+  shipments: {
+    header: "Shipments",
+    childRoutes: {
+      view: { header: "Shipment", previousRoute: "/shipments/" },
+      // Entering a shipment makes its invoices: Admins and Accountants.
+      new: {
+        header: "New Shipment",
+        previousRoute: "/shipments/",
+        roles: [UserRole.Admin, UserRole.Accountant],
+      },
+    },
+  },
+  // Every signed-in user's own account.
+  profile: { header: "My Profile" },
   payments: {
     header: "Payments",
     createNewButton: { text: "Record Payment", action: "record-payment" },
@@ -71,7 +85,8 @@ export const routeConfig: Record<string, RouteConfig> = {
   reports: { header: "Reports" },
   "needs-review": { header: "Needs Review" },
   "sync-status": { header: "Sync Status" },
-  "audit-log": { header: "Audit Log" },
+  // Admin only: the API's /audit routes show every user's activity and IPs.
+  "audit-log": { header: "Audit Log", roles: [UserRole.Admin] },
   // Admin only (design §9).
   settings: { header: "Settings", roles: [UserRole.Admin] },
 };

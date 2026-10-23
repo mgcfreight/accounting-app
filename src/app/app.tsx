@@ -12,8 +12,12 @@ import PartyList from "@/containers/parties/party-list";
 import ForgotPasswordForm from "@/containers/password/forgot-password-form";
 import ResetPasswordForm from "@/containers/password/reset-password-form";
 import Payments from "@/containers/payments/payments";
+import Profile from "@/containers/profile/profile";
 import Reports from "@/containers/reports/reports";
 import Settings from "@/containers/settings/settings";
+import ShipmentDetail from "@/containers/shipments/shipment-detail";
+import ShipmentForm from "@/containers/shipments/shipment-form";
+import ShipmentList from "@/containers/shipments/shipment-list";
 import SyncStatus from "@/containers/sync-status/sync-status";
 import { LOGIN_PATH } from "@/lib/constants";
 import { InvoiceDirection, PartyType } from "@/lib/enums";
@@ -100,6 +104,9 @@ export default function App() {
                 element={<InvoiceDetail direction={InvoiceDirection.Payable} />}
               />
               <Route path="needs-review" element={<NeedsReview />} />
+              <Route path="shipments" element={<ShipmentList />} />
+              <Route path="shipments/view" element={<ShipmentDetail />} />
+              <Route path="shipments/new" element={<ShipmentForm />} />
               <Route path="payments" element={<Payments />} />
               <Route
                 path="shippers"
@@ -121,6 +128,7 @@ export default function App() {
               <Route path="sync-status" element={<SyncStatus />} />
               <Route path="audit-log" element={<AuditLog />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="profile" element={<Profile />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

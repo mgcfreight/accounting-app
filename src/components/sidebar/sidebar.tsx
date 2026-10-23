@@ -23,6 +23,7 @@ import SidebarItem from "./sidebar-item";
 const menuIcons: Record<MenuIconName, ReactNode> = {
   dashboard: <DashboardIcon />,
   invoices: <ReciptItemSm />,
+  shipments: <TrackingIcon />,
   payments: <CashIcon className="svg-white" />,
   shippers: <User />,
   carriers: <CarrrierTruck />,
