@@ -1,56 +1,101 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
-import { toast } from "sonner";
+import { ReactNode, useState } from "react";
 import {
   BaseButton,
   BaseCardWrapper,
   BaseTable,
   ErrorState,
   InfoStrip,
-  Money,
+  StatusChip,
+  TableSkeleton,
 } from "@/components/common";
-import { ArrowRight, Pdf, Send } from "@/components/icons";
-import { InvoiceStatus, PartyType } from "@/lib/enums";
+import { Add, ArrowRight } from "@/components/icons";
+import { useCurrentUser } from "@/components/providers/user-provider";
+import { useServerTable } from "@/hooks";
 import {
-  findParty,
-  findStatements,
-  mockCarrierInvoices,
-  mockShipperInvoices,
-} from "@/lib/mock";
+  billingTriggerLabels,
+  paymentTermsLabels,
+  taxBasisLabels,
+  taxTreatmentLabels,
+} from "@/lib/constants";
+import { InvoiceDirection, PartyType, UserRole } from "@/lib/enums";
+import { AgreementView, PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDate, formatDateTime } from "@/lib/utils";
-import InvoiceCell from "../invoices/invoice-cell";
+import { formatDate, torontoToday } from "@/lib/utils";
+import {
+  ApiError,
+  errorMessage,
+  getCarrierInvoices,
+  getCustomerInvoices,
+  getParty,
+  Page,
+} from "@/services";
+import InvoiceViewCell, { InvoiceView } from "../invoices/invoice-view";
+import { AgreementFormModal } from "./party-modals";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
-  { key: "lane", label: "Lane" },
+  { key: "reference", label: "Load Ref" },
+  { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
   { key: "total", label: "Total" },
   { key: "balance", label: "Balance" },
   { key: "status", label: "Status" },
 ];
 
-// A shipper's or carrier's balance page (design §3 "Per-carrier breakdown"):
-// profile, balance, overdue, last payment, open invoices and statements.
+const Field = ({ label, children }: { label: string; children: ReactNode }) => (
+  <p>
+    <strong>{label}:</strong> {children}
+  </p>
+);
+
+// Calendar dates compare as text ("2026-10-14").
+const agreementState = (agreement: AgreementView, today: string) => {
+  if (agreement.effectiveFrom > today) return "upcoming";
+  if (agreement.effectiveTo !== null && agreement.effectiveTo < today) return "ended";
+  return "current";
+};
+
+// A shipper's or carrier's page: profile, agreed terms and invoices, from
+// the API's /party and /invoice routes. Balances and statements arrive with
+// payments.
 export default function PartyDetail({ type }: { type: PartyType }) {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
-  const party = findParty(id);
+  const { role } = useCurrentUser();
+  const [addingAgreement, setAddingAgreement] = useState(false);
   const isShipper = type === PartyType.Shipper;
+  const what = isShipper ? "Shipper" : "Carrier";
   const listHref = isShipper ? "/shippers/" : "/carriers/";
 
-  if (!party || party.type !== type) {
-    return (
-      <ErrorState
-        title={`${isShipper ? "Shipper" : "Carrier"} not found`}
-        message={id ? `There is no record ${id}.` : "None was chosen."}
-      />
+  const party = useQuery({
+    queryKey: ["parties", "detail", id],
+    queryFn: ({ signal }) => getParty(id!, signal),
+    enabled: !!id,
+  });
+
+  if (!id) return <ErrorState title={`${what} not found`} message="None was chosen." />;
+  if (party.isPending) return <TableSkeleton />;
+  if (party.isError) {
+    const notFound =
+      party.error instanceof ApiError &&
+      (party.error.status === 404 || party.error.status === 400);
+    return notFound ? (
+      <ErrorState title={`${what} not found`} message={`There is no record ${id}.`} />
+    ) : (
+      <ErrorState message={errorMessage(party.error)} onAction={() => void party.refetch()} />
     );
   }
 
-  const invoices = (isShipper ? mockShipperInvoices : mockCarrierInvoices).filter(
-    (invoice) => invoice.partyId === party.id && invoice.status !== InvoiceStatus.Void
-  );
-  const statements = findStatements(party.id);
+  const data = party.data;
+  if (data.type !== type) {
+    return <ErrorState title={`${what} not found`} message={`There is no record ${id}.`} />;
+  }
+
+  const today = torontoToday();
+  const agreements = data.agreements ?? [];
+  const current = agreements.find((a) => agreementState(a, today) === "current");
 
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -60,117 +105,157 @@ export default function PartyDetail({ type }: { type: PartyType }) {
             {isShipper ? "Shippers" : "Carriers"}
           </Link>
           <ArrowRight />
-          <span className="text-base-primary-600 text-sm">{party.name}</span>
+          <span className="text-base-primary-600 text-sm">{data.name}</span>
         </div>
-        <BaseButton
-          text="Send Statement Now"
-          className="rounded-xl px-4"
-          startContent={<Send />}
-          onPress={() =>
-            toast.info(`Statement to ${party.name} — demo only, nothing was sent.`)
-          }
-        />
+        {role !== UserRole.Viewer && (
+          <BaseButton
+            text="Add Agreement"
+            className="rounded-xl px-4"
+            startContent={<Add />}
+            onPress={() => setAddingAgreement(true)}
+          />
+        )}
       </div>
 
       <InfoStrip
         items={[
+          { label: "MGC Id", value: data.mgcId },
+          { label: "Currency", value: data.defaultCurrency },
           {
-            label: "Balance",
-            value: <Money amount={party.balance} currency={party.currency} className="font-semibold" />,
+            label: "Terms",
+            value: current ? paymentTermsLabels[current.paymentTerms] : "No agreement in force",
           },
           {
-            label: "Overdue",
-            value: <Money amount={party.overdue} currency={party.currency} />,
+            label: "Status",
+            value: data.isActive ? (
+              <StatusChip text="Active" tone="success" />
+            ) : (
+              <StatusChip text="Inactive" tone="neutral" />
+            ),
           },
-          { label: "Shipments", value: party.shipmentCount },
-          {
-            label: "Last Payment",
-            value: party.lastPaymentOn ? formatDate(party.lastPaymentOn) : "None yet",
-          },
-          { label: "Terms", value: `Net ${party.termsDays} days` },
+          { label: "Added", value: formatDate(data.createdAt) },
         ]}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <BaseCardWrapper heading="Profile">
-          <div className="text-sm text-[#343A40] space-y-1">
-            <p>
-              <strong>MGC id:</strong> {party.id}
-            </p>
-            <p>
-              <strong>Default currency:</strong> {party.currency}
-            </p>
-            <p>
-              <strong>GST/HST #:</strong> {party.gstHstNumber ?? "Not on file"}
-            </p>
-            <p>
-              <strong>Location:</strong> {party.address.city}, {party.address.province}{" "}
-              {party.address.postalCode}, {party.address.country}
-            </p>
-          </div>
-        </BaseCardWrapper>
-        <BaseCardWrapper heading="Billing Contacts">
-          <div className="text-sm text-[#343A40] space-y-1">
-            <p>
-              <strong>To:</strong> {party.billingEmails.join(", ")}
-            </p>
-            <p>
-              <strong>CC:</strong>{" "}
-              {party.ccEmails.length > 0 ? party.ccEmails.join(", ") : "None"}
-            </p>
-            <p className="text-xs text-content-5 pt-2">
-              {isShipper
-                ? "Invoices, reminders and Friday statements go to these addresses."
-                : "Carrier reminders go to MGC's accounts team, not the carrier."}
-            </p>
-          </div>
-        </BaseCardWrapper>
-      </div>
-
-      <BaseCardWrapper heading="Invoices">
-        <BaseTable
-          ariaLabel="Invoices"
-          columns={invoiceColumns}
-          data={invoices}
-          rowKey={(row) => row.id}
-          renderCell={(row, key) => <InvoiceCell invoice={row} columnKey={key} />}
-          emptyContent="No invoices"
-        />
+      <BaseCardWrapper heading="Profile">
+        <div className="text-sm text-[#343A40] space-y-1">
+          {data.legalName && <Field label="Legal name">{data.legalName}</Field>}
+          <Field label="GST/HST #">{data.gstHstNumber ?? "Not on file"}</Field>
+          <Field label="Address">
+            {[
+              data.addressLine1,
+              data.addressLine2,
+              [data.city, data.province, data.postalCode].filter(Boolean).join(" "),
+              data.country,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+          </Field>
+        </div>
       </BaseCardWrapper>
 
-      <BaseCardWrapper heading="Statement History" className="mb-5">
-        {statements.length === 0 ? (
-          <p className="text-sm text-content-5">No statements sent yet.</p>
+      <BaseCardWrapper heading="Agreements">
+        {agreements.length === 0 ? (
+          <p className="text-sm text-content-5">
+            No agreement yet. Invoices can&apos;t be made for this {what.toLowerCase()} until
+            one is added.
+          </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {statements.map((statement) => (
-              // On a phone the period takes its own line, with the sent time,
-              // balance and download below it.
-              <div
-                key={statement.id}
-                className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-x-3 gap-y-1 text-sm"
-              >
-                <span className="w-full sm:w-auto">
-                  {statement.id} · {formatDate(statement.periodFrom)} –{" "}
-                  {formatDate(statement.periodTo)}
-                </span>
-                <span className="hidden sm:block flex-1 border-dotted border-b border-gray-300" />
-                <span className="text-xs text-content-5 mr-auto sm:mr-0">
-                  Sent {formatDateTime(statement.sentAt)}
-                </span>
-                <Money amount={statement.closingBalance} currency={party.currency} />
-                <button
-                  type="button"
-                  aria-label={`Download ${statement.id}`}
-                  onClick={() => toast.info("Statement PDF — demo only.")}
-                >
-                  <Pdf />
-                </button>
-              </div>
+          <div className="flex flex-col gap-4">
+            {agreements.map((agreement) => (
+              <AgreementRow
+                key={agreement.id}
+                agreement={agreement}
+                state={agreementState(agreement, today)}
+              />
             ))}
           </div>
         )}
       </BaseCardWrapper>
+
+      <PartyInvoices party={data} />
+
+      {addingAgreement && (
+        <AgreementFormModal party={data} onClose={() => setAddingAgreement(false)} />
+      )}
     </div>
+  );
+}
+
+function AgreementRow({
+  agreement,
+  state,
+}: {
+  agreement: AgreementView;
+  state: ReturnType<typeof agreementState>;
+}) {
+  return (
+    <div className="flex flex-col gap-1 text-sm text-[#343A40] border-b border-gray-100 pb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">
+          {formatDate(agreement.effectiveFrom)} –{" "}
+          {agreement.effectiveTo ? formatDate(agreement.effectiveTo) : "open-ended"}
+        </span>
+        {state === "current" && <StatusChip text="In force" tone="success" />}
+        {state === "upcoming" && <StatusChip text="Starts later" tone="secondary" />}
+        {state === "ended" && <StatusChip text="Ended" tone="neutral" />}
+      </div>
+      <span>
+        {paymentTermsLabels[agreement.paymentTerms]} · {agreement.currency} · Tax{" "}
+        {taxTreatmentLabels[agreement.taxTreatment].toLowerCase()}, rate from{" "}
+        {taxBasisLabels[agreement.taxBasis].toLowerCase()}
+        {agreement.billingTrigger &&
+          ` · ${billingTriggerLabels[agreement.billingTrigger]}`}
+      </span>
+      {agreement.notes && (
+        <span className="text-content-5 whitespace-pre-wrap">{agreement.notes}</span>
+      )}
+    </div>
+  );
+}
+
+function PartyInvoices({ party }: { party: PartyView }) {
+  const isShipper = party.type === PartyType.Shipper;
+  const table = useServerTable(party.id);
+  const query = { page: table.page, limit: table.limit };
+
+  const invoices = useQuery({
+    queryKey: [
+      "invoices",
+      isShipper ? InvoiceDirection.Receivable : InvoiceDirection.Payable,
+      "party",
+      party.id,
+      query,
+    ],
+    queryFn: ({ signal }): Promise<Page<InvoiceView>> =>
+      isShipper
+        ? getCustomerInvoices({ ...query, customerId: party.id }, signal)
+        : getCarrierInvoices({ ...query, carrierId: party.id }, signal),
+    placeholderData: keepPreviousData,
+  });
+  const { meta, setMeta } = table.pager(invoices.data?.meta);
+
+  return (
+    <BaseCardWrapper heading="Invoices" className="mb-5">
+      {invoices.isError ? (
+        <ErrorState
+          message="We couldn't load the invoices. Please try again."
+          onAction={() => void invoices.refetch()}
+        />
+      ) : (
+        <BaseTable<InvoiceView>
+          ariaLabel="Invoices"
+          columns={invoiceColumns}
+          data={invoices.data?.items ?? []}
+          loading={invoices.isPending}
+          rowKey={(row) => row.id}
+          renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
+          meta={meta}
+          setMeta={setMeta}
+          bottomContent="Invoices"
+          emptyContent="No invoices"
+        />
+      )}
+    </BaseCardWrapper>
   );
 }

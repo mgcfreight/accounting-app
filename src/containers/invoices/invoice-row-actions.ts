@@ -1,40 +1,42 @@
-import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
-import { Invoice } from "@/lib/interfaces";
+import {
+  CarrierInvoiceStatus,
+  CustomerInvoiceStatus,
+  UserRole,
+} from "@/lib/enums";
 import { InvoiceAction } from "./invoice-action-modal";
+import { InvoiceView, isCustomerInvoice } from "./invoice-view";
 
-// Which actions an invoice offers, from its status (design §7, §8.2). Issued
-// invoices are never edited; they change through credit and debit notes.
+// Which actions an invoice offers, from its status — the same rules the API
+// enforces. Viewers get none. Issued customer invoices and approved carrier
+// invoices are never edited.
 export const availableActions = (
-  invoice: Invoice
+  invoice: InvoiceView,
+  role: UserRole
 ): { key: InvoiceAction; label: string }[] => {
-  const closed = [InvoiceStatus.Void, InvoiceStatus.WrittenOff].includes(
-    invoice.status
-  );
-  if (closed) return [];
+  if (role === UserRole.Viewer) return [];
 
-  const isDraft = invoice.status === InvoiceStatus.Draft;
-  const isReceivable = invoice.direction === InvoiceDirection.Receivable;
+  if (isCustomerInvoice(invoice)) {
+    return invoice.status === CustomerInvoiceStatus.Draft
+      ? [
+          { key: "issue", label: "Issue" },
+          { key: "edit", label: "Edit details" },
+        ]
+      : [];
+  }
 
-  return [
-    ...(isDraft
-      ? [
-          {
-            key: "issue" as const,
-            label: isReceivable ? "Issue & send" : "Confirm as payable",
-          },
-        ]
-      : []),
-    ...(!isReceivable
-      ? [{ key: "carrier-bill" as const, label: "Enter carrier bill" }]
-      : []),
-    ...(!isDraft
-      ? [
-          { key: "charge" as const, label: "Add charge" },
-          { key: "credit" as const, label: "Credit note" },
-        ]
-      : []),
-    ...(isReceivable && !isDraft && !invoice.disputed
-      ? [{ key: "dispute" as const, label: "Flag dispute" }]
-      : []),
-  ];
+  switch (invoice.status) {
+    case CarrierInvoiceStatus.Expected:
+      return [
+        { key: "receive", label: "Enter carrier bill" },
+        { key: "edit", label: "Edit details" },
+      ];
+    case CarrierInvoiceStatus.Received:
+    case CarrierInvoiceStatus.OnHold:
+      return [
+        { key: "approve", label: "Approve for payment" },
+        { key: "edit", label: "Edit details" },
+      ];
+    default:
+      return [];
+  }
 };

@@ -1,201 +1,505 @@
-import { useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
   BaseInput,
-  BaseSelect,
+  BaseSwitch,
   BaseTextArea,
   FormModal,
+  Money,
 } from "@/components/common";
-import { chargeKindOptions } from "@/lib/constants";
-import { InvoiceDirection } from "@/lib/enums";
-import { Invoice } from "@/lib/interfaces";
-import InvoiceCell from "./invoice-cell";
+import {
+  billingTriggerLabels,
+  FX_RATE_PATTERN,
+  reviewFlagLabels,
+  TMS_INVOICE_CODE_PATTERN,
+} from "@/lib/constants";
+import {
+  BillingTrigger,
+  CarrierInvoiceStatus,
+  Currency,
+  InvoiceReviewFlag,
+} from "@/lib/enums";
+import { CarrierInvoiceView, ReferenceNumbers } from "@/lib/interfaces";
+import {
+  ApiError,
+  approveCarrierInvoice,
+  errorMessage,
+  InvoiceChanges,
+  issueCustomerInvoice,
+  receiveCarrierInvoice,
+  updateCarrierInvoice,
+  updateCustomerInvoice,
+} from "@/services";
+import ChargeLines, { ChargeValues, emptyCharge, toCharges } from "./charge-lines";
+import {
+  InvoiceBalance,
+  invoiceNumberOf,
+  InvoiceView,
+  isCustomerInvoice,
+  partyOf,
+  referenceLabels,
+} from "./invoice-view";
 
-export type InvoiceAction =
-  | "issue"
-  | "charge"
-  | "credit"
-  | "dispute"
-  | "carrier-bill";
+export type InvoiceAction = "edit" | "issue" | "receive" | "approve";
 
-type FormValues = {
-  kind: string;
-  description: string;
-  amount: string;
-  reason: string;
-  billNo: string;
-};
-
-const titles: Record<InvoiceAction, string> = {
-  issue: "Issue & Send Invoice",
-  charge: "Add Charge (Debit Note)",
-  credit: "Credit Note",
-  dispute: "Flag as Disputed",
-  "carrier-bill": "Enter Carrier Bill",
-};
-
-const confirmText: Record<InvoiceAction, string> = {
-  issue: "Issue & Send",
-  charge: "Add Charge",
-  credit: "Create Credit Note",
-  dispute: "Flag Dispute",
-  "carrier-bill": "Save Bill",
-};
-
-// Amounts are typed as the 2-decimal string the API expects. Validation here
-// is for the form only; the API validates again.
-const AMOUNT_RULES = {
-  required: "Enter an amount",
-  pattern: {
-    value: /^\d{1,9}\.\d{2}$/,
-    message: "Enter the amount with cents, e.g. 125.00",
-  },
-};
-
-const emptyForm = (invoice: Invoice): FormValues => ({
-  kind: "",
-  description: "",
-  amount: "",
-  reason: "",
-  billNo: invoice.carrierBillNo ?? "",
-});
-
-// The forms behind an invoice's actions (design §8.2). Nothing is saved: the
-// screens run on mock data, so confirming shows a notice and closes.
+// The forms behind an invoice's actions, each sending the invoice's
+// `version`. Each is mounted only while open, so its form starts from the
+// invoice as last read. After a change — or a 409, meaning someone else
+// changed it first — every invoice query is refetched.
 export default function InvoiceActionModal({
   action,
   invoice,
   onClose,
 }: {
   action: InvoiceAction | null;
-  invoice: Invoice;
+  invoice: InvoiceView;
   onClose: () => void;
 }) {
-  const { control, handleSubmit, reset } = useForm<FormValues>({
-    defaultValues: emptyForm(invoice),
+  switch (action) {
+    case "edit":
+      return <EditInvoiceModal invoice={invoice} onClose={onClose} />;
+    case "issue":
+      return <IssueInvoiceModal invoice={invoice} onClose={onClose} />;
+    case "receive":
+      return isCustomerInvoice(invoice) ? null : (
+        <ReceiveBillModal invoice={invoice} onClose={onClose} />
+      );
+    case "approve":
+      return isCustomerInvoice(invoice) ? null : (
+        <ApproveInvoiceModal invoice={invoice} onClose={onClose} />
+      );
+    default:
+      return null;
+  }
+}
+
+// Saves through `action`, then refetches invoices and closes.
+const useInvoiceMutation = <T,>(
+  action: (values: T) => Promise<unknown>,
+  successMessage: string,
+  onClose: () => void
+) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: action,
+    onSuccess: () => {
+      toast.success(successMessage);
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      }
+    },
+  });
+};
+
+function InvoiceSummary({ invoice }: { invoice: InvoiceView }) {
+  return (
+    <p className="text-sm text-[#707070]">
+      {invoiceNumberOf(invoice) ?? "No number yet"} · {partyOf(invoice).name} ·
+      balance <InvoiceBalance invoice={invoice} className="" />
+    </p>
+  );
+}
+
+function ReviewFlagList({ flags }: { flags: InvoiceReviewFlag[] }) {
+  return (
+    <ul className="list-disc pl-5 text-sm text-[#343A40]">
+      {flags.map((flag) => (
+        <li key={flag}>{reviewFlagLabels[flag]}</li>
+      ))}
+    </ul>
+  );
+}
+
+// ----------------------------------------------------------------- edit
+
+type EditValues = Record<keyof ReferenceNumbers, string> & {
+  tmsInvoiceCode: string;
+  fxRateToCad: string;
+  notes: string;
+};
+
+const referenceKeys = Object.keys(referenceLabels) as (keyof ReferenceNumbers)[];
+
+const editDefaults = (invoice: InvoiceView): EditValues => ({
+  ...(Object.fromEntries(
+    referenceKeys.map((key) => [key, invoice[key] ?? ""])
+  ) as Record<keyof ReferenceNumbers, string>),
+  tmsInvoiceCode: invoice.tmsInvoiceCode ?? "",
+  fxRateToCad: invoice.fxRateToCad ?? "",
+  notes: invoice.notes ?? "",
+});
+
+// Only what changed is sent. An emptied reference number or note is sent as
+// "" (the API clears it); the TMS code and FX rate can't be cleared.
+const changesFrom = (
+  invoice: InvoiceView,
+  values: EditValues
+): Omit<InvoiceChanges, "version"> => {
+  const before = editDefaults(invoice);
+  const changes: Omit<InvoiceChanges, "version"> = {};
+  for (const key of [...referenceKeys, "notes"] as const) {
+    const value = values[key].trim();
+    if (value !== before[key]) changes[key] = value;
+  }
+  const code = values.tmsInvoiceCode.trim();
+  if (code && code !== before.tmsInvoiceCode) changes.tmsInvoiceCode = code;
+  const rate = values.fxRateToCad.trim();
+  if (rate && rate !== before.fxRateToCad) changes.fxRateToCad = rate;
+  return changes;
+};
+
+function EditInvoiceModal({
+  invoice,
+  onClose,
+}: {
+  invoice: InvoiceView;
+  onClose: () => void;
+}) {
+  const { control, handleSubmit } = useForm<EditValues>({
+    defaultValues: editDefaults(invoice),
   });
 
-  // Reset from the invoice each time, not from defaults captured on mount:
-  // the detail page keeps this modal mounted across invoices.
-  useEffect(() => {
-    if (action) reset(emptyForm(invoice));
-  }, [action, invoice, reset]);
+  const save = useInvoiceMutation(
+    (changes: Omit<InvoiceChanges, "version">) => {
+      const body = { ...changes, version: invoice.version };
+      return isCustomerInvoice(invoice)
+        ? updateCustomerInvoice(invoice.id, body)
+        : updateCarrierInvoice(invoice.id, body);
+    },
+    "Invoice updated.",
+    onClose
+  );
 
-  if (!action) return null;
+  const submit = handleSubmit((values) => {
+    const changes = changesFrom(invoice, values);
+    if (Object.keys(changes).length === 0) {
+      toast.info("Nothing changed.");
+      onClose();
+      return;
+    }
+    save.mutate(changes);
+  });
 
-  const submit = handleSubmit(() => {
-    toast.success(`${titles[action]} — demo only, nothing was saved or sent.`);
-    onClose();
+  const keepIfSet = (current: string | null, what: string) => (value: string) =>
+    !current || value.trim() !== "" || `The ${what} can't be removed once set`;
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Edit Invoice Details"
+      confirmText="Save"
+      isConfirming={save.isPending}
+      onConfirm={submit}
+      size="2xl"
+    >
+      <InvoiceSummary invoice={invoice} />
+      <p className="text-xs text-content-5">
+        Amounts never change here. Clear a reference number to remove it.
+      </p>
+      <BaseInput
+        name="tmsInvoiceCode"
+        control={control}
+        label="TMS invoice code"
+        placeholder="EGP9wr"
+        description="6 letters or digits. Gives the invoice its number."
+        rules={{
+          validate: {
+            format: (value: string) =>
+              value.trim() === "" ||
+              TMS_INVOICE_CODE_PATTERN.test(value.trim()) ||
+              "6 letters or digits",
+            keep: keepIfSet(invoice.tmsInvoiceCode, "TMS code"),
+          },
+        }}
+      />
+      {invoice.currency === Currency.USD && (
+        <BaseInput
+          name="fxRateToCad"
+          control={control}
+          label="Rate to CAD"
+          placeholder="1.372500"
+          description="USD to CAD, up to 6 decimals."
+          rules={{
+            validate: {
+              format: (value: string) =>
+                value.trim() === "" ||
+                FX_RATE_PATTERN.test(value.trim()) ||
+                "A positive number, up to 6 decimals",
+              keep: keepIfSet(invoice.fxRateToCad, "FX rate"),
+            },
+          }}
+        />
+      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {referenceKeys.map((key) => (
+          <BaseInput
+            key={key}
+            name={key}
+            control={control}
+            label={`${referenceLabels[key]} number`}
+            rules={{
+              maxLength: {
+                value: key === "quoteNumber" ? 32 : 64,
+                message: `At most ${key === "quoteNumber" ? 32 : 64} characters`,
+              },
+            }}
+          />
+        ))}
+      </div>
+      <BaseTextArea
+        name="notes"
+        control={control}
+        label="Notes"
+        rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
+      />
+    </FormModal>
+  );
+}
+
+// ---------------------------------------------------------------- issue
+
+function IssueInvoiceModal({
+  invoice,
+  onClose,
+}: {
+  invoice: InvoiceView;
+  onClose: () => void;
+}) {
+  const { control, handleSubmit } = useForm({
+    defaultValues: { acknowledgeReview: false },
+  });
+  const [missingAck, setMissingAck] = useState(false);
+  const flags = invoice.reviewFlags;
+
+  const issue = useInvoiceMutation(
+    ({ acknowledgeReview }: { acknowledgeReview: boolean }) =>
+      issueCustomerInvoice(invoice.id, {
+        version: invoice.version,
+        ...(flags.length > 0 && { acknowledgeReview }),
+      }),
+    "Invoice issued.",
+    onClose
+  );
+
+  const submit = handleSubmit((values) => {
+    if (flags.length > 0 && !values.acknowledgeReview) {
+      setMissingAck(true);
+      return;
+    }
+    issue.mutate(values);
   });
 
   return (
     <FormModal
       isOpen
       onOpenChange={(open) => !open && onClose()}
-      title={titles[action]}
-      confirmText={confirmText[action]}
+      title="Issue Invoice"
+      confirmText="Issue"
+      isConfirming={issue.isPending}
       onConfirm={submit}
     >
-      {/* InvoiceCell, so a draft reads "Not issued" rather than 0.00. */}
-      <p className="text-sm text-[#707070]">
-        {invoice.number} · {invoice.partyName} · balance{" "}
-        <InvoiceCell invoice={invoice} columnKey="balance" />
+      <InvoiceSummary invoice={invoice} />
+      <p className="text-sm">
+        Once issued, the invoice&apos;s amounts never change. It needs a TMS
+        invoice code and at least one reference number.
       </p>
-
-      {action === "issue" &&
-        (invoice.direction === InvoiceDirection.Receivable ? (
-          <p className="text-sm">
-            The invoice PDF and attachments will be emailed to the
-            shipper&apos;s billing contacts, and the invoice can no longer be
-            edited — changes after this are made with credit or debit notes.
-          </p>
-        ) : (
-          <p className="text-sm">
-            Confirms this carrier invoice as payable. It can no longer be
-            edited — changes after this are made with credit or debit notes.
-          </p>
-        ))}
-
-      {action === "charge" && (
+      {flags.length > 0 && (
         <>
-          <BaseSelect
-            name="kind"
-            control={control}
-            label="Charge type"
-            options={chargeKindOptions}
-            rules={{ required: "Choose a charge type" }}
-          />
-          <BaseInput
-            name="description"
-            control={control}
-            label="Description"
-            placeholder="Detention at consignee, 2 hours"
-            rules={{ required: "Enter a description" }}
-          />
-          <BaseInput
-            name="amount"
-            control={control}
-            label={`Amount before tax (${invoice.currency})`}
-            placeholder="0.00"
-            rules={AMOUNT_RULES}
-          />
-          <p className="text-xs text-content-5">
-            Tax is added from the tax table for this shipment&apos;s province,
-            the same way as the original lines.
-          </p>
+          <p className="text-sm font-semibold">This invoice is flagged:</p>
+          <ReviewFlagList flags={flags} />
+          <BaseSwitch name="acknowledgeReview" control={control}>
+            I&apos;ve checked these. (Recorded in the audit log.)
+          </BaseSwitch>
+          {missingAck && (
+            <p className="text-xs text-base-danger">
+              Confirm you&apos;ve checked the flags to issue it.
+            </p>
+          )}
         </>
       )}
+    </FormModal>
+  );
+}
 
-      {action === "credit" && (
-        <>
-          <BaseInput
-            name="amount"
-            control={control}
-            label={`Credit amount before tax (${invoice.currency})`}
-            placeholder="0.00"
-            rules={AMOUNT_RULES}
-          />
-          <BaseTextArea
-            name="reason"
-            control={control}
-            label="Reason"
-            placeholder="Rate correction agreed with customer"
-            rules={{ required: "Enter a reason" }}
-          />
-        </>
-      )}
+// ------------------------------------------------------- carrier: receive
 
-      {action === "dispute" && (
-        <BaseTextArea
-          name="reason"
+type BillValues = {
+  carrierInvoiceNumber: string;
+  invoiceDate: string;
+  lines: ChargeValues[];
+};
+
+function ReceiveBillModal({
+  invoice,
+  onClose,
+}: {
+  invoice: CarrierInvoiceView;
+  onClose: () => void;
+}) {
+  const { control, handleSubmit } = useForm<BillValues>({
+    defaultValues: {
+      carrierInvoiceNumber: "",
+      invoiceDate: "",
+      lines: [emptyCharge],
+    },
+  });
+
+  const receive = useInvoiceMutation(
+    (values: BillValues) =>
+      receiveCarrierInvoice(invoice.id, {
+        version: invoice.version,
+        carrierInvoiceNumber: values.carrierInvoiceNumber.trim(),
+        invoiceDate: values.invoiceDate,
+        lines: toCharges(values.lines),
+      }),
+    "Carrier bill recorded.",
+    onClose
+  );
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Enter Carrier Bill"
+      confirmText="Save Bill"
+      isConfirming={receive.isPending}
+      onConfirm={handleSubmit((values) => receive.mutate(values))}
+      size="2xl"
+    >
+      <p className="text-sm text-[#707070]">
+        {invoice.carrierName} · expected{" "}
+        <Money amount={invoice.expectedTotal} currency={invoice.currency} />{" "}
+        before tax
+      </p>
+      <p className="text-xs text-content-5">
+        Enter the charges as printed on the bill, before tax. Line amounts and
+        tax are calculated by the server. A subtotal different from expected
+        puts the invoice on hold. The due date counts from today.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <BaseInput
+          name="carrierInvoiceNumber"
           control={control}
-          label="Reason for dispute"
-          placeholder="Customer says liftgate was not used"
-          rules={{ required: "Enter a reason" }}
-          description="Disputed invoices get no reminders and are shown separately in aging."
+          label="Carrier's bill number"
+          placeholder="SH-55102"
+          rules={{
+            required: "Enter the carrier's bill number",
+            maxLength: { value: 64, message: "At most 64 characters" },
+          }}
         />
-      )}
+        <BaseInput
+          name="invoiceDate"
+          control={control}
+          type="date"
+          label="Date on the bill"
+          description="Picks the tax rate."
+          rules={{
+            required: "Enter the date on the bill",
+            pattern: { value: /^\d{4}-\d{2}-\d{2}$/, message: "Enter a date" },
+          }}
+        />
+      </div>
+      <ChargeLines
+        control={control}
+        name="lines"
+        priceLabel={`Unit price (${invoice.currency})`}
+      />
+    </FormModal>
+  );
+}
 
-      {action === "carrier-bill" && (
+// ------------------------------------------------------- carrier: approve
+
+function ApproveInvoiceModal({
+  invoice,
+  onClose,
+}: {
+  invoice: CarrierInvoiceView;
+  onClose: () => void;
+}) {
+  const { control, handleSubmit } = useForm({
+    defaultValues: { podReceived: false, acknowledgeReview: false },
+  });
+  const [missing, setMissing] = useState<string | null>(null);
+  const needsPod = invoice.billingTrigger === BillingTrigger.OnDeliveryWithPod;
+  const flags = invoice.reviewFlags;
+
+  const approve = useInvoiceMutation(
+    (values: { podReceived: boolean; acknowledgeReview: boolean }) =>
+      approveCarrierInvoice(invoice.id, {
+        version: invoice.version,
+        ...(needsPod && { podReceived: values.podReceived }),
+        ...(flags.length > 0 && { acknowledgeReview: values.acknowledgeReview }),
+      }),
+    "Carrier invoice approved.",
+    onClose
+  );
+
+  const submit = handleSubmit((values) => {
+    if (needsPod && !values.podReceived) {
+      setMissing("Confirm the POD was received to approve it.");
+      return;
+    }
+    if (flags.length > 0 && !values.acknowledgeReview) {
+      setMissing("Confirm you've checked the flags to approve it.");
+      return;
+    }
+    approve.mutate(values);
+  });
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Approve for Payment"
+      confirmText="Approve"
+      isConfirming={approve.isPending}
+      onConfirm={submit}
+    >
+      <InvoiceSummary invoice={invoice} />
+      {invoice.status === CarrierInvoiceStatus.OnHold && (
+        <div className="text-sm space-y-1">
+          <p>
+            <strong>On hold:</strong> {invoice.holdReason ?? "The bill differs from what was expected."}
+          </p>
+          <p>
+            Expected{" "}
+            <Money amount={invoice.expectedTotal} currency={invoice.currency} />
+            {invoice.varianceAmount !== null && (
+              <>
+                , difference{" "}
+                <Money amount={invoice.varianceAmount} currency={invoice.currency} />
+              </>
+            )}
+            . Approving accepts the difference.
+          </p>
+        </div>
+      )}
+      {needsPod && (
+        <BaseSwitch name="podReceived" control={control}>
+          The proof of delivery was received. (
+          {billingTriggerLabels[invoice.billingTrigger]}; recorded in the audit
+          log.)
+        </BaseSwitch>
+      )}
+      {flags.length > 0 && (
         <>
-          <BaseInput
-            name="billNo"
-            control={control}
-            label="Carrier bill number"
-            placeholder="DR-778120"
-            rules={{ required: "Enter the carrier's bill number" }}
-          />
-          <BaseInput
-            name="amount"
-            control={control}
-            label={`Bill total (${invoice.currency})`}
-            placeholder="0.00"
-            rules={AMOUNT_RULES}
-            description="If it differs from the expected total, the difference becomes a debit or credit note."
-          />
+          <p className="text-sm font-semibold">This invoice is flagged:</p>
+          <ReviewFlagList flags={flags} />
+          <BaseSwitch name="acknowledgeReview" control={control}>
+            I&apos;ve checked these. (Recorded in the audit log.)
+          </BaseSwitch>
         </>
       )}
+      {missing && <p className="text-xs text-base-danger">{missing}</p>}
     </FormModal>
   );
 }

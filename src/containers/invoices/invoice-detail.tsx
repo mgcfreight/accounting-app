@@ -1,43 +1,58 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
-import { useState } from "react";
-import { toast } from "sonner";
+import { ReactNode, useState } from "react";
 import {
+  AlertBanner,
   BaseButton,
   BaseCardWrapper,
   DetailRow,
   ErrorState,
   InfoStrip,
-  InvoiceFlags,
-  InvoiceStatusChip,
   Money,
-  StatusChip,
+  TableSkeleton,
 } from "@/components/common";
+import { ArrowRight, Send } from "@/components/icons";
+import { useCurrentUser } from "@/components/providers/user-provider";
 import {
-  ArrowRight,
-  DocumentUpload,
-  Pdf,
-  Printer,
-  Send,
-} from "@/components/icons";
-import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
-import { findInvoice, findParty } from "@/lib/mock";
-import { paymentMethodLabel } from "@/lib/constants";
-import { formatDate, formatDateTime } from "@/lib/utils";
+  billingTriggerLabels,
+  paymentTermsLabels,
+  reviewFlagLabels,
+  taxBasisLabels,
+} from "@/lib/constants";
+import { CarrierInvoiceStatus, InvoiceDirection } from "@/lib/enums";
+import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
+import { formatDate, formatDateTime, humanize } from "@/lib/utils";
+import {
+  ApiError,
+  errorMessage,
+  getCarrierInvoice,
+  getCustomerInvoice,
+} from "@/services";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { availableActions } from "./invoice-row-actions";
+import {
+  awaitsReview,
+  InvoiceBalance,
+  invoiceListHref,
+  invoiceNumberOf,
+  InvoiceStatusCell,
+  InvoiceTotal,
+  InvoiceView,
+  isCustomerInvoice,
+  partyOf,
+  referencesOf,
+} from "./invoice-view";
 
-const attachmentLabel = {
-  MGC_INVOICE: "MGC invoice",
-  BOL: "Bill of lading",
-  POD: "Proof of delivery",
-  OTHER: "Document",
-};
+const Field = ({ label, children }: { label: string; children: ReactNode }) => (
+  <p>
+    <strong>{label}:</strong> {children}
+  </p>
+);
 
-const demoOnly = (what: string) =>
-  toast.info(`${what} — demo only. Files and PDFs arrive with the API.`);
+const orNone = (value: string | null) => value ?? "Not on file";
 
-// mokal-app's InvoiceId page, extended with what the design adds to an
-// invoice (§9): lines with tax, notes, payments, attachments and history.
+// mokal-app's InvoiceId page, on the Accounts API: the invoice, who it's for,
+// its lines and taxes, and what can be done with it next.
 export default function InvoiceDetail({
   direction,
 }: {
@@ -45,21 +60,44 @@ export default function InvoiceDetail({
 }) {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
-  const invoice = findInvoice(id);
+  const { role } = useCurrentUser();
   const [action, setAction] = useState<InvoiceAction | null>(null);
   const isReceivable = direction === InvoiceDirection.Receivable;
-  const listHref = isReceivable ? "/shipper-invoices/" : "/carrier-invoices/";
+  const listHref = invoiceListHref(direction);
 
-  if (!invoice || invoice.direction !== direction) {
-    return (
+  const invoice = useQuery({
+    queryKey: ["invoices", direction, "detail", id],
+    queryFn: ({ signal }): Promise<InvoiceView> =>
+      isReceivable
+        ? getCustomerInvoice(id!, signal)
+        : getCarrierInvoice(id!, signal),
+    enabled: !!id,
+  });
+
+  if (!id) {
+    return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
+  }
+  if (invoice.isPending) return <TableSkeleton />;
+  if (invoice.isError) {
+    // 400: not an invoice id. 404: no such invoice.
+    const notFound =
+      invoice.error instanceof ApiError &&
+      (invoice.error.status === 404 || invoice.error.status === 400);
+    return notFound ? (
+      <ErrorState title="Invoice not found" message={`There is no invoice ${id}.`} />
+    ) : (
       <ErrorState
-        title="Invoice not found"
-        message={id ? `There is no invoice ${id}.` : "No invoice was chosen."}
+        message={errorMessage(invoice.error)}
+        onAction={() => void invoice.refetch()}
       />
     );
   }
 
-  const party = findParty(invoice.partyId);
+  const data = invoice.data;
+  const number = invoiceNumberOf(data);
+  const party = partyOf(data);
+  const actions = availableActions(data, role);
+  const references = referencesOf(data);
 
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -69,255 +107,230 @@ export default function InvoiceDetail({
             {isReceivable ? "Shipper Invoices" : "Carrier Invoices"}
           </Link>
           <ArrowRight />
-          <span className="text-base-primary-600 text-sm">#{invoice.number}</span>
+          <span className="text-base-primary-600 text-sm">
+            {number ? `#${number}` : "No number yet"}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {availableActions(invoice).map((item) => (
+          {actions.map((item, index) => (
             <BaseButton
               key={item.key}
               text={item.label}
-              varient={item.key === "issue" ? "solid" : "bordered"}
-              className={`rounded-xl px-4 ${
-                item.key === "issue" ? "" : "text-base-primary"
-              }`}
+              varient={index === 0 ? "solid" : "bordered"}
+              className={`rounded-xl px-4 ${index === 0 ? "" : "text-base-primary"}`}
               startContent={item.key === "issue" ? <Send /> : undefined}
               onPress={() => setAction(item.key)}
             />
           ))}
-          <BaseButton
-            text="PDF"
-            varient="bordered"
-            className="rounded-xl px-4 text-base-primary"
-            startContent={<Printer />}
-            onPress={() => demoOnly("Invoice PDF")}
-          />
         </div>
       </div>
 
+      {awaitsReview(data) && (
+        <AlertBanner
+          message={
+            <>
+              Check before {isReceivable ? "issuing" : "approving"}:{" "}
+              {data.reviewFlags.map((flag) => reviewFlagLabels[flag]).join("; ")}.
+            </>
+          }
+        />
+      )}
+
       <InfoStrip
         items={[
-          { label: "Invoice Date", value: formatDate(invoice.invoiceDate) },
-          { label: "Due Date", value: formatDate(invoice.dueDate) },
-          {
-            label: "Invoice Total",
-            value: <Money amount={invoice.total} currency={invoice.currency} />,
-          },
-          {
-            label: "Balance",
-            value:
-              invoice.status === InvoiceStatus.Draft ? (
-                "Not issued yet"
-              ) : invoice.status === InvoiceStatus.Void ? (
-                "Void — nothing owed"
-              ) : (
-                <Money
-                  amount={invoice.balance}
-                  currency={invoice.currency}
-                  className="font-semibold"
-                />
-              ),
-          },
-          {
-            label: "Status",
-            value: (
-              <div className="flex flex-wrap gap-1">
-                <InvoiceStatusChip status={invoice.status} />
-                <InvoiceFlags
-                  overdueDays={invoice.overdueDays}
-                  disputed={invoice.disputed}
-                />
-              </div>
-            ),
-          },
+          { label: "Invoice Date", value: formatDate(data.invoiceDate ?? undefined) ?? "—" },
+          { label: "Due Date", value: formatDate(data.dueDate ?? undefined) ?? "—" },
+          { label: "Invoice Total", value: <InvoiceTotal invoice={data} /> },
+          { label: "Balance", value: <InvoiceBalance invoice={data} /> },
+          { label: "Status", value: <InvoiceStatusCell invoice={data} /> },
         ]}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <BaseCardWrapper heading={isReceivable ? "Bill To" : "Carrier"}>
+        {isCustomerInvoice(data) ? (
+          <BillToCard invoice={data} href={party.href} />
+        ) : (
+          <CarrierCard invoice={data} href={party.href} />
+        )}
+        <BaseCardWrapper heading="Details">
           <div className="text-sm text-[#343A40] space-y-1">
-            <p>
-              <strong>Name:</strong>{" "}
-              <Link
-                to={`${isReceivable ? "/shippers" : "/carriers"}/view/?id=${invoice.partyId}`}
-                className="text-base-primary-300 hover:underline"
-              >
-                {invoice.partyName}
-              </Link>
-            </p>
-            {party && (
-              <>
-                <p>
-                  <strong>Billing email:</strong> {party.billingEmails.join(", ")}
-                </p>
-                {party.ccEmails.length > 0 && (
-                  <p>
-                    <strong>CC:</strong> {party.ccEmails.join(", ")}
-                  </p>
-                )}
-                <p>
-                  <strong>Terms:</strong> Net {party.termsDays} days
-                </p>
-                <p>
-                  <strong>GST/HST #:</strong> {party.gstHstNumber ?? "Not on file"}
-                </p>
-                <p>
-                  <strong>Location:</strong> {party.address.city},{" "}
-                  {party.address.province} {party.address.postalCode},{" "}
-                  {party.address.country}
-                </p>
-              </>
+            <Field label="Currency">{data.currency}</Field>
+            {data.fxRateToCad !== null && (
+              <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
-          </div>
-        </BaseCardWrapper>
-        <BaseCardWrapper heading="Shipment">
-          <div className="text-sm text-[#343A40] space-y-1">
-            <p>
-              <strong>Shipment:</strong> {invoice.shipmentId}
-            </p>
-            <p>
-              <strong>From:</strong> {invoice.origin}
-            </p>
-            <p>
-              <strong>To:</strong> {invoice.destination}
-            </p>
-            <p>
-              <strong>Currency:</strong> {invoice.currency}
-            </p>
-            {!isReceivable && (
-              <p>
-                <strong>Carrier bill #:</strong>{" "}
-                {invoice.carrierBillNo ?? "Awaiting bill"}
-              </p>
-            )}
+            <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
+            <Field label="Tax">
+              {taxBasisLabels[data.taxBasis]}
+              {data.taxJurisdiction && ` · ${data.taxJurisdiction}`}
+            </Field>
+            <Field label="Kind">{humanize(data.kind)}</Field>
+            <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
+            <Field label="Shipment">{data.shipmentId ?? "—"}</Field>
+            <Field label="Reference numbers">
+              {references.length > 0
+                ? references.map((ref) => `${ref.label} ${ref.value}`).join(" · ")
+                : "None"}
+            </Field>
           </div>
         </BaseCardWrapper>
       </div>
 
-      <BaseCardWrapper heading="Charges">
-        <div className="flex flex-col gap-4 mb-4 pb-4">
-          {invoice.lines.map((line) => (
-            <div key={line.id} className="flex flex-col gap-2">
-              <DetailRow
-                label={line.description}
-                value={<Money amount={line.amount} currency={invoice.currency} />}
-              />
-              <DetailRow
-                label={<span className="pl-4 text-content-5">{line.taxCode}</span>}
-                value={
-                  <Money amount={line.taxAmount} currency={invoice.currency} />
-                }
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col gap-2 border-t-2 border-base-default pt-4">
-          <DetailRow
-            label="Subtotal"
-            value={<Money amount={invoice.subtotal} currency={invoice.currency} />}
-          />
-          <DetailRow
-            label={isReceivable ? "Tax" : "Tax (input tax credit)"}
-            value={<Money amount={invoice.taxTotal} currency={invoice.currency} />}
-          />
-        </div>
-        <div className="flex flex-col items-end gap-3 mt-6">
-          <span className="font-medium text-sm">Invoice Total</span>
-          <Money
-            amount={invoice.total}
-            currency={invoice.currency}
-            className="font-medium text-xl"
-          />
-          <span className="text-sm opacity-70">Including tax</span>
-        </div>
-      </BaseCardWrapper>
+      <ChargesCard invoice={data} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <BaseCardWrapper heading="Credit & Debit Notes">
-          {invoice.adjustments.length === 0 ? (
-            <p className="text-sm text-content-5">No notes on this invoice.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {invoice.adjustments.map((note) => (
-                <DetailRow
-                  key={note.id}
-                  label={`${note.number} · ${note.reason}`}
-                  value={<Money amount={note.total} currency={invoice.currency} />}
-                />
-              ))}
-            </div>
-          )}
+      {data.notes && (
+        <BaseCardWrapper heading="Notes" className="mb-5">
+          {/* Rendered as text by React, so a note can't inject markup. */}
+          <p className="text-sm text-[#343A40] whitespace-pre-wrap">{data.notes}</p>
         </BaseCardWrapper>
-        <BaseCardWrapper heading="Payments">
-          {invoice.payments.length === 0 ? (
-            <p className="text-sm text-content-5">No payments yet.</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {invoice.payments.map((payment) => (
-                <DetailRow
-                  key={payment.id}
-                  label={`${payment.paymentNumber} · ${paymentMethodLabel(payment.method)} · ${formatDate(payment.paidOn)}`}
-                  value={
-                    <Money amount={payment.amount} currency={invoice.currency} />
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </BaseCardWrapper>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
-        <BaseCardWrapper
-          heading="Documents"
-          action={
-            <BaseButton
-              text="Upload"
-              varient="light"
-              className="text-base-primary"
-              startContent={<DocumentUpload />}
-              onPress={() => demoOnly("Upload")}
-            />
-          }
-        >
-          <div className="flex flex-col gap-3">
-            {invoice.attachments.map((file) => (
-              <div key={file.id} className="flex justify-between items-center gap-3">
-                <span className="text-sm">{attachmentLabel[file.kind]}</span>
-                <span className="flex-1 border-dotted border-b border-gray-300" />
-                <button
-                  type="button"
-                  aria-label={`Download ${file.fileName}`}
-                  onClick={() => demoOnly(file.fileName)}
-                >
-                  <Pdf />
-                </button>
-              </div>
-            ))}
-            {!invoice.attachments.some((file) => file.kind === "POD") && (
-              <StatusChip text="No POD yet" tone="neutral" className="w-fit" />
-            )}
-          </div>
-        </BaseCardWrapper>
-        <BaseCardWrapper heading="History">
-          <ol className="relative border-l-2 border-base-default ml-2 flex flex-col gap-4">
-            {invoice.history.map((entry) => (
-              <li key={entry.id} className="ml-4">
-                <span className="absolute -left-1.75 mt-1 h-3 w-3 rounded-full bg-base-primary-300" />
-                <p className="text-sm text-[#343A40]">{entry.action}</p>
-                <p className="text-xs text-content-5">
-                  {formatDateTime(entry.at)} · {entry.user}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </BaseCardWrapper>
-      </div>
+      )}
 
       <InvoiceActionModal
         action={action}
-        invoice={invoice}
+        invoice={data}
         onClose={() => setAction(null)}
       />
     </div>
+  );
+}
+
+// The customer's billing address as it was when the invoice was made.
+function BillToCard({ invoice, href }: { invoice: CustomerInvoiceView; href: string }) {
+  const { billTo } = invoice;
+  const place = [billTo.city, billTo.province, billTo.postal_code]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <BaseCardWrapper heading="Bill To">
+      <div className="text-sm text-[#343A40] space-y-1">
+        <Field label="Name">
+          <Link to={href} className="text-base-primary-300 hover:underline">
+            {billTo.name}
+          </Link>
+        </Field>
+        {billTo.legal_name && <Field label="Legal name">{billTo.legal_name}</Field>}
+        <Field label="GST/HST #">{orNone(billTo.gst_hst_number)}</Field>
+        <Field label="Address">
+          {[billTo.address_line1, billTo.address_line2, place, billTo.country]
+            .filter(Boolean)
+            .join(", ")}
+        </Field>
+        {invoice.issuedAt && (
+          <Field label="Issued">{formatDateTime(invoice.issuedAt)}</Field>
+        )}
+        {invoice.sentAt && <Field label="Sent">{formatDateTime(invoice.sentAt)}</Field>}
+        <p className="text-xs text-content-5 pt-2">
+          As it was when the invoice was made.
+        </p>
+      </div>
+    </BaseCardWrapper>
+  );
+}
+
+function CarrierCard({ invoice, href }: { invoice: CarrierInvoiceView; href: string }) {
+  return (
+    <BaseCardWrapper heading="Carrier">
+      <div className="text-sm text-[#343A40] space-y-1">
+        <Field label="Name">
+          <Link to={href} className="text-base-primary-300 hover:underline">
+            {invoice.carrierName}
+          </Link>
+        </Field>
+        <Field label="Billing">{billingTriggerLabels[invoice.billingTrigger]}</Field>
+        <Field label="Carrier bill #">
+          {invoice.carrierInvoiceNumber ?? "Awaiting bill"}
+        </Field>
+        {invoice.receivedAt && (
+          <Field label="Bill received">{formatDateTime(invoice.receivedAt)}</Field>
+        )}
+        {invoice.approvedAt && (
+          <Field label="Approved">{formatDateTime(invoice.approvedAt)}</Field>
+        )}
+        {invoice.status === CarrierInvoiceStatus.OnHold && (
+          <Field label="On hold">
+            {invoice.holdReason ?? "The bill differs from what was expected."}
+          </Field>
+        )}
+        <Field label="Expected total">
+          <Money amount={invoice.expectedTotal} currency={invoice.currency} />
+        </Field>
+        {invoice.varianceAmount !== null && (
+          <Field label="Difference from expected">
+            <Money amount={invoice.varianceAmount} currency={invoice.currency} />
+          </Field>
+        )}
+      </div>
+    </BaseCardWrapper>
+  );
+}
+
+// Lines, taxes and totals, exactly as the API calculated them.
+function ChargesCard({ invoice }: { invoice: InvoiceView }) {
+  const { currency } = invoice;
+  const lines = invoice.lines ?? [];
+  const awaitingBill =
+    !isCustomerInvoice(invoice) && invoice.status === CarrierInvoiceStatus.Expected;
+
+  return (
+    <BaseCardWrapper heading="Charges">
+      {awaitingBill ? (
+        <p className="text-sm text-content-5">
+          The carrier&apos;s bill hasn&apos;t arrived. Its charges show here once
+          it&apos;s entered.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-col gap-4 mb-4 pb-4">
+            {lines.map((line) => (
+              <DetailRow
+                key={line.id}
+                label={
+                  <span>
+                    {line.description}
+                    <span className="block text-xs text-content-5">
+                      {line.chargeTypeCode} · {line.quantity} × {currency}{" "}
+                      {line.unitPrice}
+                      {line.isTaxable ? "" : " · not taxed"}
+                    </span>
+                  </span>
+                }
+                value={<Money amount={line.amount} currency={currency} />}
+              />
+            ))}
+          </div>
+          <div className="flex flex-col gap-2 border-t-2 border-base-default pt-4">
+            <DetailRow
+              label="Subtotal"
+              value={<Money amount={invoice.subtotal} currency={currency} />}
+            />
+            {invoice.taxes.map((tax) => (
+              <DetailRow
+                key={`${tax.tax_rate_id}-${tax.code}`}
+                label={
+                  <span className="pl-4 text-content-5">
+                    {tax.code} {tax.rate_percent}%
+                    {tax.jurisdiction && ` (${tax.jurisdiction})`} on{" "}
+                    <Money amount={tax.taxable_amount} currency={currency} />
+                  </span>
+                }
+                value={<Money amount={tax.tax_amount} currency={currency} />}
+              />
+            ))}
+            <DetailRow
+              label={isCustomerInvoice(invoice) ? "Tax" : "Tax (input tax credit)"}
+              value={<Money amount={invoice.taxTotal} currency={currency} />}
+            />
+          </div>
+          <div className="flex flex-col items-end gap-3 mt-6">
+            <span className="font-medium text-sm">Invoice Total</span>
+            <Money amount={invoice.total} currency={currency} className="font-medium text-xl" />
+            <span className="text-sm opacity-70">Including tax</span>
+            <span className="text-sm">
+              Paid <Money amount={invoice.amountPaid} currency={currency} /> · Balance{" "}
+              <InvoiceBalance invoice={invoice} />
+            </span>
+          </div>
+        </>
+      )}
+    </BaseCardWrapper>
   );
 }

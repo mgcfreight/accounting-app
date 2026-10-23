@@ -1,10 +1,14 @@
 import { Card } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
+  BaseButton,
   BaseInput,
   BaseSelect,
   BaseTable,
+  ErrorState,
   FilterBar,
   FormModal,
   PartyAvatar,
@@ -12,88 +16,146 @@ import {
   StatusChip,
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
-import { useClientTable } from "@/hooks";
-import { AuditEntry } from "@/lib/interfaces";
-import { mockAuditLog } from "@/lib/mock";
+import { useDebouncedValue, useServerTable } from "@/hooks";
+import { auditActionLabels } from "@/lib/constants";
+import { AuditAction, AuditTargetType } from "@/lib/enums";
+import { AuditDetails, AuditEventView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, fullName, humanize } from "@/lib/utils";
+import { getAuditEvents } from "@/services";
 
-type Filters = { search: string; entity: string; user: string };
+type Filters = { action: string; targetId: string };
+
+// Narrowing to one user or one sign-in, picked from a row.
+type Scope = { kind: "actor" | "session"; id: string; label: string };
 
 const columns: BaseTableColumn[] = [
-  { key: "at", label: "Time", sortable: true, sortType: "date" },
-  { key: "user", label: "User", sortable: true },
-  { key: "entity", label: "Record" },
+  { key: "at", label: "Time" },
+  { key: "user", label: "User" },
   { key: "action", label: "Action" },
-  { key: "summary", label: "Change" },
+  { key: "record", label: "Record" },
+  { key: "ip", label: "IP Address" },
+  { key: "details", label: "Details" },
   { key: "actions", label: "" },
 ];
 
-const all = (label: string) => ({ key: "ALL", label, value: "ALL" });
-const unique = (values: string[]) =>
-  Array.from(new Set(values)).map((value) => ({ key: value, label: value, value }));
+const actionOptions = [
+  { key: "ALL", label: "All actions", value: "ALL" },
+  ...Object.values(AuditAction).map((action) => ({
+    key: action,
+    label: auditActionLabels[action],
+    value: action,
+  })),
+];
 
-const summarize = (entry: AuditEntry) =>
-  Object.entries(entry.after ?? {})
+// Where a record opens. Parties aren't linked: the event doesn't say whether
+// it's a shipper or a carrier.
+const recordHref = (event: AuditEventView) => {
+  if (!event.targetId) return null;
+  const id = encodeURIComponent(event.targetId);
+  switch (event.targetType) {
+    case AuditTargetType.CustomerInvoice:
+      return `/shipper-invoices/view/?id=${id}`;
+    case AuditTargetType.CarrierInvoice:
+      return `/carrier-invoices/view/?id=${id}`;
+    default:
+      return null;
+  }
+};
+
+// `{ role: { from, to } }` reads "role: Viewer → Accountant".
+const summarize = (details: AuditDetails | null) =>
+  Object.entries(details ?? {})
     .map(([field, value]) => {
-      const before = entry.before?.[field];
-      return before === undefined
-        ? `${field}: ${String(value)}`
-        : `${field}: ${String(before)} → ${String(value)}`;
+      if (value !== null && typeof value === "object") {
+        return "from" in value || "to" in value
+          ? `${field}: ${String(value.from ?? "—")} → ${String(value.to ?? "—")}`
+          : `${field}: ${JSON.stringify(value)}`;
+      }
+      return `${field}: ${String(value)}`;
     })
     .join(", ");
 
-// Design §11: the append-only change history, read-only and searchable.
+// Design §11: the append-only history, read-only, from GET /audit/events
+// (Admin only). Newest first, filtered and paged by the API.
 export default function AuditLog() {
-  const [open, setOpen] = useState<AuditEntry | null>(null);
+  const [open, setOpen] = useState<AuditEventView | null>(null);
+  const [scope, setScope] = useState<Scope | null>(null);
   const { control } = useForm<Filters>({
-    defaultValues: { search: "", entity: "ALL", user: "ALL" },
+    defaultValues: { action: "ALL", targetId: "" },
   });
-  const search = useWatch({ control, name: "search" }).trim().toLowerCase();
-  const entity = useWatch({ control, name: "entity" });
-  const user = useWatch({ control, name: "user" });
+  const action = useWatch({ control, name: "action" });
+  const targetId = useDebouncedValue(useWatch({ control, name: "targetId" }).trim());
 
-  const filtered = useMemo(
-    () =>
-      mockAuditLog.filter((entry) => {
-        if (entity && entity !== "ALL" && entry.entity !== entity) return false;
-        if (user && user !== "ALL" && entry.user !== user) return false;
-        if (!search) return true;
-        return [entry.entityId, entry.action, summarize(entry)].some((value) =>
-          value.toLowerCase().includes(search)
-        );
-      }),
-    [search, entity, user]
-  );
-
-  const table = useClientTable(filtered, columns, {
-    column: "at",
-    sortKey: "at",
-    direction: "desc",
+  const table = useServerTable(JSON.stringify([action, targetId, scope?.id]));
+  const query = {
+    page: table.page,
+    limit: table.limit,
+    ...(action !== "ALL" && { action: action as AuditAction }),
+    ...(targetId && { targetId: targetId.slice(0, 64) }),
+    ...(scope?.kind === "actor" && { actorId: scope.id }),
+    ...(scope?.kind === "session" && { sessionId: scope.id }),
+  };
+  const events = useQuery({
+    queryKey: ["audit", query],
+    queryFn: ({ signal }) => getAuditEvents(query, signal),
+    placeholderData: keepPreviousData,
   });
+  const { meta, setMeta } = table.pager(events.data?.meta);
 
-  const renderCell = (entry: AuditEntry, key: string) => {
+  const renderCell = (event: AuditEventView, key: string) => {
     switch (key) {
       case "at":
-        return <span className="whitespace-nowrap">{formatDateTime(entry.at)}</span>;
+        return <span className="whitespace-nowrap">{formatDateTime(event.createdAt)}</span>;
       case "user":
-        return <PartyAvatar name={entry.user} />;
-      case "entity":
-        return (
-          <div>
-            <p className="font-semibold">{entry.entity}</p>
-            <p className="font-mono text-gray-500">{entry.entityId}</p>
-          </div>
+        return event.actor ? (
+          <PartyAvatar name={fullName(event.actor)} subtitle={event.actor.email} />
+        ) : (
+          <span className="text-gray-400">No signed-in user</span>
         );
       case "action":
-        return <StatusChip text={entry.action} tone="neutral" />;
-      case "summary":
-        return <span className="line-clamp-2 max-w-md">{summarize(entry)}</span>;
+        return <StatusChip text={auditActionLabels[event.action]} tone="neutral" />;
+      case "record": {
+        if (!event.targetType) return <span className="text-gray-400">—</span>;
+        const href = recordHref(event);
+        return (
+          <div>
+            <p className="font-semibold">{humanize(event.targetType)}</p>
+            {href ? (
+              <Link to={href} className="font-mono text-base-primary-300 hover:underline">
+                {event.targetId}
+              </Link>
+            ) : (
+              <p className="font-mono text-gray-500">{event.targetId}</p>
+            )}
+          </div>
+        );
+      }
+      case "ip":
+        return <span className="font-mono">{event.ipAddress ?? "—"}</span>;
+      case "details":
+        return <span className="line-clamp-2 max-w-md">{summarize(event.details)}</span>;
       case "actions":
         return (
           <RowActions
             actions={[
-              { key: "view", label: "View before / after", icon: <EyeIcon />, onPress: () => setOpen(entry) },
+              { key: "view", label: "View details", icon: <EyeIcon />, onPress: () => setOpen(event) },
+              ...(event.actor
+                ? [{
+                    key: "actor",
+                    label: "Show this user's activity",
+                    onPress: () =>
+                      setScope({ kind: "actor", id: event.actor!.id, label: fullName(event.actor!) }),
+                  }]
+                : []),
+              ...(event.sessionId
+                ? [{
+                    key: "session",
+                    label: "Show this sign-in's activity",
+                    onPress: () =>
+                      setScope({ kind: "session", id: event.sessionId!, label: `sign-in ${event.sessionId}` }),
+                  }]
+                : []),
             ]}
           />
         );
@@ -106,69 +168,92 @@ export default function AuditLog() {
     <>
       <FilterBar>
         <BaseInput
-          name="search"
+          name="targetId"
           control={control}
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
-          placeholder="Search by record id or change"
+          placeholder="Record id (exact), e.g. usr_4fK9qZ0aB1"
           endContent={<SearchNormalSm />}
         />
         <BaseSelect
-          name="entity"
+          name="action"
           control={control}
-          options={[all("All records"), ...unique(mockAuditLog.map((e) => e.entity))]}
-          className="w-full sm:w-44"
+          options={actionOptions}
+          className="w-full sm:w-60"
           classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="Record type"
+          aria-label="Action"
           disallowEmptySelection
         />
-        <BaseSelect
-          name="user"
-          control={control}
-          options={[all("All users"), ...unique(mockAuditLog.map((e) => e.user))]}
-          className="w-full sm:w-44"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="User"
-          disallowEmptySelection
-        />
+        {scope && (
+          <div className="flex items-center gap-2">
+            <StatusChip text={`Only ${scope.label}`} tone="primary" />
+            <BaseButton
+              text="Clear"
+              varient="light"
+              className="text-base-primary px-2 min-w-0"
+              onPress={() => setScope(null)}
+            />
+          </div>
+        )}
       </FilterBar>
       <Card className="mt-4">
-        <BaseTable
-          ariaLabel="Audit log"
-          columns={columns}
-          data={table.pageRows}
-          rowKey={(row) => row.id}
-          renderCell={renderCell}
-          meta={table.meta}
-          setMeta={table.setMeta}
-          sort={table.sort}
-          onSortChange={table.onSortChange}
-          bottomContent="Entries"
-        />
+        {events.isError ? (
+          <ErrorState
+            message="We couldn't load the audit log. Please try again."
+            onAction={() => void events.refetch()}
+          />
+        ) : (
+          <BaseTable<AuditEventView>
+            ariaLabel="Audit log"
+            columns={columns}
+            data={events.data?.items ?? []}
+            loading={events.isPending}
+            rowKey={(row) => row.id}
+            renderCell={renderCell}
+            meta={meta}
+            setMeta={setMeta}
+            bottomContent="Entries"
+            emptyContent="No entries match these filters"
+          />
+        )}
       </Card>
       {open && (
         <FormModal
           isOpen
           onOpenChange={(isOpen) => !isOpen && setOpen(null)}
-          title={`${open.entity} ${open.entityId}`}
+          title={auditActionLabels[open.action]}
           confirmText="Close"
           onConfirm={() => setOpen(null)}
           size="2xl"
         >
-          <p className="text-sm text-[#707070]">
-            {open.action} by {open.user} · {formatDateTime(open.at)}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(["before", "after"] as const).map((side) => (
-              <div key={side}>
-                <p className="text-xs font-semibold uppercase text-base-primary mb-1">{side}</p>
-                {/* Rendered as text by React, so field values cannot inject markup. */}
-                <pre className="bg-content-2 rounded-lg p-3 text-xs overflow-auto">
-                  {open[side] ? JSON.stringify(open[side], null, 2) : "—"}
-                </pre>
-              </div>
-            ))}
+          <div className="text-sm text-[#343A40] space-y-1">
+            <p>
+              <strong>When:</strong> {formatDateTime(open.createdAt)}
+            </p>
+            <p>
+              <strong>Who:</strong>{" "}
+              {open.actor ? `${fullName(open.actor)} (${open.actor.email})` : "No signed-in user"}
+            </p>
+            {open.targetType && (
+              <p>
+                <strong>Record:</strong> {humanize(open.targetType)} {open.targetId}
+              </p>
+            )}
+            <p>
+              <strong>Sign-in:</strong> {open.sessionId ?? "—"}
+            </p>
+            <p>
+              <strong>IP address:</strong> {open.ipAddress ?? "—"}
+            </p>
+            <p className="break-all">
+              <strong>Browser:</strong> {open.userAgent ?? "—"}
+            </p>
           </div>
+          <p className="text-xs font-semibold uppercase text-base-primary">Details</p>
+          {/* Rendered as text by React, so field values cannot inject markup. */}
+          <pre className="bg-content-2 rounded-lg p-3 text-xs overflow-auto">
+            {open.details ? JSON.stringify(open.details, null, 2) : "—"}
+          </pre>
         </FormModal>
       )}
     </>
