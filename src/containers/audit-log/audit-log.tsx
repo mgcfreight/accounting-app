@@ -1,100 +1,170 @@
 import { Card } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
+  AlertBanner,
   BaseInput,
   BaseSelect,
   BaseTable,
+  DetailRow,
   FilterBar,
   FormModal,
   PartyAvatar,
   RowActions,
   StatusChip,
 } from "@/components/common";
-import { EyeIcon, SearchNormalSm } from "@/components/icons";
-import { useClientTable } from "@/hooks";
-import { AuditEntry } from "@/lib/interfaces";
-import { mockAuditLog } from "@/lib/mock";
+import { EyeIcon } from "@/components/icons";
+import { useCurrentUser } from "@/components/providers/user-provider";
+import { useServerPaging } from "@/hooks";
+import { AuditEvent } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, fullName, torontoDayBounds } from "@/lib/utils";
+import { errorMessage, listAuditEvents, listUsers } from "@/services";
 
-type Filters = { search: string; entity: string; user: string };
+type Filters = { actorId: string; action: string; targetType: string; from: string; to: string };
 
-const columns: BaseTableColumn[] = [
-  { key: "at", label: "Time", sortable: true, sortType: "date" },
-  { key: "user", label: "User", sortable: true },
-  { key: "entity", label: "Record" },
-  { key: "action", label: "Action" },
-  { key: "summary", label: "Change" },
-  { key: "actions", label: "" },
+const ALL = "ALL";
+
+// The actions the API records — its AuditAction enum, which rejects any other
+// value as a filter. Keep in step with the backend's src/types/index.ts.
+const ACTIONS = [
+  "auth.signed_in",
+  "auth.sign_in_failed",
+  "auth.signed_out",
+  "auth.2fa_code_rejected",
+  "auth.account_locked",
+  "auth.refresh_token_reused",
+  "auth.password_changed",
+  "auth.password_reset_requested",
+  "auth.password_reset",
+  "auth.2fa_enabled",
+  "auth.2fa_disabled",
+  "auth.2fa_email_code_sent",
+  "auth.recovery_codes_regenerated",
+  "user.created",
+  "user.updated",
+  "user.enabled",
+  "user.disabled",
+  "user.password_set",
+  "user.2fa_reset",
+  "session.revoked",
+  "party.created",
+  "party.agreement_created",
+  "shipment.created",
+  "customer_invoice.updated",
+  "customer_invoice.issued",
+  "carrier_invoice.updated",
+  "carrier_invoice.received",
+  "carrier_invoice.approved",
+  "settings.updated",
+  "tax_rate.created",
+  "charge_type.created",
+  "charge_type.updated",
+  "accounting_period.closed",
+  "accounting_period.reopened",
+  "role.created",
+  "role.updated",
+  "role.deleted",
 ];
 
-const all = (label: string) => ({ key: "ALL", label, value: "ALL" });
-const unique = (values: string[]) =>
-  Array.from(new Set(values)).map((value) => ({ key: value, label: value, value }));
+// The API's AuditTargetType enum.
+const TARGET_TYPES = [
+  "user",
+  "party",
+  "shipment",
+  "customer_invoice",
+  "carrier_invoice",
+  "setting",
+  "tax_rate",
+  "charge_type",
+  "accounting_period",
+  "role",
+];
 
-const summarize = (entry: AuditEntry) =>
-  Object.entries(entry.after ?? {})
-    .map(([field, value]) => {
-      const before = entry.before?.[field];
-      return before === undefined
-        ? `${field}: ${String(value)}`
-        : `${field}: ${String(before)} → ${String(value)}`;
-    })
-    .join(", ");
+const option = (value: string, label = value) => ({ key: value, label, value });
 
-// Design §11: the append-only change history, read-only and searchable.
+// "auth.2fa_enabled" -> "2fa enabled"; the group shows as the chip's tone.
+const actionLabel = (action: string) => action.split(".").slice(1).join(".").replace(/_/g, " ") || action;
+const isFailure = (action: string) =>
+  /failed|rejected|locked|reused/.test(action);
+
+// Who did what, and when (audit_events). The API decides whose: an Admin sees
+// every event, any other role only the ones they made. Read-only.
 export default function AuditLog() {
-  const [open, setOpen] = useState<AuditEntry | null>(null);
+  const me = useCurrentUser();
+  const isAdmin = me.isAdmin;
+  const [open, setOpen] = useState<AuditEvent | null>(null);
   const { control } = useForm<Filters>({
-    defaultValues: { search: "", entity: "ALL", user: "ALL" },
+    defaultValues: { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" },
   });
-  const search = useWatch({ control, name: "search" }).trim().toLowerCase();
-  const entity = useWatch({ control, name: "entity" });
-  const user = useWatch({ control, name: "user" });
+  const filters = useWatch({ control }) as Filters;
+  const paging = useServerPaging(JSON.stringify(filters));
 
-  const filtered = useMemo(
-    () =>
-      mockAuditLog.filter((entry) => {
-        if (entity && entity !== "ALL" && entry.entity !== entity) return false;
-        if (user && user !== "ALL" && entry.user !== user) return false;
-        if (!search) return true;
-        return [entry.entityId, entry.action, summarize(entry)].some((value) =>
-          value.toLowerCase().includes(search)
-        );
-      }),
-    [search, entity, user]
-  );
-
-  const table = useClientTable(filtered, columns, {
-    column: "at",
-    sortKey: "at",
-    direction: "desc",
+  const users = useQuery({
+    queryKey: ["users", "picker"],
+    queryFn: ({ signal }) =>
+      listUsers({ page: 1, limit: 100, sortBy: "name", order: "ASC" }, signal),
+    enabled: isAdmin,
   });
 
-  const renderCell = (entry: AuditEntry, key: string) => {
+  const pick = (value: string | undefined) => (value && value !== ALL ? value : undefined);
+  const params = {
+    page: paging.page,
+    limit: paging.limit,
+    actorId: isAdmin ? pick(filters.actorId) : undefined,
+    action: pick(filters.action),
+    targetType: pick(filters.targetType),
+    from: filters.from ? torontoDayBounds(filters.from).start : undefined,
+    to: filters.to ? torontoDayBounds(filters.to).end : undefined,
+  };
+  const events = useQuery({
+    queryKey: ["audit", params],
+    queryFn: ({ signal }) => listAuditEvents(params, signal),
+    placeholderData: keepPreviousData,
+  });
+
+  const columns: BaseTableColumn[] = [
+    { key: "createdAt", label: "Time" },
+    ...(isAdmin ? [{ key: "actor", label: "User" }] : []),
+    { key: "action", label: "Action" },
+    { key: "target", label: "Record" },
+    { key: "ipAddress", label: "IP Address" },
+    { key: "actions", label: "" },
+  ];
+
+  const renderCell = (event: AuditEvent, key: string) => {
     switch (key) {
-      case "at":
-        return <span className="whitespace-nowrap">{formatDateTime(entry.at)}</span>;
-      case "user":
-        return <PartyAvatar name={entry.user} />;
-      case "entity":
-        return (
-          <div>
-            <p className="font-semibold">{entry.entity}</p>
-            <p className="font-mono text-gray-500">{entry.entityId}</p>
-          </div>
+      case "createdAt":
+        return <span className="whitespace-nowrap">{formatDateTime(event.createdAt)}</span>;
+      case "actor":
+        return event.actor ? (
+          <PartyAvatar name={fullName(event.actor)} subtitle={event.actor.email} />
+        ) : (
+          <span className="text-gray-500">System / unknown</span>
         );
       case "action":
-        return <StatusChip text={entry.action} tone="neutral" />;
-      case "summary":
-        return <span className="line-clamp-2 max-w-md">{summarize(entry)}</span>;
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <StatusChip text={actionLabel(event.action)} tone={isFailure(event.action) ? "danger" : "neutral"} />
+            <span className="font-mono text-gray-500">{event.action}</span>
+          </div>
+        );
+      case "target":
+        return event.targetType ? (
+          <div>
+            <p className="font-semibold">{event.targetType.replace(/_/g, " ")}</p>
+            <p className="font-mono text-gray-500">{event.targetId ?? "—"}</p>
+          </div>
+        ) : (
+          "—"
+        );
+      case "ipAddress":
+        return <span className="font-mono">{event.ipAddress ?? "—"}</span>;
       case "actions":
         return (
           <RowActions
-            actions={[
-              { key: "view", label: "View before / after", icon: <EyeIcon />, onPress: () => setOpen(entry) },
-            ]}
+            actions={[{ key: "view", label: "View details", icon: <EyeIcon />, onPress: () => setOpen(event) }]}
           />
         );
       default:
@@ -102,73 +172,85 @@ export default function AuditLog() {
     }
   };
 
+  const filterSelect = { classNames: { trigger: "bg-white border-none h-12 rounded-lg" }, disallowEmptySelection: true };
+  const dateInput = { classNames: { inputWrapper: "bg-white h-12 border-none rounded-lg" }, className: "w-full sm:w-44" };
+
   return (
     <>
       <FilterBar>
-        <BaseInput
-          name="search"
+        {isAdmin && (
+          <BaseSelect
+            name="actorId"
+            control={control}
+            options={[option(ALL, "All users"), ...(users.data?.items ?? []).map((u) => option(u.id, fullName(u)))]}
+            className="w-full sm:w-52"
+            aria-label="User"
+            isLoading={users.isPending}
+            {...filterSelect}
+          />
+        )}
+        <BaseSelect
+          name="action"
           control={control}
-          className="max-w-sm"
-          classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
-          placeholder="Search by record id or change"
-          endContent={<SearchNormalSm />}
+          options={[option(ALL, "All actions"), ...ACTIONS.map((a) => option(a))]}
+          className="w-full sm:w-60"
+          aria-label="Action"
+          {...filterSelect}
         />
         <BaseSelect
-          name="entity"
+          name="targetType"
           control={control}
-          options={[all("All records"), ...unique(mockAuditLog.map((e) => e.entity))]}
+          options={[option(ALL, "All records"), ...TARGET_TYPES.map((t) => option(t, t.replace(/_/g, " ")))]}
           className="w-full sm:w-44"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
           aria-label="Record type"
-          disallowEmptySelection
+          {...filterSelect}
         />
-        <BaseSelect
-          name="user"
-          control={control}
-          options={[all("All users"), ...unique(mockAuditLog.map((e) => e.user))]}
-          className="w-full sm:w-44"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="User"
-          disallowEmptySelection
-        />
+        <BaseInput name="from" control={control} type="date" aria-label="From date" {...dateInput} />
+        <BaseInput name="to" control={control} type="date" aria-label="To date" {...dateInput} />
+        {!isAdmin && <p className="text-sm text-content-6">Showing your own activity.</p>}
       </FilterBar>
+      {events.isError && (
+        <AlertBanner
+          message={`Couldn't load the audit report: ${errorMessage(events.error)}`}
+          action={<button type="button" className="underline text-sm" onClick={() => void events.refetch()}>Retry</button>}
+        />
+      )}
       <Card className="mt-4">
-        <BaseTable
-          ariaLabel="Audit log"
+        <BaseTable<AuditEvent>
+          ariaLabel="Audit report"
           columns={columns}
-          data={table.pageRows}
+          data={events.isError ? [] : (events.data?.items ?? [])}
+          loading={events.isPending}
           rowKey={(row) => row.id}
           renderCell={renderCell}
-          meta={table.meta}
-          setMeta={table.setMeta}
-          sort={table.sort}
-          onSortChange={table.onSortChange}
-          bottomContent="Entries"
+          meta={paging.tableMeta(events.data?.meta)}
+          setMeta={paging.setMeta}
+          bottomContent="Events"
+          emptyContent={events.isError ? "Couldn't load events." : "No events match."}
         />
       </Card>
       {open && (
         <FormModal
           isOpen
           onOpenChange={(isOpen) => !isOpen && setOpen(null)}
-          title={`${open.entity} ${open.entityId}`}
+          title={open.action}
           confirmText="Close"
           onConfirm={() => setOpen(null)}
           size="2xl"
         >
-          <p className="text-sm text-[#707070]">
-            {open.action} by {open.user} · {formatDateTime(open.at)}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(["before", "after"] as const).map((side) => (
-              <div key={side}>
-                <p className="text-xs font-semibold uppercase text-base-primary mb-1">{side}</p>
-                {/* Rendered as text by React, so field values cannot inject markup. */}
-                <pre className="bg-content-2 rounded-lg p-3 text-xs overflow-auto">
-                  {open[side] ? JSON.stringify(open[side], null, 2) : "—"}
-                </pre>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
+            <DetailRow label="Time" value={formatDateTime(open.createdAt)} />
+            <DetailRow label="User" value={open.actor ? `${fullName(open.actor)} (${open.actor.email})` : "System / unknown"} />
+            <DetailRow label="Record" value={open.targetType ? `${open.targetType} ${open.targetId ?? ""}` : "—"} />
+            <DetailRow label="Session" value={<span className="font-mono">{open.sessionId ?? "—"}</span>} />
+            <DetailRow label="IP address" value={<span className="font-mono">{open.ipAddress ?? "—"}</span>} />
+            <DetailRow label="Browser" value={<span className="break-all">{open.userAgent ?? "—"}</span>} />
           </div>
+          <p className="text-xs font-semibold uppercase text-base-primary mt-2">Details</p>
+          {/* Rendered as text by React, so values cannot inject markup. */}
+          <pre className="bg-content-2 rounded-lg p-3 text-xs overflow-auto">
+            {open.details ? JSON.stringify(open.details, null, 2) : "—"}
+          </pre>
         </FormModal>
       )}
     </>

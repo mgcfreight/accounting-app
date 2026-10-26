@@ -13,9 +13,10 @@ import {
   RowActions,
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm, Send } from "@/components/icons";
+import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import { currencyOptions } from "@/lib/constants";
-import { PartyType } from "@/lib/enums";
+import { PartyType, Permission } from "@/lib/enums";
 import { Party } from "@/lib/interfaces";
 import { mockCarriers, mockShippers } from "@/lib/mock";
 import { isZeroMoney } from "@/lib/money";
@@ -52,6 +53,7 @@ const filterCurrencyOptions = [
 // Shippers and carriers share one design (§9 "Shippers / Carriers").
 export default function PartyList({ type }: { type: PartyType }) {
   const navigate = useNavigate();
+  const { can } = useCan();
   const isShipper = type === PartyType.Shipper;
   const { control } = useForm<Filters>({
     defaultValues: { search: "", currency: "ALL", balance: "ALL" },
@@ -121,13 +123,17 @@ export default function PartyList({ type }: { type: PartyType }) {
                 icon: <EyeIcon />,
                 onPress: () => navigate(partyHref(party)),
               },
-              {
-                key: "statement",
-                label: "Send statement now",
-                icon: <Send />,
-                onPress: () =>
-                  toast.info(`Statement to ${party.name} — demo only, nothing was sent.`),
-              },
+              ...(can(Permission.ReportsSendEmail)
+                ? [
+                    {
+                      key: "statement",
+                      label: "Send statement now",
+                      icon: <Send />,
+                      onPress: () =>
+                        toast.info(`Statement to ${party.name} — demo only, nothing was sent.`),
+                    },
+                  ]
+                : []),
             ]}
           />
         );

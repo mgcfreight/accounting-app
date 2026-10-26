@@ -38,6 +38,11 @@ export default function SidebarItem({
   const active = isItemActive(item, pathname);
   const groupKey = item.label.toLowerCase();
   const isOpen = openGroup === groupKey;
+  // The longest matching child wins, so /users/sessions/ marks "Sessions"
+  // and not also "Users" (/users/).
+  const activeChild = item.children
+    ?.filter((child) => isRouteActive(child.route, pathname))
+    .sort((a, b) => b.route.length - a.route.length)[0];
 
   const handleClick = () => {
     setOpenGroup(isOpen ? "" : groupKey);
@@ -79,7 +84,7 @@ export default function SidebarItem({
                 to={child.route}
                 onClick={onNavigate}
                 className={`pl-6 py-2 uppercase group relative flex items-center font-medium duration-300 ease-in-out ${
-                  isRouteActive(child.route, pathname)
+                  child === activeChild
                     ? "border-l-3 border-base-primary-50 text-base-primary-50"
                     : "text-white rounded-md"
                 }`}

@@ -1,40 +1,113 @@
-import { useNavigate } from "react-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { BaseButton, RHFPasswordField, RHFTextField } from "@/components/common";
 import { useUser } from "@/components/providers/user-provider";
-import { HOME_PATH } from "@/lib/constants";
-import { mockCurrentUser } from "@/lib/mock";
+import {
+  EMAIL_SHAPE,
+  FORGOT_PASSWORD_PATH,
+  HOME_PATH,
+} from "@/lib/constants";
+import { SignInStep } from "@/lib/enums";
+import { errorMessage, login, LoginResult } from "@/services";
+import TwoFactorSetupStep from "./two-factor-setup-step";
+import TwoFactorStep from "./two-factor-step";
 
 interface LoginFormValues {
   email: string;
   password: string;
 }
 
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export type Challenge = Exclude<LoginResult, { nextStep: SignInStep.SignedIn }>;
+
+// After sign-in, back to the page that sent the visitor here (AppLayout puts
+// it in `state.from`) — only ever a path inside this app.
+const returnPath = (state: unknown) => {
+  const from = (state as { from?: unknown } | null)?.from;
+  return typeof from === "string" && from.startsWith("/") && !from.startsWith("//")
+    ? from
+    : HOME_PATH;
+};
 
 // mokal-app's login form, minus sign-up (Accounts users are created by an
-// Admin in Settings). There is no API yet, so Login signs in as the mock user
-// and goes straight to the dashboard; with the API, call signIn()
-// (services/auth.ts) and pass the user it returns to setUser. The
-// authenticator-app (2FA) step waits on open question 6.
+// Admin on the Users page). Email and password first; the API then either
+// signs in or asks for a two-factor code (or, the first time, for 2FA to be
+// set up), which the steps below handle. The session is the API's httpOnly
+// cookie: this form never sees a token.
 export default function LoginForm() {
   const navigate = useNavigate();
-  const { setUser } = useUser();
+  const location = useLocation();
+  const { refreshUser } = useUser();
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
   // No `defaultValues`: the fields are registered native inputs, and a
   // declared default would overwrite credentials the browser autofilled.
   const {
     register,
     handleSubmit,
+    resetField,
     formState: { errors },
   } = useForm<LoginFormValues>({ mode: "onTouched" });
 
-  const onSubmit = () => {
-    setLoading(true);
-    setUser(mockCurrentUser);
-    navigate(HOME_PATH);
+  const finishSignIn = async (warnLowCodes = false) => {
+    if (warnLowCodes) {
+      toast.warning(
+        "You're running low on recovery codes. Make new ones in My Account."
+      );
+    }
+    await refreshUser();
+    navigate(returnPath(location.state), { replace: true });
   };
+
+  // The challenge expired or was refused: start again from the password.
+  const restart = (message: string) => {
+    setChallenge(null);
+    resetField("password");
+    setFormError(message);
+  };
+
+  const onSubmit = async (values: LoginFormValues) => {
+    setLoading(true);
+    setFormError(null);
+    try {
+      const result = await login({
+        email: values.email.trim(),
+        password: values.password,
+      });
+      if (result.nextStep === SignInStep.SignedIn) {
+        await finishSignIn(false);
+      } else {
+        setChallenge(result);
+      }
+    } catch (error) {
+      // "Invalid credentials" for a wrong email, password or a locked
+      // account alike: the API never says which.
+      setFormError(errorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (challenge?.nextStep === SignInStep.TwoFactor) {
+    return (
+      <TwoFactorStep
+        challenge={challenge}
+        onSignedIn={finishSignIn}
+        onRestart={restart}
+      />
+    );
+  }
+  if (challenge?.nextStep === SignInStep.TwoFactorSetup) {
+    return (
+      <TwoFactorSetupStep
+        challenge={challenge}
+        onSignedIn={finishSignIn}
+        onRestart={restart}
+      />
+    );
+  }
 
   return (
     <form method="post" noValidate onSubmit={handleSubmit(onSubmit)}>
@@ -60,8 +133,21 @@ export default function LoginForm() {
         label="Password"
         placeholder="Enter Password"
         autoComplete="current-password"
-        className="mb-4"
+        className="mb-2"
       />
+      <div className="flex justify-end">
+        <Link
+          to={FORGOT_PASSWORD_PATH}
+          className="text-xs text-base-primary-300 hover:underline"
+        >
+          Forgot password?
+        </Link>
+      </div>
+      {formError && (
+        <p role="alert" className="mt-4 text-sm text-base-danger text-center">
+          {formError}
+        </p>
+      )}
       <BaseButton
         type="submit"
         text="Login"

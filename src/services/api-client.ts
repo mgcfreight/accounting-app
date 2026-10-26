@@ -1,16 +1,20 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { z } from "zod";
 
 // The one path to the Accounts API: every request goes through `apiClient`.
 // Each endpoint gets a typed function in services/ built on it; nothing else
 // in the app calls axios or fetch.
 //
-// The session is the API's httpOnly cookie, sent by `withCredentials`. No
-// token is ever read or attached here (security.md).
+// The session is two httpOnly cookies set by the API (`mgc_at`, the 15-minute
+// access token, and `mgc_rt`, the refresh token), sent by `withCredentials`.
+// No token is ever read or attached here (security.md).
 
 const configuredTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS);
 
 export const apiClient = axios.create({
-  baseURL: (import.meta.env.VITE_API_URL || "/api").replace(/\/+$/, ""),
+  // The API's routes are under /v1 (its APP_PREFIX), on the origin that
+  // serves this app.
+  baseURL: (import.meta.env.VITE_API_URL || "/v1").replace(/\/+$/, ""),
   timeout:
     Number.isInteger(configuredTimeout) && configuredTimeout > 0
       ? configuredTimeout
@@ -50,8 +54,95 @@ const messageFrom = (body: unknown): string | undefined => {
   return undefined;
 };
 
+// Thrown when a response arrives but isn't the shape the screen expects —
+// a mismatch with the API, never shown as data.
+export class ResponseShapeError extends Error {
+  constructor(cause: unknown) {
+    super("The server sent a response this screen can't read.", { cause });
+    this.name = "ResponseShapeError";
+  }
+}
+
+// The text to show for a failed request: the API's own message (they are
+// written for staff), or a generic one for anything else.
+export const errorMessage = (error: unknown) =>
+  error instanceof ApiError || error instanceof ResponseShapeError
+    ? error.message
+    : "Something went wrong. Please try again.";
+
+// Checks a response body against its schema, throwing on any mismatch.
+export const parseBody = <T extends z.ZodType>(schema: T, body: unknown) => {
+  const result = schema.safeParse(body);
+  if (!result.success) throw new ResponseShapeError(result.error);
+  return result.data as z.infer<T>;
+};
+
+// Called when the session can't be renewed (signed out elsewhere, disabled,
+// expired), so the UserProvider can clear the user and show the login page.
+type SessionExpiredListener = () => void;
+const sessionExpiredListeners = new Set<SessionExpiredListener>();
+
+export const onSessionExpired = (listener: SessionExpiredListener) => {
+  sessionExpiredListeners.add(listener);
+  return () => {
+    sessionExpiredListeners.delete(listener);
+  };
+};
+
+// Requests where a 401 means "wrong code / no session yet", not "access token
+// expired": sign-in, the 2FA challenge steps, password reset, and the refresh
+// itself. A 401 from any other endpoint triggers one refresh.
+const NO_REFRESH = new Set([
+  "/auth/login",
+  "/auth/2fa/verify",
+  "/auth/2fa/email/send",
+  "/auth/2fa/email/verify",
+  "/auth/2fa/setup",
+  "/auth/2fa/enable",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/tokens",
+]);
+
+// The API's refresh token is single use, and presenting a used one signs the
+// user out everywhere, so refreshes must never run in parallel: every 401
+// waits on the same one.
+let refreshing: Promise<boolean> | null = null;
+
+const refreshSession = () => {
+  refreshing ??= apiClient
+    .post("/auth/tokens")
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+};
+
+type RetriableConfig = InternalAxiosRequestConfig & { _retried?: boolean };
+
+// On a 401 the access cookie has probably expired: renew it once and repeat
+// the request. If renewing fails, the session is over.
+apiClient.interceptors.response.use(undefined, async (error: unknown) => {
+  if (!(error instanceof AxiosError) || error.response?.status !== 401) {
+    return Promise.reject(error);
+  }
+  const config = error.config as RetriableConfig | undefined;
+  if (!config || config._retried || NO_REFRESH.has(config.url ?? "")) {
+    return Promise.reject(error);
+  }
+  if (await refreshSession()) {
+    const retry: RetriableConfig = { ...config, _retried: true };
+    return apiClient.request(retry);
+  }
+  sessionExpiredListeners.forEach((listener) => listener());
+  return Promise.reject(error);
+});
+
 // Turns every axios failure into an ApiError. A request cancelled by its
 // caller (TanStack Query passes a `signal`) is let through as it is.
+// Registered second, so it runs after the refresh handler above has decided.
 apiClient.interceptors.response.use(undefined, (error: unknown) => {
   if (axios.isCancel(error) || !(error instanceof AxiosError)) {
     return Promise.reject(error);

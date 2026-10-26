@@ -6,15 +6,19 @@
 // write an index.html for every route (vite.config.ts), so a route missing
 // here 404s on refresh.
 //
-// It is also the one place a route's roles are declared: RouteGuard (app/),
+// It is also the one place a route's access is declared: RouteGuard (app/),
 // the sidebar and the profile menu all ask canAccessRoute.
 
-import { UserRole } from "./enums";
+import { Access, hasAccess } from "./access";
+import { Permission } from "./enums";
+import { Me } from "./interfaces";
 
 export type HeaderButton = {
   text: string;
   // Opens a modal on the page instead of navigating (see useHeaderAction).
   action: string;
+  // Who sees the button. Omitted means everyone who can open the page.
+  access?: Access;
 };
 
 export type RouteConfig = {
@@ -23,17 +27,21 @@ export type RouteConfig = {
   // Append "#<id>" from the ?id= query param to the title.
   includeIdInHeader?: boolean;
   createNewButton?: HeaderButton;
-  // Roles that may open the route. Omitted means every role; a child route
-  // without its own list takes its parent's. Presentation only — the API
-  // enforces access on every endpoint.
-  roles?: UserRole[];
+  // Who may open the route. A child route without its own takes its
+  // parent's; a top-level route without one is refused. Presentation only —
+  // the API enforces access on every endpoint.
+  access?: Access;
   childRoutes?: Record<string, RouteConfig>;
 };
 
+const ANY_USER: Access = { anyUser: true };
+const ADMIN_ONLY: Access = { adminOnly: true };
+
 export const routeConfig: Record<string, RouteConfig> = {
-  dashboard: { header: "Dashboard" },
+  dashboard: { header: "Dashboard", access: ANY_USER },
   "shipper-invoices": {
     header: "Shipper Invoices",
+    access: { allOf: [Permission.CustomerInvoicesView] },
     childRoutes: {
       view: {
         header: "Invoice",
@@ -44,6 +52,7 @@ export const routeConfig: Record<string, RouteConfig> = {
   },
   "carrier-invoices": {
     header: "Carrier Invoices",
+    access: { allOf: [Permission.CarrierInvoicesView] },
     childRoutes: {
       view: {
         header: "Carrier Invoice",
@@ -54,26 +63,70 @@ export const routeConfig: Record<string, RouteConfig> = {
   },
   payments: {
     header: "Payments",
-    createNewButton: { text: "Record Payment", action: "record-payment" },
+    access: {
+      anyOf: [Permission.CustomerPaymentsView, Permission.CarrierPaymentsView],
+    },
+    // Each side is checked again in the form.
+    createNewButton: {
+      text: "Record Payment",
+      action: "record-payment",
+      access: {
+        anyOf: [
+          Permission.CustomerPaymentsCreate,
+          Permission.CarrierPaymentsCreate,
+        ],
+      },
+    },
   },
   shippers: {
     header: "Shippers",
+    access: { allOf: [Permission.PartiesView] },
     childRoutes: {
       view: { header: "Shipper", previousRoute: "/shippers/" },
     },
   },
   carriers: {
     header: "Carriers",
+    access: { allOf: [Permission.PartiesView] },
     childRoutes: {
       view: { header: "Carrier", previousRoute: "/carriers/" },
     },
   },
-  reports: { header: "Reports" },
-  "needs-review": { header: "Needs Review" },
-  "sync-status": { header: "Sync Status" },
-  "audit-log": { header: "Audit Log" },
-  // Admin only (design §9).
-  settings: { header: "Settings", roles: [UserRole.Admin] },
+  reports: { header: "Reports", access: { allOf: [Permission.ReportsView] } },
+  "needs-review": {
+    header: "Needs Review",
+    access: {
+      anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
+    },
+  },
+  // No permission covers sync yet; revisit with the sync feature.
+  "sync-status": { header: "Sync Status", access: ADMIN_ONLY },
+  // Staff accounts are Admin only. Sessions is open to everyone: the API
+  // returns everyone's sessions to an Admin and only their own to others.
+  users: {
+    header: "Users",
+    access: ADMIN_ONLY,
+    createNewButton: { text: "Add User", action: "add-user" },
+    childRoutes: {
+      sessions: { header: "Sessions", access: ANY_USER },
+    },
+  },
+  roles: {
+    header: "Roles & Permissions",
+    access: ADMIN_ONLY,
+    createNewButton: { text: "Add Role", action: "add-role" },
+  },
+  // Admin only (design §9). The audit report is open to everyone, scoped by
+  // the API the same way as sessions.
+  settings: {
+    header: "Settings",
+    access: ADMIN_ONLY,
+    childRoutes: {
+      "audit-log": { header: "Audit Report", access: ANY_USER },
+    },
+  },
+  // The signed-in user's own password, two-factor and sessions.
+  account: { header: "My Account", access: ANY_USER },
 };
 
 export const getRouteConfig = (pathname: string): RouteConfig | undefined => {
@@ -85,13 +138,25 @@ export const getRouteConfig = (pathname: string): RouteConfig | undefined => {
   return config;
 };
 
-// Deny by default: a path missing from the table is refused, so a route added
-// to app.tsx without an entry here shows "No access" rather than opening to
-// every role.
-export const canAccessRoute = (pathname: string, role: UserRole): boolean => {
+type AccessHolder = Pick<Me, "isAdmin" | "permissions">;
+
+// Deny by default: a path missing from the table, or a route with no access
+// rule of its own or from its parent, is refused — so a route added to app.tsx
+// without an entry here shows "No access" rather than opening to everyone.
+export const canAccessRoute = (pathname: string, me: AccessHolder): boolean => {
   const config = getRouteConfig(pathname);
   if (!config) return false;
   const segments = pathname.split("/").filter(Boolean);
-  const roles = config.roles ?? routeConfig[segments[0]]?.roles;
-  return !roles || roles.includes(role);
+  const access = config.access ?? routeConfig[segments[0]]?.access;
+  return !!access && hasAccess(me, access);
+};
+
+// The header's "create new" button for a route, if this user may use it.
+export const headerButtonFor = (
+  pathname: string,
+  me: AccessHolder
+): HeaderButton | undefined => {
+  const button = getRouteConfig(pathname)?.createNewButton;
+  if (!button || !canAccessRoute(pathname, me)) return undefined;
+  return !button.access || hasAccess(me, button.access) ? button : undefined;
 };

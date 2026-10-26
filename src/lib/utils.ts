@@ -7,6 +7,21 @@ export const createInitials = (name: string) =>
     .map((word) => word[0]?.toUpperCase())
     .join("");
 
+export const fullName = (person: { firstName: string; lastName: string }) =>
+  `${person.firstName} ${person.lastName}`.trim();
+
+// 3725 -> "1h 2m". Under a minute shows "<1m".
+export const formatDuration = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return "<1m";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const rest = minutes % 60;
+  return [days && `${days}d`, hours && `${hours}h`, rest && `${rest}m`]
+    .filter(Boolean)
+    .join(" ");
+};
+
 // Timestamps are stored in UTC and shown in Toronto time (design §11).
 const TIME_ZONE = "America/Toronto";
 
@@ -37,6 +52,23 @@ export const formatDateTime = (date?: string) => {
     minute: "2-digit",
     timeZone: TIME_ZONE,
   });
+};
+
+// The first and last instant of a Toronto calendar day, as ISO timestamps with
+// Toronto's UTC offset, for filtering timestamps by day. The offset is taken
+// at noon, so on the two DST-change days a bound can be an hour off.
+export const torontoDayBounds = (date: string) => {
+  const zone = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
+    timeZoneName: "longOffset",
+  })
+    .formatToParts(new Date(`${date}T12:00:00Z`))
+    .find((part) => part.type === "timeZoneName")?.value;
+  const offset = zone && zone !== "GMT" ? zone.slice(3) : "+00:00";
+  return {
+    start: `${date}T00:00:00.000${offset}`,
+    end: `${date}T23:59:59.999${offset}`,
+  };
 };
 
 // Lower-case label for an enum value: PARTIALLY_PAID -> "Partially paid".

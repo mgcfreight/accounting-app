@@ -12,7 +12,8 @@ import {
   Money,
 } from "@/components/common";
 import { ReportingIcon } from "@/components/icons";
-import { Currency } from "@/lib/enums";
+import { useCan } from "@/components/providers/user-provider";
+import { Currency, Permission } from "@/lib/enums";
 import { MonthlyPnl } from "@/lib/interfaces";
 import { mockAging, mockMonthlyPnl, mockReports } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
@@ -30,6 +31,10 @@ const formatIcon = {
   CSV: <PiFileCsv className="text-lg" />,
 };
 
+// The API has export_pdf and export_csv only; spreadsheets count as CSV.
+const formatPermission = (format: string) =>
+  format === "PDF" ? Permission.ReportsExportPdf : Permission.ReportsExportCsv;
+
 const pnlColumns: BaseTableColumn[] = [
   { key: "month", label: "Month" },
   { key: "revenue", label: "Revenue" },
@@ -44,6 +49,7 @@ export default function Reports() {
   const { control } = useForm({ defaultValues: { period: "2026-10" } });
   const periodKey = useWatch({ control, name: "period" });
   const period = periodOptions.find((option) => option.key === periodKey);
+  const { can } = useCan();
 
   const exportReport = (title: string, format: string) =>
     toast.info(`${title} (${format}, ${period?.label}) — demo only. Exports arrive with the API.`);
@@ -77,7 +83,7 @@ export default function Reports() {
                 </div>
               </div>
               <div className="flex gap-2 justify-end">
-                {report.formats.map((format) => (
+                {report.formats.filter((format) => can(formatPermission(format))).map((format) => (
                   <BaseButton
                     key={format}
                     text={format}

@@ -1,6 +1,6 @@
 import { Link, useLocation, useSearchParams } from "react-router";
-import { User } from "@/lib/interfaces";
-import { getRouteConfig } from "@/lib/routes.config";
+import { Me } from "@/lib/interfaces";
+import { getRouteConfig, headerButtonFor } from "@/lib/routes.config";
 import BaseButton from "../common/base-button";
 import { ArrowLeft, CreateNewButtonIcon, HamburgerIcon } from "../icons";
 import { useTriggerHeaderAction } from "../providers/header-action-provider";
@@ -13,12 +13,13 @@ export default function Header({
   user,
 }: {
   onOpenSidebar: () => void;
-  user: User;
+  user: Me;
 }) {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const triggerAction = useTriggerHeaderAction();
   const route = getRouteConfig(pathname);
+  const button = headerButtonFor(pathname, user);
   const id = searchParams.get("id");
 
   return (
@@ -46,12 +47,12 @@ export default function Header({
                 ? `${route.header} #${id}`
                 : route?.header}
             </span>
-            {route?.createNewButton && (
+            {button && (
               <BaseButton
                 className="rounded-full px-6 ml-1"
                 startContent={<CreateNewButtonIcon />}
-                text={route.createNewButton.text}
-                onPress={() => triggerAction(route.createNewButton!.action)}
+                text={button.text}
+                onPress={() => triggerAction(button.action)}
               />
             )}
           </h2>

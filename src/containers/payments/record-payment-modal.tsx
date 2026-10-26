@@ -2,7 +2,9 @@ import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { BaseInput, BaseSelect, FormModal } from "@/components/common";
+import { useCan } from "@/components/providers/user-provider";
 import { currencyOptions, paymentMethodOptions } from "@/lib/constants";
+import { Permission } from "@/lib/enums";
 import { mockCarriers, mockShippers } from "@/lib/mock";
 
 type FormValues = {
@@ -16,9 +18,19 @@ type FormValues = {
   reference: string;
 };
 
-const directionOptions = [
-  { key: "IN", label: "Money in (from a shipper)", value: "IN" },
-  { key: "OUT", label: "Money out (to a carrier)", value: "OUT" },
+const allDirections = [
+  {
+    key: "IN",
+    label: "Money in (from a shipper)",
+    value: "IN",
+    permission: Permission.CustomerPaymentsCreate,
+  },
+  {
+    key: "OUT",
+    label: "Money out (to a carrier)",
+    value: "OUT",
+    permission: Permission.CarrierPaymentsCreate,
+  },
 ];
 
 const AMOUNT = /^\d{1,9}\.\d{2}$/;
@@ -33,9 +45,14 @@ export default function RecordPaymentModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  // Only the sides the role may record (the header button needs either).
+  const { can } = useCan();
+  const directionOptions = allDirections.filter((option) =>
+    can(option.permission)
+  );
   const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
     defaultValues: {
-      direction: "IN",
+      direction: directionOptions[0]?.value ?? "IN",
       party: "",
       method: "",
       currency: "CAD",

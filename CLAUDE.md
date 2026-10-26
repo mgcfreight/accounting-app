@@ -26,13 +26,15 @@ src/
 ├── containers/          page composition and page state
 ├── components/          reusable presentation (common/ = mokal-app's kit)
 ├── hooks/               reusable client behaviour
-├── services/            the only path to the Accounts API (no endpoints yet)
+├── services/            the only path to the Accounts API (zod-checked)
 └── lib/                 constants, enums, interfaces, money, dates
-    └── mock/            the data every screen runs on today
+    └── mock/            the data the not-yet-wired screens run on
+```
 
-**The screens run on mock data.** `services/` holds the axios instance
-(`apiClient`) and TanStack Query client, but no endpoints are wired yet: the
-signed-in user is the mock user (`UserProvider`), and every action shows a
+**Sign-in, users, sessions, audit and settings run on the API; the rest
+still run on mock data.** The session is the API's httpOnly cookies, and
+the signed-in user comes from `GET /auth/me` (`UserProvider`). Invoice,
+payment, party and report screens read `lib/mock` and their actions show a
 "demo only" toast.
 The design copies mokal-app's — same layout, components, theme and colours.
 
@@ -48,8 +50,14 @@ npm run build       # static build to out/ (one index.html per route)
 npm run preview     # serve out/ on port 3001
 npm run lint        # ESLint
 npm run typecheck   # tsc --noEmit
-npm test            # currently just lint + typecheck — there are no tests
+npm test            # lint + typecheck + unit tests
+npm run test:unit   # Vitest + React Testing Library (jsdom), once
+npm run test:watch  # the same, re-running on change
 ```
+
+Tests sit next to the code they cover as `*.test.ts(x)`; config is
+`vitest.config.ts` (it reuses `vite.config.ts`), setup `src/test/setup.ts`.
+Import `describe`/`it`/`expect` from `vitest` — globals are off.
 
 **This repo uses npm.** Install with plain `npm ci` — unlike mokal-app, the
 dependency tree resolves without `--legacy-peer-deps`, so don't add the flag;
@@ -68,8 +76,9 @@ ESLint 10 yet.
 
 - **Say what you actually ran.** Never report that something works because it
   looks right. Name the command and give the real outcome. "I didn't run it" is
-  a fine answer; a false "it works" is not. There is no test suite here, so
-  passing lint and typecheck is not evidence that behaviour is correct.
+  a fine answer; a false "it works" is not. The unit tests cover only a few
+  modules so far, so passing them, lint and typecheck is not evidence that a
+  screen behaves correctly against the API.
 - **Read before writing.** Open the component and its container before
   changing either, and check `components/common` before writing a new one.
 - **Match the surrounding code.** If the surrounding pattern looks wrong, say so

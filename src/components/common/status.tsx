@@ -16,6 +16,7 @@ const invoiceStatus: Record<InvoiceStatus, { label: string; tone: ChipTone }> =
     [InvoiceStatus.Issued]: { label: "Issued", tone: "primary" },
     [InvoiceStatus.PartiallyPaid]: { label: "Partially paid", tone: "secondary" },
     [InvoiceStatus.Paid]: { label: "Paid", tone: "success" },
+    [InvoiceStatus.Superseded]: { label: "Replaced", tone: "neutral" },
     [InvoiceStatus.Void]: { label: "Void", tone: "neutral" },
     [InvoiceStatus.WrittenOff]: { label: "Written off", tone: "neutral" },
   };

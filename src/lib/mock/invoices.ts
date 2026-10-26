@@ -66,8 +66,14 @@ export const mockShipperInvoices: Invoice[] = [
     ],
   },
   {
+    // Version a: the fuel surcharge was added after INV-10422 went out. Same
+    // dates; the payment on INV-10422 moved across.
     id: "INV-10422",
-    number: "INV-10422",
+    number: "INV-10422a",
+    revision: 1,
+    revisionReason: "Fuel surcharge added: rate change agreed with the shipper",
+    replacesId: "INV-10422-0",
+    notSent: true,
     direction: InvoiceDirection.Receivable,
     partyId: "USR_52BR",
     partyName: "Maple Leaf Foods Co.",
@@ -94,9 +100,8 @@ export const mockShipperInvoices: Invoice[] = [
     ],
     attachments: docs("SHP-8F2K7", true),
     history: [
-      created("INV-10422", "2026-10-01T14:10:00Z"),
-      { id: "INV-10422-h2", at: "2026-10-01T16:45:00Z", user: "Sam Patel", action: "Issued and emailed to payables@mapleleaf.example.com" },
-      { id: "INV-10422-h3", at: "2026-10-10T15:20:00Z", user: "Sam Patel", action: "Payment P-2042 allocated (CAD 1,000.00)" },
+      { id: "INV-10422-h1", at: "2026-10-15T14:05:00Z", user: "Sam Patel", action: "Issued as a new version of INV-10422: fuel surcharge added" },
+      { id: "INV-10422-h2", at: "2026-10-15T14:05:00Z", user: "System", action: "Payment P-2042 (CAD 1,000.00) moved from INV-10422" },
     ],
   },
   {
@@ -464,11 +469,74 @@ export const mockCarrierInvoices: Invoice[] = [
 ];
 
 export const findInvoice = (id: string | null) =>
-  [...mockShipperInvoices, ...mockCarrierInvoices].find(
+  allInvoices().find(
     (invoice) => invoice.id === id
   );
 
 export const findInvoiceByNumber = (number: string) =>
-  [...mockShipperInvoices, ...mockCarrierInvoices].find(
+  allInvoices().find(
     (invoice) => invoice.number === number
   );
+
+// Versions that a newer one replaced. Kept apart from the lists above so no
+// list, balance or dashboard total counts them -- the API leaves them out too
+// unless asked for SUPERSEDED.
+export const mockSupersededInvoices: Invoice[] = [
+  {
+    id: "INV-10422-0",
+    number: "INV-10422",
+    revision: 0,
+    replacedById: "INV-10422",
+    replacedAt: "2026-10-15T14:05:00Z",
+    direction: InvoiceDirection.Receivable,
+    partyId: "USR_52BR",
+    partyName: "Maple Leaf Foods Co.",
+    shipmentId: "SHP-8F2K7",
+    origin: "Montréal, QC",
+    destination: "Toronto, ON",
+    status: InvoiceStatus.Superseded,
+    currency: Currency.CAD,
+    invoiceDate: "2026-10-01",
+    dueDate: "2026-10-31",
+    subtotal: "1820.00",
+    taxTotal: "236.60",
+    total: "2056.60",
+    balance: "1056.60",
+    overdueDays: 0,
+    disputed: false,
+    lines: [line("L1", "FREIGHT", "LTL freight", "1820.00", "HST ON 13%", "236.60")],
+    adjustments: [],
+    payments: [
+      { id: "P-2042", paymentNumber: "P-2042", method: PaymentMethod.Eft, paidOn: "2026-10-10", amount: "1000.00" },
+    ],
+    attachments: docs("SHP-8F2K7", true),
+    history: [
+      created("INV-10422-0", "2026-10-01T14:10:00Z"),
+      { id: "INV-10422-0-h2", at: "2026-10-01T16:45:00Z", user: "Sam Patel", action: "Issued and emailed to payables@mapleleaf.example.com" },
+      { id: "INV-10422-0-h3", at: "2026-10-10T15:20:00Z", user: "Sam Patel", action: "Payment P-2042 allocated (CAD 1,000.00)" },
+      { id: "INV-10422-0-h4", at: "2026-10-15T14:05:00Z", user: "Sam Patel", action: "Replaced by INV-10422a" },
+    ],
+  },
+];
+
+const allInvoices = () => [
+  ...mockShipperInvoices,
+  ...mockCarrierInvoices,
+  ...mockSupersededInvoices,
+];
+
+/** Every version of an invoice's number, oldest first. */
+export const invoiceVersions = (invoice: Invoice): Invoice[] => {
+  const byId = new Map(allInvoices().map((item) => [item.id, item]));
+  let first = invoice;
+  while (first.replacesId && byId.has(first.replacesId)) {
+    first = byId.get(first.replacesId)!;
+  }
+  const versions = [first];
+  let current = first;
+  while (current.replacedById && byId.has(current.replacedById)) {
+    current = byId.get(current.replacedById)!;
+    versions.push(current);
+  }
+  return versions;
+};

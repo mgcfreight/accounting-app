@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  AlertBanner,
   BaseButton,
   BaseCardWrapper,
   DetailRow,
@@ -19,11 +20,13 @@ import {
   Printer,
   Send,
 } from "@/components/icons";
-import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
-import { findInvoice, findParty } from "@/lib/mock";
+import { useCan } from "@/components/providers/user-provider";
+import { InvoiceDirection, InvoiceStatus, Permission } from "@/lib/enums";
+import { findInvoice, findParty, invoiceVersions } from "@/lib/mock";
 import { paymentMethodLabel } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
+import { invoiceHref } from "./invoice-cell";
 import { availableActions } from "./invoice-row-actions";
 
 const attachmentLabel = {
@@ -47,7 +50,19 @@ export default function InvoiceDetail({
   const id = searchParams.get("id");
   const invoice = findInvoice(id);
   const [action, setAction] = useState<InvoiceAction | null>(null);
+  const { can } = useCan();
   const isReceivable = direction === InvoiceDirection.Receivable;
+  const canExportPdf = can(
+    isReceivable
+      ? Permission.CustomerInvoicesExportPdf
+      : Permission.CarrierInvoicesExportPdf
+  );
+  // No permission covers documents yet; uploading changes the invoice.
+  const canUpload = can(
+    isReceivable
+      ? Permission.CustomerInvoicesEdit
+      : Permission.CarrierInvoicesEdit
+  );
   const listHref = isReceivable ? "/shipper-invoices/" : "/carrier-invoices/";
 
   if (!invoice || invoice.direction !== direction) {
@@ -60,6 +75,11 @@ export default function InvoiceDetail({
   }
 
   const party = findParty(invoice.partyId);
+  const versions = invoiceVersions(invoice);
+  const replacedBy = versions.find(
+    (version) => version.id === invoice.replacedById
+  );
+  const isReplaced = invoice.status === InvoiceStatus.Superseded;
 
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -72,7 +92,7 @@ export default function InvoiceDetail({
           <span className="text-base-primary-600 text-sm">#{invoice.number}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {availableActions(invoice).map((item) => (
+          {availableActions(invoice, can).map((item) => (
             <BaseButton
               key={item.key}
               text={item.label}
@@ -84,15 +104,43 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
-          <BaseButton
-            text="PDF"
-            varient="bordered"
-            className="rounded-xl px-4 text-base-primary"
-            startContent={<Printer />}
-            onPress={() => demoOnly("Invoice PDF")}
-          />
+          {canExportPdf && (
+            <BaseButton
+              text="PDF"
+              varient="bordered"
+              className="rounded-xl px-4 text-base-primary"
+              startContent={<Printer />}
+              onPress={() => demoOnly("Invoice PDF")}
+            />
+          )}
         </div>
       </div>
+
+      {isReplaced && (
+        <AlertBanner
+          message={
+            <>
+              This version was replaced
+              {replacedBy ? (
+                <>
+                  {" "}by{" "}
+                  <Link
+                    to={invoiceHref(replacedBy)}
+                    className="text-base-primary-300 hover:underline"
+                  >
+                    {replacedBy.number}
+                  </Link>
+                </>
+              ) : null}
+              {invoice.replacedAt
+                ? ` on ${formatDateTime(invoice.replacedAt)}`
+                : ""}
+              . It is kept exactly as it was sent; what it owed moved to the
+              new version.
+            </>
+          }
+        />
+      )}
 
       <InfoStrip
         items={[
@@ -109,6 +157,8 @@ export default function InvoiceDetail({
                 "Not issued yet"
               ) : invoice.status === InvoiceStatus.Void ? (
                 "Void — nothing owed"
+              ) : isReplaced ? (
+                "Replaced — see the new version"
               ) : (
                 <Money
                   amount={invoice.balance}
@@ -122,6 +172,9 @@ export default function InvoiceDetail({
             value: (
               <div className="flex flex-wrap gap-1">
                 <InvoiceStatusChip status={invoice.status} />
+                {invoice.notSent && (
+                  <StatusChip text="Not sent yet" tone="secondary" />
+                )}
                 <InvoiceFlags
                   overdueDays={invoice.overdueDays}
                   disputed={invoice.disputed}
@@ -231,6 +284,39 @@ export default function InvoiceDetail({
         </div>
       </BaseCardWrapper>
 
+      {versions.length > 1 && (
+        <BaseCardWrapper heading="Versions">
+          <ol className="flex flex-col gap-3">
+            {versions.map((version) => (
+              <li
+                key={version.id}
+                className="flex flex-wrap justify-between items-start gap-3"
+              >
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {version.id === invoice.id ? (
+                      <strong>{version.number}</strong>
+                    ) : (
+                      <Link
+                        to={invoiceHref(version)}
+                        className="text-base-primary-300 hover:underline"
+                      >
+                        {version.number}
+                      </Link>
+                    )}
+                    <InvoiceStatusChip status={version.status} />
+                  </div>
+                  <span className="text-xs text-content-5">
+                    {version.revisionReason ?? "First version"}
+                  </span>
+                </div>
+                <Money amount={version.total} currency={version.currency} />
+              </li>
+            ))}
+          </ol>
+        </BaseCardWrapper>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <BaseCardWrapper heading="Credit & Debit Notes">
           {invoice.adjustments.length === 0 ? (
@@ -270,13 +356,15 @@ export default function InvoiceDetail({
         <BaseCardWrapper
           heading="Documents"
           action={
-            <BaseButton
-              text="Upload"
-              varient="light"
-              className="text-base-primary"
-              startContent={<DocumentUpload />}
-              onPress={() => demoOnly("Upload")}
-            />
+            canUpload ? (
+              <BaseButton
+                text="Upload"
+                varient="light"
+                className="text-base-primary"
+                startContent={<DocumentUpload />}
+                onPress={() => demoOnly("Upload")}
+              />
+            ) : undefined
           }
         >
           <div className="flex flex-col gap-3">

@@ -9,7 +9,8 @@ import {
   Money,
 } from "@/components/common";
 import { ArrowRight, Pdf, Send } from "@/components/icons";
-import { InvoiceStatus, PartyType } from "@/lib/enums";
+import { useCan } from "@/components/providers/user-provider";
+import { InvoiceStatus, PartyType, Permission } from "@/lib/enums";
 import {
   findParty,
   findStatements,
@@ -35,6 +36,7 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
   const party = findParty(id);
+  const { can } = useCan();
   const isShipper = type === PartyType.Shipper;
   const listHref = isShipper ? "/shippers/" : "/carriers/";
 
@@ -62,14 +64,17 @@ export default function PartyDetail({ type }: { type: PartyType }) {
           <ArrowRight />
           <span className="text-base-primary-600 text-sm">{party.name}</span>
         </div>
-        <BaseButton
-          text="Send Statement Now"
-          className="rounded-xl px-4"
-          startContent={<Send />}
-          onPress={() =>
-            toast.info(`Statement to ${party.name} — demo only, nothing was sent.`)
-          }
-        />
+        {/* Statements belong to reports on the API (reports.send_email). */}
+        {can(Permission.ReportsSendEmail) && (
+          <BaseButton
+            text="Send Statement Now"
+            className="rounded-xl px-4"
+            startContent={<Send />}
+            onPress={() =>
+              toast.info(`Statement to ${party.name} — demo only, nothing was sent.`)
+            }
+          />
+        )}
       </div>
 
       <InfoStrip
@@ -159,13 +164,15 @@ export default function PartyDetail({ type }: { type: PartyType }) {
                   Sent {formatDateTime(statement.sentAt)}
                 </span>
                 <Money amount={statement.closingBalance} currency={party.currency} />
-                <button
-                  type="button"
-                  aria-label={`Download ${statement.id}`}
-                  onClick={() => toast.info("Statement PDF — demo only.")}
-                >
-                  <Pdf />
-                </button>
+                {can(Permission.ReportsExportPdf) && (
+                  <button
+                    type="button"
+                    aria-label={`Download ${statement.id}`}
+                    onClick={() => toast.info("Statement PDF — demo only.")}
+                  >
+                    <Pdf />
+                  </button>
+                )}
               </div>
             ))}
           </div>

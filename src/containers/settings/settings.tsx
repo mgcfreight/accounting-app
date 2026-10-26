@@ -1,20 +1,24 @@
 import { Accordion, AccordionItem } from "@heroui/react";
 import { useState } from "react";
+import AccountingPeriods from "./accounting-periods";
+import ChargeTypes from "./charge-types";
 import CompanyInformation from "./company-information";
-import ReminderSchedule from "./reminder-schedule";
+import NoticeSettingsSection from "./notice-settings";
 import TaxRates from "./tax-rates";
-import UsersSection from "./users-section";
 
+// The "Settings and lookups" module of the v5 database document.
 const sections = [
   { key: "company", title: "Company Information", Body: CompanyInformation },
   { key: "tax", title: "Tax Rates", Body: TaxRates },
-  { key: "schedule", title: "Reminders & Statements", Body: ReminderSchedule },
-  { key: "users", title: "Users & Roles", Body: UsersSection },
+  { key: "charges", title: "Charge Types", Body: ChargeTypes },
+  { key: "notices", title: "Notices & Alerts", Body: NoticeSettingsSection },
+  { key: "periods", title: "Accounting Periods", Body: AccountingPeriods },
 ];
 
 // mokal-app's settings page: a split accordion, one open section at a time.
 // Settings are Admin only (design §9): the roles are in lib/routes.config.ts
-// and RouteGuard keeps other roles out; the API enforces it.
+// and RouteGuard keeps other roles out; the API enforces it. Users have their
+// own page (/users/), and the audit report is at /settings/audit-log/.
 export default function Settings() {
   const [opened, setOpened] = useState<string>("company");
 
