@@ -101,6 +101,8 @@ export enum InvoiceStatus {
   Issued = "ISSUED",
   PartiallyPaid = "PARTIALLY_PAID",
   Paid = "PAID",
+  // Replaced by a newer version (INV-10422 -> INV-10422a); kept as sent.
+  Superseded = "SUPERSEDED",
   Void = "VOID",
   WrittenOff = "WRITTEN_OFF",
 }

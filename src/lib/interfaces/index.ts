@@ -196,6 +196,15 @@ export interface Invoice {
   overdueDays: number;
   disputed: boolean;
   carrierBillNo?: string;
+  // Versions: a change of service replaces the invoice with a new one
+  // (INV-10422 -> INV-10422a). Absent on an invoice never changed.
+  revision?: number;
+  revisionReason?: string;
+  replacesId?: string;
+  replacedById?: string;
+  replacedAt?: string;
+  // Issued but not emailed yet (sending isn't built).
+  notSent?: boolean;
   lines: InvoiceLine[];
   adjustments: Adjustment[];
   payments: InvoicePaymentRow[];

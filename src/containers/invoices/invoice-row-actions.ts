@@ -15,6 +15,7 @@ const actionPermission = (
         : Permission.CarrierInvoicesApprove;
     case "carrier-bill":
       return Permission.CarrierInvoicesEdit;
+    case "revise":
     case "charge":
     case "credit":
       return isReceivable
@@ -27,14 +28,17 @@ const actionPermission = (
 
 // Which actions an invoice offers, from its status (design §7, §8.2) and what
 // the user's role allows (`can`, from useCan). Issued invoices are never
-// edited; they change through credit and debit notes.
+// edited in place: they change through credit and debit notes, or a new
+// version that replaces them. A replaced version offers nothing.
 export const availableActions = (
   invoice: Invoice,
   can: (permission: Permission) => boolean
 ): { key: InvoiceAction; label: string }[] => {
-  const closed = [InvoiceStatus.Void, InvoiceStatus.WrittenOff].includes(
-    invoice.status
-  );
+  const closed = [
+    InvoiceStatus.Void,
+    InvoiceStatus.WrittenOff,
+    InvoiceStatus.Superseded,
+  ].includes(invoice.status);
   if (closed) return [];
 
   const isDraft = invoice.status === InvoiceStatus.Draft;
@@ -54,6 +58,10 @@ export const availableActions = (
       : []),
     ...(!isDraft
       ? [
+          {
+            key: "revise" as const,
+            label: isReceivable ? "Edit invoice" : "Edit carrier bill",
+          },
           { key: "charge" as const, label: "Add charge" },
           { key: "credit" as const, label: "Credit note" },
         ]

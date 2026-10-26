@@ -51,3 +51,9 @@ export const chargeKindOptions = [
   },
   { key: "OTHER", label: "Other", value: "OTHER" },
 ];
+
+// Every kind a line can have, for editing a whole invoice: freight as well.
+export const invoiceLineKindOptions = [
+  { key: "FREIGHT", label: "Freight / linehaul", value: "FREIGHT" },
+  ...chargeKindOptions,
+];

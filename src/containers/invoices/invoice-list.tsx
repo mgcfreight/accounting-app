@@ -14,7 +14,11 @@ import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import { InvoiceDirection, InvoiceStatus } from "@/lib/enums";
 import { Invoice } from "@/lib/interfaces";
-import { mockCarrierInvoices, mockShipperInvoices } from "@/lib/mock";
+import {
+  mockCarrierInvoices,
+  mockShipperInvoices,
+  mockSupersededInvoices,
+} from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { humanize } from "@/lib/utils";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
@@ -27,7 +31,7 @@ const statusOptions = [
   { key: "ALL", label: "All statuses", value: "ALL" },
   ...Object.values(InvoiceStatus).map((status) => ({
     key: status,
-    label: humanize(status),
+    label: status === InvoiceStatus.Superseded ? "Replaced" : humanize(status),
     value: status,
   })),
 ];
@@ -81,10 +85,17 @@ export default function InvoiceList({
   const status = useWatch({ control, name: "status" });
   const flag = useWatch({ control, name: "flag" });
 
-  const source =
-    direction === InvoiceDirection.Receivable
+  // Like the API, replaced versions are listed only when asked for.
+  const source = useMemo(() => {
+    if (status === InvoiceStatus.Superseded) {
+      return mockSupersededInvoices.filter(
+        (invoice) => invoice.direction === direction
+      );
+    }
+    return direction === InvoiceDirection.Receivable
       ? mockShipperInvoices
       : mockCarrierInvoices;
+  }, [direction, status]);
   const columns = useMemo(() => columnsFor(direction), [direction]);
 
   const filtered = useMemo(

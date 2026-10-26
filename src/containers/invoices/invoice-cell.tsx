@@ -81,6 +81,10 @@ export default function InvoiceCell({
       if (invoice.status === InvoiceStatus.Void) {
         return <span className="text-gray-400">—</span>;
       }
+      // What it owed moved to the version that replaced it.
+      if (invoice.status === InvoiceStatus.Superseded) {
+        return <span className="text-gray-400">Replaced</span>;
+      }
       return (
         <Money
           amount={invoice.balance}

@@ -1,23 +1,28 @@
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
+  BaseButton,
   BaseInput,
   BaseSelect,
   BaseTextArea,
   FormModal,
 } from "@/components/common";
-import { chargeKindOptions } from "@/lib/constants";
+import { Add } from "@/components/icons";
+import { chargeKindOptions, invoiceLineKindOptions } from "@/lib/constants";
 import { InvoiceDirection } from "@/lib/enums";
 import { Invoice } from "@/lib/interfaces";
 import InvoiceCell from "./invoice-cell";
 
 export type InvoiceAction =
   | "issue"
+  | "revise"
   | "charge"
   | "credit"
   | "dispute"
   | "carrier-bill";
+
+type LineValues = { kind: string; description: string; amount: string };
 
 type FormValues = {
   kind: string;
@@ -25,10 +30,12 @@ type FormValues = {
   amount: string;
   reason: string;
   billNo: string;
+  lines: LineValues[];
 };
 
 const titles: Record<InvoiceAction, string> = {
   issue: "Issue & Send Invoice",
+  revise: "Edit Invoice (New Version)",
   charge: "Add Charge (Debit Note)",
   credit: "Credit Note",
   dispute: "Flag as Disputed",
@@ -37,11 +44,15 @@ const titles: Record<InvoiceAction, string> = {
 
 const confirmText: Record<InvoiceAction, string> = {
   issue: "Issue & Send",
+  revise: "Issue New Version",
   charge: "Add Charge",
   credit: "Create Credit Note",
   dispute: "Flag Dispute",
   "carrier-bill": "Save Bill",
 };
+
+// The API caps an invoice at 50 lines.
+const MAX_LINES = 50;
 
 // Amounts are typed as the 2-decimal string the API expects. Validation here
 // is for the form only; the API validates again.
@@ -59,6 +70,13 @@ const emptyForm = (invoice: Invoice): FormValues => ({
   amount: "",
   reason: "",
   billNo: invoice.carrierBillNo ?? "",
+  // The whole current set of charges, to change in place: the new version
+  // is made from all of them, not from the difference.
+  lines: invoice.lines.map((line) => ({
+    kind: line.kind,
+    description: line.description,
+    amount: line.amount,
+  })),
 });
 
 // The forms behind an invoice's actions (design §8.2). Nothing is saved: the
@@ -75,6 +93,7 @@ export default function InvoiceActionModal({
   const { control, handleSubmit, reset } = useForm<FormValues>({
     defaultValues: emptyForm(invoice),
   });
+  const lines = useFieldArray({ control, name: "lines" });
 
   // Reset from the invoice each time, not from defaults captured on mount:
   // the detail page keeps this modal mounted across invoices.
@@ -89,6 +108,8 @@ export default function InvoiceActionModal({
     onClose();
   });
 
+  const isReceivable = invoice.direction === InvoiceDirection.Receivable;
+
   return (
     <FormModal
       isOpen
@@ -96,6 +117,7 @@ export default function InvoiceActionModal({
       title={titles[action]}
       confirmText={confirmText[action]}
       onConfirm={submit}
+      size={action === "revise" ? "2xl" : "md"}
     >
       {/* InvoiceCell, so a draft reads "Not issued" rather than 0.00. */}
       <p className="text-sm text-[#707070]">
@@ -108,14 +130,107 @@ export default function InvoiceActionModal({
           <p className="text-sm">
             The invoice PDF and attachments will be emailed to the
             shipper&apos;s billing contacts, and the invoice can no longer be
-            edited — changes after this are made with credit or debit notes.
+            edited — changes after this are made with a new version, or with credit or debit notes.
           </p>
         ) : (
           <p className="text-sm">
             Confirms this carrier invoice as payable. It can no longer be
-            edited — changes after this are made with credit or debit notes.
+            edited — changes after this are made with a new version, or with credit or debit notes.
           </p>
         ))}
+
+      {action === "revise" && (
+        <>
+          <p className="text-sm">
+            {invoice.number} is kept exactly as it was sent and marked
+            Replaced. The new version gets the next letter on the number
+            (230 → 230a → 230b) and keeps the same invoice
+            date, due date and reference numbers. Tax is worked out again on
+            the charges below. Payments already received move to the new
+            version; its total can&apos;t be lower than what has been paid.
+          </p>
+          {isReceivable ? (
+            <p className="text-xs text-content-5">
+              Emailing isn&apos;t built yet: the new version is issued and
+              marked &quot;Not sent yet&quot;.
+            </p>
+          ) : (
+            <p className="text-xs text-content-5">
+              The new version has to be approved again before it can be paid.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {lines.fields.map((field, index) => (
+              <div
+                key={field.id}
+                className="grid grid-cols-1 sm:grid-cols-[10rem_1fr_8rem_auto] gap-2 items-start"
+              >
+                <BaseSelect
+                  name={`lines.${index}.kind`}
+                  control={control}
+                  label="Charge type"
+                  options={invoiceLineKindOptions}
+                  rules={{ required: "Choose a charge type" }}
+                />
+                <BaseInput
+                  name={`lines.${index}.description`}
+                  control={control}
+                  label="Description"
+                  rules={{ required: "Enter a description" }}
+                />
+                <BaseInput
+                  name={`lines.${index}.amount`}
+                  control={control}
+                  label={`Before tax (${invoice.currency})`}
+                  placeholder="0.00"
+                  rules={AMOUNT_RULES}
+                />
+                <BaseButton
+                  text="Remove"
+                  varient="light"
+                  className="text-base-primary mt-1"
+                  isDisabled={lines.fields.length === 1}
+                  aria-label={`Remove line ${index + 1}`}
+                  onPress={() => lines.remove(index)}
+                />
+              </div>
+            ))}
+            <BaseButton
+              text="Add line"
+              varient="light"
+              className="text-base-primary w-fit"
+              startContent={<Add />}
+              isDisabled={lines.fields.length >= MAX_LINES}
+              onPress={() =>
+                lines.append({ kind: "", description: "", amount: "" })
+              }
+            />
+          </div>
+
+          {!isReceivable && (
+            <BaseInput
+              name="billNo"
+              control={control}
+              label="Carrier bill number"
+              description="Change it only if the carrier sent a new bill."
+              rules={{ required: "Enter the carrier's bill number" }}
+            />
+          )}
+          <BaseTextArea
+            name="reason"
+            control={control}
+            label="Reason for the change"
+            placeholder="Detention at consignee, 2 hours"
+            description="Shown in the invoice's version history."
+            rules={{
+              required: "Enter a reason",
+              minLength: { value: 3, message: "Enter at least 3 characters" },
+              maxLength: { value: 255, message: "Keep it under 255 characters" },
+            }}
+          />
+        </>
+      )}
 
       {action === "charge" && (
         <>
