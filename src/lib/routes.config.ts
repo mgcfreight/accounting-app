@@ -81,6 +81,11 @@ export const routeConfig: Record<string, RouteConfig> = {
   shippers: {
     header: "Shippers",
     access: { allOf: [Permission.PartiesView] },
+    createNewButton: {
+      text: "Add Shipper",
+      action: "add-party",
+      access: { allOf: [Permission.PartiesCreate] },
+    },
     childRoutes: {
       view: { header: "Shipper", previousRoute: "/shippers/" },
     },
@@ -88,8 +93,37 @@ export const routeConfig: Record<string, RouteConfig> = {
   carriers: {
     header: "Carriers",
     access: { allOf: [Permission.PartiesView] },
+    createNewButton: {
+      text: "Add Carrier",
+      action: "add-party",
+      access: { allOf: [Permission.PartiesCreate] },
+    },
     childRoutes: {
       view: { header: "Carrier", previousRoute: "/carriers/" },
+    },
+  },
+  shipments: {
+    header: "Shipments",
+    access: { allOf: [Permission.ShipmentsView] },
+    createNewButton: {
+      text: "New Shipment",
+      action: "new-shipment",
+      // As the form's own route, below.
+      access: {
+        allOf: [Permission.ShipmentsCreate, Permission.PartiesView],
+      },
+    },
+    childRoutes: {
+      view: { header: "Shipment", previousRoute: "/shipments/" },
+      // Entering a shipment makes its invoices. The form picks its parties
+      // from /party, so it needs parties.view as well.
+      new: {
+        header: "New Shipment",
+        previousRoute: "/shipments/",
+        access: {
+          allOf: [Permission.ShipmentsCreate, Permission.PartiesView],
+        },
+      },
     },
   },
   reports: { header: "Reports", access: { allOf: [Permission.ReportsView] } },

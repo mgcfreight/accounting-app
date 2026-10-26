@@ -1,139 +1,116 @@
 import { Card } from "@heroui/react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
-import { useMemo } from "react";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { toast } from "sonner";
 import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ErrorState,
   FilterBar,
-  Money,
   PartyAvatar,
   RowActions,
+  StatusChip,
 } from "@/components/common";
-import { EyeIcon, SearchNormalSm, Send } from "@/components/icons";
-import { useCan } from "@/components/providers/user-provider";
-import { useClientTable } from "@/hooks";
-import { currencyOptions } from "@/lib/constants";
-import { PartyType, Permission } from "@/lib/enums";
-import { Party } from "@/lib/interfaces";
-import { mockCarriers, mockShippers } from "@/lib/mock";
-import { isZeroMoney } from "@/lib/money";
+import { EyeIcon, SearchNormalSm } from "@/components/icons";
+import { useHeaderAction } from "@/components/providers/header-action-provider";
+import { useDebouncedValue, useServerPaging } from "@/hooks";
+import { PartyType } from "@/lib/enums";
+import { PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { listParties } from "@/services";
+import { PartyFormModal } from "./party-modals";
 
-type Filters = { search: string; currency: string; balance: string };
+type Filters = { search: string; active: string };
 
-export const partyHref = (party: Party) =>
+export const partyHref = (party: Pick<PartyView, "id" | "type">) =>
   `${party.type === PartyType.Shipper ? "/shippers" : "/carriers"}/view/?id=${encodeURIComponent(party.id)}`;
 
+export const partyPlace = (party: PartyView) =>
+  [party.city, party.province, party.country].filter(Boolean).join(", ");
+
 const columns: BaseTableColumn[] = [
-  { key: "name", label: "Name", sortable: true },
-  { key: "billing", label: "Billing Email" },
-  { key: "terms", label: "Terms", sortable: true, sortKey: "termsDays", sortType: "number" },
-  { key: "shipments", label: "Shipments", sortable: true, sortKey: "shipmentCount", sortType: "number" },
-  { key: "balance", label: "Balance", sortable: true, sortType: "money" },
-  { key: "overdue", label: "Overdue", sortable: true, sortType: "money" },
-  { key: "lastPayment", label: "Last Payment", sortable: true, sortKey: "lastPaymentOn", sortType: "date" },
+  { key: "name", label: "Name" },
+  { key: "mgcId", label: "MGC Id" },
+  { key: "gstHst", label: "GST/HST #" },
+  { key: "currency", label: "Currency" },
+  { key: "status", label: "Status" },
+  { key: "createdAt", label: "Added" },
   { key: "actions", label: "" },
 ];
 
-const balanceOptions = [
-  { key: "ALL", label: "All balances", value: "ALL" },
-  { key: "OPEN", label: "Open balance", value: "OPEN" },
-  { key: "OVERDUE", label: "Has overdue", value: "OVERDUE" },
+const activeOptions = [
+  { key: "ALL", label: "Active or not", value: "ALL" },
+  { key: "true", label: "Active", value: "true" },
+  { key: "false", label: "Inactive", value: "false" },
 ];
 
-const filterCurrencyOptions = [
-  { key: "ALL", label: "All currencies", value: "ALL" },
-  ...currencyOptions,
-];
-
-// Shippers and carriers share one design (§9 "Shippers / Carriers").
+// Shippers and carriers share one design (§9 "Shippers / Carriers"), from
+// the API's /party routes. Balances arrive with payments; until then the
+// list shows who the party is.
 export default function PartyList({ type }: { type: PartyType }) {
   const navigate = useNavigate();
-  const { can } = useCan();
   const isShipper = type === PartyType.Shipper;
+  const [adding, setAdding] = useState(false);
   const { control } = useForm<Filters>({
-    defaultValues: { search: "", currency: "ALL", balance: "ALL" },
+    defaultValues: { search: "", active: "ALL" },
   });
-  const search = useWatch({ control, name: "search" }).trim().toLowerCase();
-  const currency = useWatch({ control, name: "currency" });
-  const balance = useWatch({ control, name: "balance" });
+  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
+  const active = useWatch({ control, name: "active" });
 
-  const source = isShipper ? mockShippers : mockCarriers;
-  const filtered = useMemo(
-    () =>
-      source.filter((party) => {
-        if (currency && currency !== "ALL" && party.currency !== currency) return false;
-        if (balance === "OPEN" && isZeroMoney(party.balance)) return false;
-        if (balance === "OVERDUE" && isZeroMoney(party.overdue)) return false;
-        if (!search) return true;
-        return [party.name, ...party.billingEmails].some((value) =>
-          value.toLowerCase().includes(search)
-        );
-      }),
-    [source, search, currency, balance]
-  );
+  // The header's "Add Shipper / Carrier" (routes.config: parties.create).
+  useHeaderAction("add-party", () => setAdding(true));
 
-  const table = useClientTable(filtered, columns, {
-    column: "name",
-    sortKey: "name",
-    direction: "asc",
+  const paging = useServerPaging(JSON.stringify([type, search, active]));
+  const params = {
+    page: paging.page,
+    limit: paging.limit,
+    type,
+    searchQuery: search.slice(0, 100),
+    isActive: active && active !== "ALL" ? active === "true" : undefined,
+  };
+  const parties = useQuery({
+    queryKey: ["parties", "list", params],
+    queryFn: ({ signal }) => listParties(params, signal),
+    placeholderData: keepPreviousData,
   });
 
-  const renderCell = (party: Party, key: string) => {
+  const renderCell = (party: PartyView, key: string) => {
     switch (key) {
       case "name":
         return (
           <PartyAvatar
             name={party.name}
-            subtitle={`${party.address.city}, ${party.address.province} · ${party.currency}`}
+            subtitle={partyPlace(party)}
             tone={isShipper ? "success" : "primary"}
           />
         );
-      case "billing":
-        return party.billingEmails[0];
-      case "terms":
-        return `Net ${party.termsDays}`;
-      case "shipments":
-        return party.shipmentCount;
-      case "balance":
-        return <Money amount={party.balance} currency={party.currency} className="font-semibold" />;
-      case "overdue":
-        return isZeroMoney(party.overdue) ? (
-          <span className="text-gray-400">—</span>
+      case "mgcId":
+        return <span className="font-mono">{party.mgcId}</span>;
+      case "gstHst":
+        return party.gstHstNumber ?? <span className="text-gray-400">Not on file</span>;
+      case "currency":
+        return party.defaultCurrency;
+      case "status":
+        return party.isActive ? (
+          <StatusChip text="Active" tone="success" />
         ) : (
-          <Money amount={party.overdue} currency={party.currency} className="text-base-danger" />
+          <StatusChip text="Inactive" tone="neutral" />
         );
-      case "lastPayment":
-        return party.lastPaymentOn ? (
-          <span className="whitespace-nowrap">{formatDate(party.lastPaymentOn)}</span>
-        ) : (
-          <span className="text-gray-400">None yet</span>
-        );
+      case "createdAt":
+        return <span className="whitespace-nowrap">{formatDate(party.createdAt)}</span>;
       case "actions":
         return (
           <RowActions
             actions={[
               {
                 key: "view",
-                label: "View balance & profile",
+                label: "View profile & agreements",
                 icon: <EyeIcon />,
                 onPress: () => navigate(partyHref(party)),
               },
-              ...(can(Permission.ReportsSendEmail)
-                ? [
-                    {
-                      key: "statement",
-                      label: "Send statement now",
-                      icon: <Send />,
-                      onPress: () =>
-                        toast.info(`Statement to ${party.name} — demo only, nothing was sent.`),
-                    },
-                  ]
-                : []),
             ]}
           />
         );
@@ -150,42 +127,47 @@ export default function PartyList({ type }: { type: PartyType }) {
           control={control}
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
-          placeholder={`Search ${isShipper ? "shippers" : "carriers"} by name or email`}
+          placeholder={`Search ${isShipper ? "shippers" : "carriers"} by name or MGC id`}
           endContent={<SearchNormalSm />}
         />
         <BaseSelect
-          name="currency"
+          name="active"
           control={control}
-          options={filterCurrencyOptions}
+          options={activeOptions}
           className="w-full sm:w-44"
           classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="Currency"
-          disallowEmptySelection
-        />
-        <BaseSelect
-          name="balance"
-          control={control}
-          options={balanceOptions}
-          className="w-full sm:w-44"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="Balance"
+          aria-label="Active"
           disallowEmptySelection
         />
       </FilterBar>
       <Card className="mt-4">
-        <BaseTable
-          ariaLabel={isShipper ? "Shippers" : "Carriers"}
-          columns={columns}
-          data={table.pageRows}
-          rowKey={(row) => row.id}
-          renderCell={renderCell}
-          meta={table.meta}
-          setMeta={table.setMeta}
-          sort={table.sort}
-          onSortChange={table.onSortChange}
-          bottomContent={isShipper ? "Shippers" : "Carriers"}
-        />
+        {parties.isError ? (
+          <ErrorState
+            message={`We couldn't load the ${isShipper ? "shippers" : "carriers"}. Please try again.`}
+            onAction={() => void parties.refetch()}
+          />
+        ) : (
+          <BaseTable<PartyView>
+            ariaLabel={isShipper ? "Shippers" : "Carriers"}
+            columns={columns}
+            data={parties.data?.items ?? []}
+            loading={parties.isPending}
+            rowKey={(row) => row.id}
+            renderCell={renderCell}
+            meta={paging.tableMeta(parties.data?.meta)}
+            setMeta={paging.setMeta}
+            bottomContent={isShipper ? "Shippers" : "Carriers"}
+            emptyContent={`No ${isShipper ? "shippers" : "carriers"} found`}
+          />
+        )}
       </Card>
+      {adding && (
+        <PartyFormModal
+          type={type}
+          onCreated={(party) => navigate(partyHref(party))}
+          onClose={() => setAdding(false)}
+        />
+      )}
     </>
   );
 }

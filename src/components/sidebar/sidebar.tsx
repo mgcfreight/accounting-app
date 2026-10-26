@@ -26,6 +26,7 @@ const menuIcons: Record<MenuIconName, ReactNode> = {
   payments: <CashIcon className="svg-white" />,
   shippers: <User />,
   carriers: <CarrrierTruck />,
+  shipments: <TrackingIcon />,
   reports: <ReportingIcon />,
   system: <TrackingIcon />,
   users: <User />,
