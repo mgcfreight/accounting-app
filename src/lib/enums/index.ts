@@ -222,6 +222,10 @@ export enum InvoiceReviewFlag {
   NoReferenceNumber = "NO_REFERENCE_NUMBER",
   NoTmsCode = "NO_TMS_CODE",
   NoFxRate = "NO_FX_RATE",
+  // Set by the Accounts API's TMS sync.
+  TmsChanged = "TMS_CHANGED",
+  TmsCancelled = "TMS_CANCELLED",
+  UnknownCharge = "UNKNOWN_CHARGE",
 }
 
 // Invoice list sort columns (the API's InvoiceSortBy).

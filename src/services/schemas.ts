@@ -345,6 +345,8 @@ export const partySchema: z.ZodType<PartyView> = z.object({
   isActive: z.boolean(),
   createdAt: timestamp,
   updatedAt: timestamp,
+  email: z.string().nullable().optional(),
+  businessEmail: z.string().nullable().optional(),
   agreements: z.array(agreementSchema).optional(),
 });
 

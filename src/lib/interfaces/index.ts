@@ -411,6 +411,10 @@ export interface PartyView {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Contact addresses as the TMS holds them (shippers); null when it has
+  // none. Absent until the API's TMS sync ships.
+  email?: string | null;
+  businessEmail?: string | null;
   // Newest first. Only from the single-party endpoint.
   agreements?: AgreementView[];
 }
