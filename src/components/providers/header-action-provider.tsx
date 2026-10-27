@@ -4,6 +4,7 @@ import {
   RefObject,
   useContext,
   useEffect,
+  useMemo,
   useRef,
 } from "react";
 
@@ -16,10 +17,13 @@ const HeaderActionContext = createContext<{
   registry: RefObject<Registry>;
 } | null>(null);
 
+// The value never changes: DashboardLayout re-renders on every sidebar hover,
+// and a new object here would re-render every page that registers an action.
 export function HeaderActionProvider({ children }: { children: ReactNode }) {
   const registry = useRef<Registry>(new Map());
+  const value = useMemo(() => ({ registry }), []);
   return (
-    <HeaderActionContext.Provider value={{ registry }}>
+    <HeaderActionContext.Provider value={value}>
       {children}
     </HeaderActionContext.Provider>
   );
