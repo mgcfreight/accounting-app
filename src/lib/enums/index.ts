@@ -237,3 +237,42 @@ export enum SortOrder {
   Asc = "ASC",
   Desc = "DESC",
 }
+
+// Statements, reminders, allocation, installments and disputes: no API yet;
+// the screens read lib/mock.
+
+export enum StatementRunKind {
+  DailyRefresh = "DAILY_REFRESH",
+  WeeklyEmail = "WEEKLY_EMAIL",
+}
+
+export enum ReminderChannel {
+  // Emailed to the shipper's accounts department.
+  CustomerEmail = "CUSTOMER_EMAIL",
+  // An alert to MGC's accounts team that a carrier bill falls due.
+  TeamAlert = "TEAM_ALERT",
+}
+
+export enum ReminderStatus {
+  Scheduled = "SCHEDULED",
+  Sent = "SENT",
+  Skipped = "SKIPPED",
+}
+
+export enum AllocationRule {
+  InvoiceNumber = "INVOICE_NUMBER",
+  ExactAmount = "EXACT_AMOUNT",
+  OldestOpen = "OLDEST_OPEN",
+  Manual = "MANUAL",
+}
+
+export enum InstallmentStatus {
+  Paid = "PAID",
+  Due = "DUE",
+  Late = "LATE",
+}
+
+export enum DisputeStatus {
+  Open = "OPEN",
+  Resolved = "RESOLVED",
+}

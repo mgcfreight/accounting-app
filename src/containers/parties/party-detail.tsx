@@ -166,6 +166,7 @@ export default function PartyDetail({ type }: { type: PartyType }) {
                 key={agreement.id}
                 agreement={agreement}
                 state={agreementState(agreement, today)}
+                isShipper={isShipper}
               />
             ))}
           </div>
@@ -185,12 +186,18 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   );
 }
 
+const AgreementSwitch = ({ label, on }: { label: string; on: boolean }) => (
+  <StatusChip text={`${label}: ${on ? "on" : "off"}`} tone={on ? "success" : "neutral"} />
+);
+
 function AgreementRow({
   agreement,
   state,
+  isShipper,
 }: {
   agreement: AgreementView;
   state: ReturnType<typeof agreementState>;
+  isShipper: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 text-sm text-[#343A40] border-b border-gray-100 pb-3">
@@ -210,6 +217,17 @@ function AgreementRow({
         {agreement.billingTrigger &&
           ` · ${billingTriggerLabels[agreement.billingTrigger]}`}
       </span>
+      {/* Read-only: adding an agreement can't set these yet (the API's
+          create-agreement request doesn't take them). */}
+      <div className="flex flex-wrap gap-1">
+        <AgreementSwitch label="Payment reminders" on={agreement.remindersEnabled} />
+        {isShipper && (
+          <>
+            <AgreementSwitch label="Auto-send invoices" on={agreement.autoSendInvoices} />
+            <AgreementSwitch label="Weekly statement" on={agreement.weeklyStatementEnabled} />
+          </>
+        )}
+      </div>
       {agreement.notes && (
         <span className="text-content-5 whitespace-pre-wrap">{agreement.notes}</span>
       )}

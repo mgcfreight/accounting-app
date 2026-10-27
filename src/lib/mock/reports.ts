@@ -1,5 +1,12 @@
-import { Currency } from "../enums";
-import { AgingRow, MonthlyPnl, Statement } from "../interfaces";
+import { Currency, PartyType } from "../enums";
+import {
+  AgingRow,
+  MonthlyPnl,
+  PartyPnl,
+  PeriodSummary,
+  Statement,
+  TaxSummaryRow,
+} from "../interfaces";
 
 // Dashboard and report figures. In production every one of these comes from
 // the API already calculated; see README.md for how they tie to invoices.ts.
@@ -150,3 +157,80 @@ export const mockReports = [
     formats: ["CSV"],
   },
 ];
+
+// Summaries by the Reports page's periods (its periodOptions keys). October
+// ties to mockMonthlyPnl and to the tax summary below; Q3 is Jul + Aug + Sep.
+// Collected and paid out are money received and sent, CAD.
+export const mockPeriodSummaries: Record<string, PeriodSummary> = {
+  "2026-10": { key: "2026-10", period: "October 2026 (MTD)", revenue: "31480.00", carrierCost: "25813.60", grossMargin: "5666.40", marginPercent: "18.0", taxCollected: "3460.47", inputTaxCredits: "2848.49", collected: "5755.00", paidOut: "2709.00" },
+  "2026-09": { key: "2026-09", period: "September 2026", revenue: "58300.00", carrierCost: "46931.50", grossMargin: "11368.50", marginPercent: "19.5", taxCollected: "6421.80", inputTaxCredits: "5162.47", collected: "49860.25", paidOut: "41775.10" },
+  "2026-Q3": { key: "2026-Q3", period: "Q3 2026", revenue: "164320.00", carrierCost: "133925.70", grossMargin: "30394.30", marginPercent: "18.5", taxCollected: "18154.12", inputTaxCredits: "14731.82", collected: "151240.60", paidOut: "126610.35" },
+  "2026-YTD": { key: "2026-YTD", period: "2026 year to date", revenue: "452310.00", carrierCost: "370894.20", grossMargin: "81415.80", marginPercent: "18.0", taxCollected: "49876.33", inputTaxCredits: "40921.08", collected: "418920.45", paidOut: "352107.90" },
+};
+
+// The months of each quarter, for the quarterly view of the P&L sheet.
+export const mockQuarterMonths: Record<string, string[]> = {
+  "2026-Q3": ["Jul 2026", "Aug 2026", "Sep 2026"],
+};
+
+const pnl = (
+  partyId: string,
+  partyName: string,
+  type: PartyType,
+  shipmentCount: number,
+  revenue: string,
+  carrierCost: string,
+  grossMargin: string,
+  marginPercent: string
+): PartyPnl => ({
+  partyId,
+  partyName,
+  type,
+  shipmentCount,
+  revenue,
+  carrierCost,
+  grossMargin,
+  marginPercent,
+});
+
+// October 2026 (MTD), CAD. Each side adds up to October's revenue 31,480.00,
+// carrier cost 25,813.60 and gross margin 5,666.40 over 15 shipments.
+export const mockPartyPnl: { period: string; shippers: PartyPnl[]; carriers: PartyPnl[] } = {
+  period: "October 2026 (MTD)",
+  shippers: [
+    pnl("USR_41AQ", "Northwind Distribution", PartyType.Shipper, 5, "9850.00", "8076.00", "1774.00", "18.0"),
+    pnl("USR_52BR", "Maple Leaf Foods Co.", PartyType.Shipper, 4, "8120.00", "6740.40", "1379.60", "17.0"),
+    pnl("USR_63CS", "Pacific Rim Traders", PartyType.Shipper, 2, "4310.00", "3491.10", "818.90", "19.0"),
+    pnl("USR_74DT", "Great Lakes Supply", PartyType.Shipper, 1, "3900.00", "3237.00", "663.00", "17.0"),
+    pnl("USR_85EU", "Atlantic Seafoods", PartyType.Shipper, 1, "1220.00", "1000.40", "219.60", "18.0"),
+    pnl("USR_96FV", "Prairie Agri Inc.", PartyType.Shipper, 2, "4080.00", "3268.70", "811.30", "19.9"),
+  ],
+  carriers: [
+    pnl("CAR_01", "Day & Ross", PartyType.Carrier, 5, "11040.00", "9120.00", "1920.00", "17.4"),
+    pnl("CAR_02", "TST-CF Express", PartyType.Carrier, 3, "6620.00", "5480.60", "1139.40", "17.2"),
+    pnl("CAR_03", "Manitoulin Transport", PartyType.Carrier, 2, "5810.00", "4750.00", "1060.00", "18.2"),
+    pnl("CAR_04", "XPO Logistics", PartyType.Carrier, 1, "3650.00", "3010.00", "640.00", "17.5"),
+    pnl("CAR_05", "Kriska Transportation", PartyType.Carrier, 4, "4360.00", "3453.00", "907.00", "20.8"),
+  ],
+};
+
+// October 2026 (MTD). Tax on the taxable amount, rounded half-up; QST is on
+// the price before GST. Net = collected − input tax credits. Taxable sales
+// add up to October's revenue and purchases to its carrier cost; the totals
+// match mockPeriodSummaries["2026-10"].
+export const mockTaxSummary: {
+  period: string;
+  rows: TaxSummaryRow[];
+  totals: { taxCollected: string; inputTaxCredits: string; netTax: string };
+} = {
+  period: "October 2026 (MTD)",
+  rows: [
+    { key: "ON-HST", jurisdiction: "ON", taxCode: "HST", ratePercent: "13.000", taxableSales: "14200.00", taxCollected: "1846.00", taxablePurchases: "11650.00", inputTaxCredits: "1514.50", netTax: "331.50" },
+    { key: "QC-GST", jurisdiction: "QC", taxCode: "GST", ratePercent: "5.000", taxableSales: "8120.00", taxCollected: "406.00", taxablePurchases: "6740.40", inputTaxCredits: "337.02", netTax: "68.98" },
+    { key: "QC-QST", jurisdiction: "QC", taxCode: "QST", ratePercent: "9.975", taxableSales: "8120.00", taxCollected: "809.97", taxablePurchases: "6740.40", inputTaxCredits: "672.35", netTax: "137.62" },
+    { key: "BC-GST", jurisdiction: "BC", taxCode: "GST", ratePercent: "5.000", taxableSales: "4310.00", taxCollected: "215.50", taxablePurchases: "3491.10", inputTaxCredits: "174.56", netTax: "40.94" },
+    { key: "NB-HST", jurisdiction: "NB", taxCode: "HST", ratePercent: "15.000", taxableSales: "1220.00", taxCollected: "183.00", taxablePurchases: "1000.40", inputTaxCredits: "150.06", netTax: "32.94" },
+    { key: "US-ZERO", jurisdiction: "US", taxCode: "Zero-rated", ratePercent: "0.000", taxableSales: "3630.00", taxCollected: "0.00", taxablePurchases: "2931.70", inputTaxCredits: "0.00", netTax: "0.00" },
+  ],
+  totals: { taxCollected: "3460.47", inputTaxCredits: "2848.49", netTax: "611.98" },
+};

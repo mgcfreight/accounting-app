@@ -1,6 +1,30 @@
-import { Currency, MatchStatus, PaymentDirection, PaymentMethod } from "../enums";
-import { Payment } from "../interfaces";
+import {
+  AllocationRule,
+  Currency,
+  MatchStatus,
+  PaymentDirection,
+  PaymentMethod,
+} from "../enums";
+import { Allocation, Payment } from "../interfaces";
 
+const allocation = (
+  invoiceNumber: string,
+  invoiceBalanceBefore: string,
+  amount: string,
+  invoiceBalanceAfter: string,
+  rule: AllocationRule
+): Allocation => ({
+  invoiceNumber,
+  invoiceBalanceBefore,
+  amount,
+  invoiceBalanceAfter,
+  rule,
+});
+
+// Each allocation shows the invoice balance before and after it, from
+// invoices.ts. P-2042 went to INV-10422 before INV-10422a replaced it.
+// Auto-matching tries the invoice number in the reference, then an exact
+// amount, then the party's oldest open invoice (design §8.5).
 export const mockPayments: Payment[] = [
   {
     id: "P-2047",
@@ -15,6 +39,12 @@ export const mockPayments: Payment[] = [
     amount: "1500.00",
     unapplied: "1500.00",
     match: MatchStatus.Unmatched,
+    allocations: [],
+    // No invoice number and no invoice for exactly 1,500.00: the oldest open
+    // invoice, part-paid.
+    suggested: [
+      allocation("INV-10421", "2816.89", "1500.00", "1316.89", AllocationRule.OldestOpen),
+    ],
   },
   {
     id: "P-2045",
@@ -29,6 +59,10 @@ export const mockPayments: Payment[] = [
     amount: "2709.00",
     unapplied: "0.00",
     match: MatchStatus.Matched,
+    allocations: [
+      allocation("CINV-10423", "2709.00", "2709.00", "0.00", AllocationRule.InvoiceNumber),
+    ],
+    suggested: [],
   },
   {
     id: "P-2044",
@@ -43,6 +77,11 @@ export const mockPayments: Payment[] = [
     amount: "500.00",
     unapplied: "500.00",
     match: MatchStatus.Unmatched,
+    allocations: [],
+    // INV-10424 is disputed, so the match waits for staff to confirm.
+    suggested: [
+      allocation("INV-10424", "1475.00", "500.00", "975.00", AllocationRule.OldestOpen),
+    ],
   },
   {
     id: "P-2042",
@@ -57,6 +96,10 @@ export const mockPayments: Payment[] = [
     amount: "1000.00",
     unapplied: "0.00",
     match: MatchStatus.Matched,
+    allocations: [
+      allocation("INV-10422", "2056.60", "1000.00", "1056.60", AllocationRule.InvoiceNumber),
+    ],
+    suggested: [],
   },
   {
     id: "P-2041",
@@ -71,6 +114,11 @@ export const mockPayments: Payment[] = [
     amount: "3255.00",
     unapplied: "0.00",
     match: MatchStatus.Matched,
+    // A Stripe payment names its invoice.
+    allocations: [
+      allocation("INV-10423", "3255.00", "3255.00", "0.00", AllocationRule.InvoiceNumber),
+    ],
+    suggested: [],
   },
   {
     id: "P-2046",
@@ -85,5 +133,10 @@ export const mockPayments: Payment[] = [
     amount: "900.00",
     unapplied: "0.00",
     match: MatchStatus.Matched,
+    // The first instalment of the plan in installments.ts.
+    allocations: [
+      allocation("CINV-10426", "1884.75", "900.00", "984.75", AllocationRule.Manual),
+    ],
+    suggested: [],
   },
 ];

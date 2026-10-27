@@ -18,12 +18,12 @@ import {
   PartyView,
   ReferenceNumbers,
 } from "@/lib/interfaces";
-import { formatDate } from "@/lib/utils";
+import { isZeroMoney } from "@/lib/money";
+import { daysPastDue, formatDate, torontoToday } from "@/lib/utils";
 
 // Helpers and one renderCell for invoices from the Accounts API, used by the
-// invoice lists, the invoice page and the party and shipment pages.
-// (invoice-cell.tsx is the mock-data version, still used by the dashboard
-// and Needs Review.)
+// invoice lists, the invoice page, the dashboard and the party and shipment
+// pages.
 
 export type InvoiceView = CustomerInvoiceView | CarrierInvoiceView;
 
@@ -116,7 +116,30 @@ export const awaitsReview = (invoice: InvoiceView) =>
       invoice.status === CarrierInvoiceStatus.Received ||
       invoice.status === CarrierInvoiceStatus.OnHold);
 
+// The statuses in which an invoice is owed: issued to the customer, or the
+// carrier's bill entered.
+const OWED_CARRIER_STATUSES = [
+  CarrierInvoiceStatus.Received,
+  CarrierInvoiceStatus.OnHold,
+  CarrierInvoiceStatus.Approved,
+];
+
+// Owed and not paid off: what overdue flags, reminders and disputes apply to.
+export const isOwed = (invoice: InvoiceView) =>
+  (isCustomerInvoice(invoice)
+    ? invoice.status === CustomerInvoiceStatus.Issued
+    : OWED_CARRIER_STATUSES.includes(invoice.status)) &&
+  !isZeroMoney(invoice.balanceDue);
+
+// Days past its due date, for an owed invoice; 0 when it isn't overdue.
+// Calendar dates compare as text.
+export const overdueDaysOf = (invoice: InvoiceView, today = torontoToday()) =>
+  isOwed(invoice) && invoice.dueDate && invoice.dueDate < today
+    ? daysPastDue(invoice.dueDate, today)
+    : 0;
+
 export function InvoiceStatusCell({ invoice }: { invoice: InvoiceView }) {
+  const overdueDays = overdueDaysOf(invoice);
   return (
     <div className="flex flex-wrap items-start gap-1">
       {isCustomerInvoice(invoice) ? (
@@ -129,6 +152,9 @@ export function InvoiceStatusCell({ invoice }: { invoice: InvoiceView }) {
           status={invoice.paymentStatus}
           amountPaid={invoice.amountPaid}
         />
+      )}
+      {overdueDays > 0 && (
+        <StatusChip text={`Overdue ${overdueDays}d`} tone="danger" />
       )}
       {awaitsReview(invoice) && <StatusChip text="Needs review" tone="warning" />}
     </div>
