@@ -5,6 +5,8 @@ import {
   customerInvoiceSchema,
   meSchema,
   permissionCatalogSchema,
+  syncEventSchema,
+  syncStatusSchema,
   userSchema,
 } from "./schemas";
 
@@ -209,6 +211,14 @@ describe("customerInvoiceSchema", () => {
     ).toBe(false);
   });
 
+  it("reads the review flags the TMS sync sets", () => {
+    const reviewFlags = ["TMS_CHANGED", "TMS_CANCELLED", "UNKNOWN_CHARGE"];
+    expect(
+      customerInvoiceSchema.parse({ ...customerInvoice, reviewFlags })
+        .reviewFlags
+    ).toEqual(reviewFlags);
+  });
+
   it("reads a replaced version", () => {
     const parsed = customerInvoiceSchema.parse({
       ...customerInvoice,
@@ -262,5 +272,77 @@ describe("carrierInvoiceSchema", () => {
       carrierInvoiceSchema.safeParse({ ...expected, varianceAmount: "-5" })
         .success
     ).toBe(false);
+  });
+});
+
+// GET /sync/status as mgc-accounts-backend sends it.
+const syncStatus = {
+  enabled: true,
+  running: false,
+  cursor: "1043:2058",
+  cursorUpdatedAt: "2026-10-26T15:02:11.000Z",
+  inbox: { RECEIVED: 0, APPLIED: 2050, SKIPPED: 2, FAILED: 6 },
+  outbox: { pending: 0, rejected: 0 },
+  lastRun: {
+    trigger: "MANUAL",
+    startedAt: "2026-10-26T15:02:10.000Z",
+    finishedAt: "2026-10-26T15:02:11.000Z",
+    pulled: 1,
+    applied: 1,
+    failed: 0,
+    skipped: 0,
+    error: null,
+  },
+};
+
+describe("syncStatusSchema", () => {
+  it("reads the counts and the last run", () => {
+    const parsed = syncStatusSchema.parse(syncStatus);
+    expect(parsed.inbox.FAILED).toBe(6);
+    expect(parsed.lastRun?.applied).toBe(1);
+  });
+
+  it("reads a server that hasn't run yet", () => {
+    expect(
+      syncStatusSchema.parse({ ...syncStatus, lastRun: null }).lastRun
+    ).toBeNull();
+  });
+
+  it("refuses a cursor that isn't txId:seq", () => {
+    expect(
+      syncStatusSchema.safeParse({ ...syncStatus, cursor: "2058" }).success
+    ).toBe(false);
+  });
+
+  it("refuses a missing count rather than showing 0", () => {
+    const { FAILED: _failed, ...inbox } = syncStatus.inbox;
+    expect(syncStatusSchema.safeParse({ ...syncStatus, inbox }).success).toBe(
+      false
+    );
+  });
+});
+
+describe("syncEventSchema", () => {
+  const held = {
+    eventId: "0d6c5a52-6f2e-4c1a-9a43-0d6b1fb1f0a1",
+    seq: "938",
+    type: "shipment.upserted",
+    aggregateId: "6650",
+    status: "FAILED",
+    error: "No Accounts payment terms for a 90-day credit period",
+    attempts: 3,
+    occurredAt: "2026-10-26T14:00:00.000Z",
+    receivedAt: "2026-10-26T14:01:00.000Z",
+    appliedAt: null,
+  };
+
+  it("reads a held event with its reason", () => {
+    expect(syncEventSchema.parse(held).error).toContain("90-day");
+  });
+
+  it("refuses a status it doesn't know", () => {
+    expect(syncEventSchema.safeParse({ ...held, status: "DONE" }).success).toBe(
+      false
+    );
   });
 });

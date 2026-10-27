@@ -256,7 +256,7 @@ export default function ShipmentForm() {
           <BaseInput
             name="tmsCustomerInvoiceCode"
             control={control}
-            label="TMS customer invoice code"
+            label="TMS shipper invoice code"
             placeholder="EGP9wr"
             description="6 letters or digits. Without it the invoice waits for a number."
             rules={tmsCodeRules}

@@ -41,8 +41,16 @@ export const invoiceListHref = (direction: InvoiceDirection) =>
     ? "/shipper-invoices/"
     : "/carrier-invoices/";
 
+// The detail page's `?id=` is the invoice number (sin_…/cin_…) once it has
+// one, so the address shows the number staff know; a draft without one uses
+// its internal id (csi_…/cri_…). The prefixes never overlap.
 export const apiInvoiceHref = (invoice: InvoiceView) =>
-  `${invoiceListHref(directionOf(invoice))}view/?id=${encodeURIComponent(invoice.id)}`;
+  `${invoiceListHref(directionOf(invoice))}view/?id=${encodeURIComponent(
+    invoiceNumberOf(invoice) ?? invoice.id
+  )}`;
+
+// True for an invoice number, false for an internal id.
+export const isInvoiceNumber = (value: string) => /^(sin|cin)_/.test(value);
 
 // A customer invoice is numbered once it has its TMS code; a carrier
 // invoice by MGC's reference number.

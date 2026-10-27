@@ -154,6 +154,15 @@ export const getCustomerInvoice = (invoiceId: string, signal?: AbortSignal) =>
     .get("/invoice/customer", { params: { invoiceId }, signal })
     .then((res) => parseBody(customerInvoice, res.data).data);
 
+// By its number (sin_EGP9wr_230), with its lines.
+export const getCustomerInvoiceByNumber = (
+  invoiceNumber: string,
+  signal?: AbortSignal
+) =>
+  apiClient
+    .get("/invoice/customer/by-number", { params: { invoiceNumber }, signal })
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
 // Every version of the invoice, superseded ones included.
 export const getCustomerInvoiceVersions = (
   invoiceId: string,
@@ -219,6 +228,15 @@ export const listCarrierInvoices = (
 export const getCarrierInvoice = (invoiceId: string, signal?: AbortSignal) =>
   apiClient
     .get("/invoice/carrier", { params: { invoiceId }, signal })
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// By our number (cin_EGP9wr_230), with its lines.
+export const getCarrierInvoiceByNumber = (
+  invoiceNumber: string,
+  signal?: AbortSignal
+) =>
+  apiClient
+    .get("/invoice/carrier/by-number", { params: { invoiceNumber }, signal })
     .then((res) => parseBody(carrierInvoice, res.data).data);
 
 export const getCarrierInvoiceVersions = (

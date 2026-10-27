@@ -18,8 +18,10 @@ import {
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
-  SyncRunStatus,
+  SyncInboxStatus,
+  SyncTrigger,
   Permission,
+  TmsDocumentKind,
   TaxBasis,
   TaxTreatment,
   TwoFactorMethod,
@@ -250,19 +252,45 @@ export interface ReviewItem {
   detectedAt: string;
 }
 
-export interface SyncResource {
-  resource: string;
-  checkpoint: string;
-  recordsLastRun: number;
+// The TMS sync (/sync, Admin only). One run pulls new TMS events into the
+// inbox, then applies every one waiting.
+export interface SyncRun {
+  trigger: SyncTrigger;
+  startedAt: string;
+  finishedAt: string;
+  pulled: number;
+  applied: number;
+  failed: number;
+  skipped: number;
+  // Why the run stopped early (TMS down, contract broken), if it did.
+  error: string | null;
 }
 
-export interface SyncRun {
-  id: string;
-  startedAt: string;
-  finishedAt?: string;
-  status: SyncRunStatus;
-  records: number;
-  error?: string;
+export interface SyncStatus {
+  // Off unless the server has MGC_SYNC_ENABLED and its TMS keys.
+  enabled: boolean;
+  running: boolean;
+  // The TMS feed position ("txId:seq") read up to, and when it last moved.
+  cursor: string;
+  cursorUpdatedAt: string;
+  inbox: Record<SyncInboxStatus, number>;
+  // Invoice changes waiting to go to the TMS, and ones it refused.
+  outbox: { pending: number; rejected: number };
+  // Since the API server started; null before its first run.
+  lastRun: SyncRun | null;
+}
+
+export interface SyncEvent {
+  eventId: string;
+  seq: string;
+  type: string;
+  aggregateId: string;
+  status: SyncInboxStatus;
+  error: string | null;
+  attempts: number;
+  occurredAt: string;
+  receivedAt: string;
+  appliedAt: string | null;
 }
 
 // GET /audit/events. An Admin sees every event; other roles their own.
@@ -398,11 +426,20 @@ export interface PartyView {
   country: string;
   defaultCurrency: Currency;
   isActive: boolean;
+  // Contact details as the TMS holds them (shippers); null when it has none.
+  email: string | null;
+  businessEmail: string | null;
+  phone: string | null;
+  contactName: string | null;
+  businessNumber: string | null;
   createdAt: string;
   updatedAt: string;
   // Newest first. Only from the single-party endpoint.
   agreements?: AgreementView[];
 }
+
+// S3 keys of a shipment's TMS documents, by kind; a missing kind has none.
+export type TmsDocuments = Partial<Record<TmsDocumentKind, string>>;
 
 // The seven numbers that tell a party which load an invoice is for.
 export interface ReferenceNumbers {
@@ -440,6 +477,7 @@ export interface ShipmentView extends ReferenceNumbers {
   sellTotal: string;
   buyCurrency: Currency | null;
   buyTotal: string | null;
+  documents: TmsDocuments;
   mgcCreatedAt: string;
   createdAt: string;
 }

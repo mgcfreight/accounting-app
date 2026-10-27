@@ -5,7 +5,9 @@ import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
+  BaseTable,
   DetailRow,
+  DocumentList,
   ErrorState,
   InfoStrip,
   Money,
@@ -19,21 +21,39 @@ import {
   reviewFlagLabels,
   taxBasisLabels,
 } from "@/lib/constants";
-import { CarrierInvoiceStatus, InvoiceDirection } from "@/lib/enums";
-import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
+import { documentLinks } from "@/lib/documents";
+import {
+  CarrierInvoiceStatus,
+  InvoiceDirection,
+  Permission,
+  TmsDocumentKind,
+} from "@/lib/enums";
+import {
+  CarrierInvoiceView,
+  CustomerInvoiceView,
+  Paginated,
+} from "@/lib/interfaces";
+import { isZeroMoney } from "@/lib/money";
+import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime, humanize } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
   getCarrierInvoice,
+  getCarrierInvoiceByNumber,
   getCarrierInvoiceVersions,
   getCustomerInvoice,
+  getCustomerInvoiceByNumber,
   getCustomerInvoiceVersions,
+  getShipment,
+  listCarrierInvoices,
+  listCustomerInvoices,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
+import { shipmentHref } from "../shipments/shipment-list";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { availableActions } from "./invoice-row-actions";
-import {
+import InvoiceViewCell, {
   apiInvoiceHref,
   awaitsReview,
   carrierIdsOf,
@@ -44,10 +64,25 @@ import {
   InvoiceTotal,
   InvoiceView,
   isCustomerInvoice,
+  isInvoiceNumber,
   isSuperseded,
   partyOf,
   referencesOf,
 } from "./invoice-view";
+
+// The shipment documents each side's invoice page lists, in this order.
+const CUSTOMER_DOCUMENTS = [
+  TmsDocumentKind.CustomerInvoicePdf,
+  TmsDocumentKind.Invoice,
+  TmsDocumentKind.Bol,
+  TmsDocumentKind.ShippingLabels,
+  TmsDocumentKind.CustomsInvoice,
+];
+const CARRIER_DOCUMENTS = [
+  TmsDocumentKind.CarrierInvoicePdf,
+  TmsDocumentKind.Bol,
+  TmsDocumentKind.ShippingLabels,
+];
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -72,24 +107,41 @@ export default function InvoiceDetail({
   const isReceivable = direction === InvoiceDirection.Receivable;
   const listHref = invoiceListHref(direction);
 
+  // `id` is the invoice number, or the internal id of a draft without one.
+  const byNumber = !!id && isInvoiceNumber(id);
   const invoice = useQuery({
     queryKey: ["invoices", direction, "detail", id],
-    queryFn: ({ signal }): Promise<InvoiceView> =>
-      isReceivable
-        ? getCustomerInvoice(id!, signal)
-        : getCarrierInvoice(id!, signal),
+    queryFn: ({ signal }): Promise<InvoiceView> => {
+      if (isReceivable) {
+        return byNumber
+          ? getCustomerInvoiceByNumber(id!, signal)
+          : getCustomerInvoice(id!, signal);
+      }
+      return byNumber
+        ? getCarrierInvoiceByNumber(id!, signal)
+        : getCarrierInvoice(id!, signal);
+    },
     enabled: !!id,
   });
   // Every version of this invoice's number, oldest first.
+  const invoiceId = invoice.data?.id;
   const versions = useQuery({
-    queryKey: ["invoices", direction, "versions", id],
+    queryKey: ["invoices", direction, "versions", invoiceId],
     queryFn: ({ signal }): Promise<InvoiceView[]> =>
       isReceivable
-        ? getCustomerInvoiceVersions(id!, signal)
-        : getCarrierInvoiceVersions(id!, signal),
-    enabled: !!id,
+        ? getCustomerInvoiceVersions(invoiceId!, signal)
+        : getCarrierInvoiceVersions(invoiceId!, signal),
+    enabled: !!invoiceId,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
+  // The shipment's TMS documents, for those who may read shipments.
+  const shipmentId = invoice.data?.shipmentId ?? null;
+  const canSeeShipment = can(Permission.ShipmentsView);
+  const shipment = useQuery({
+    queryKey: ["shipments", "detail", shipmentId],
+    queryFn: ({ signal }) => getShipment(shipmentId!, signal),
+    enabled: !!shipmentId && canSeeShipment,
+  });
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
@@ -203,13 +255,27 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
-            <Field label="Tax">
-              {taxBasisLabels[data.taxBasis]}
-              {data.taxJurisdiction && ` · ${data.taxJurisdiction}`}
-            </Field>
+            {/* Carrier invoices print no tax (decided 2026-10-27). */}
+            {isCustomerInvoice(data) && (
+              <Field label="Tax">
+                {taxBasisLabels[data.taxBasis]}
+                {data.taxJurisdiction && ` · ${data.taxJurisdiction}`}
+              </Field>
+            )}
             <Field label="Kind">{humanize(data.kind)}</Field>
             <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
-            <Field label="Shipment">{data.shipmentId ?? "—"}</Field>
+            <Field label="Shipment">
+              {data.shipmentId && canSeeShipment ? (
+                <Link
+                  to={shipmentHref({ id: data.shipmentId })}
+                  className="text-base-primary-300 hover:underline"
+                >
+                  {shipment.data ? `Load ${shipment.data.loadNumber}` : data.shipmentId}
+                </Link>
+              ) : (
+                data.shipmentId ?? "—"
+              )}
+            </Field>
             <Field label="Reference numbers">
               {references.length > 0
                 ? references.map((ref) => `${ref.label} ${ref.value}`).join(" · ")
@@ -220,6 +286,46 @@ export default function InvoiceDetail({
       </div>
 
       <ChargesCard invoice={data} />
+
+      {data.shipmentId &&
+        can(
+          isReceivable
+            ? Permission.CarrierInvoicesView
+            : Permission.CustomerInvoicesView
+        ) && (
+          <LinkedInvoices
+            direction={
+              isReceivable ? InvoiceDirection.Payable : InvoiceDirection.Receivable
+            }
+            shipmentId={data.shipmentId}
+          />
+        )}
+
+      {canSeeShipment && data.shipmentId && (
+        <BaseCardWrapper heading="Documents">
+          {shipment.isError ? (
+            <p className="text-sm text-base-danger">
+              Couldn&apos;t load the shipment&apos;s documents.{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => void shipment.refetch()}
+              >
+                Try again
+              </button>
+            </p>
+          ) : shipment.isPending ? (
+            <p className="text-sm text-content-5">Loading…</p>
+          ) : (
+            <DocumentList
+              documents={documentLinks(
+                shipment.data.documents,
+                isReceivable ? CUSTOMER_DOCUMENTS : CARRIER_DOCUMENTS
+              )}
+            />
+          )}
+        </BaseCardWrapper>
+      )}
 
       {versions.isError ? (
         <BaseCardWrapper heading="Versions">
@@ -282,11 +388,65 @@ export default function InvoiceDetail({
         invoice={data}
         partyName={party.name}
         onClose={() => setAction(null)}
-        onRevised={(newId) =>
-          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`)
-        }
+        onRevised={(revised) => navigate(apiInvoiceHref(revised))}
       />
     </div>
+  );
+}
+
+const linkedColumns: BaseTableColumn[] = [
+  { key: "number", label: "Invoice #" },
+  { key: "party", label: "Party" },
+  { key: "invoiceDate", label: "Invoice Date" },
+  { key: "total", label: "Total" },
+  { key: "balance", label: "Balance" },
+  { key: "status", label: "Status" },
+];
+
+// The other side's invoices for the same shipment — the carrier's on a
+// shipper invoice and the shipper's on a carrier one — each linking to its
+// page. One page of 20, as on the shipment page.
+function LinkedInvoices({
+  direction,
+  shipmentId,
+}: {
+  direction: InvoiceDirection;
+  shipmentId: string;
+}) {
+  const isReceivable = direction === InvoiceDirection.Receivable;
+  const params = { page: 1, limit: 20, shipmentId };
+  const invoices = useQuery({
+    queryKey: ["invoices", direction, "shipment", params],
+    queryFn: ({ signal }): Promise<Paginated<InvoiceView>> =>
+      isReceivable
+        ? listCustomerInvoices(params, signal)
+        : listCarrierInvoices(params, signal),
+  });
+  const rows = invoices.data?.items ?? [];
+  const carriers = usePartyNames(carrierIdsOf(rows));
+  const heading = isReceivable ? "Shipper Invoices" : "Carrier Invoices";
+
+  return (
+    <BaseCardWrapper heading={`${heading} for this Shipment`}>
+      {invoices.isError ? (
+        <ErrorState
+          message="We couldn't load the invoices. Please try again."
+          onAction={() => void invoices.refetch()}
+        />
+      ) : (
+        <BaseTable<InvoiceView>
+          ariaLabel={heading}
+          columns={linkedColumns}
+          data={rows}
+          loading={invoices.isPending}
+          rowKey={(row) => row.id}
+          renderCell={(row, key) => (
+            <InvoiceViewCell invoice={row} columnKey={key} parties={carriers} />
+          )}
+          emptyContent="No invoices"
+        />
+      )}
+    </BaseCardWrapper>
   );
 }
 
@@ -372,8 +532,13 @@ function CarrierCard({
 function ChargesCard({ invoice }: { invoice: InvoiceView }) {
   const { currency } = invoice;
   const lines = invoice.lines ?? [];
+  const isCustomer = isCustomerInvoice(invoice);
   const awaitingBill =
-    !isCustomerInvoice(invoice) && invoice.status === CarrierInvoiceStatus.Expected;
+    !isCustomer && invoice.status === CarrierInvoiceStatus.Expected;
+  // Carrier invoices print no tax (decided 2026-10-27). A bill entered with
+  // tax still shows its one tax total, so subtotal + tax = total adds up.
+  const showTaxRates = isCustomer;
+  const showTaxTotal = isCustomer || !isZeroMoney(invoice.taxTotal);
 
   return (
     <BaseCardWrapper heading="Charges">
@@ -407,7 +572,7 @@ function ChargesCard({ invoice }: { invoice: InvoiceView }) {
               label="Subtotal"
               value={<Money amount={invoice.subtotal} currency={currency} />}
             />
-            {invoice.taxes.map((tax) => (
+            {showTaxRates && invoice.taxes.map((tax) => (
               <DetailRow
                 key={`${tax.tax_rate_id}-${tax.code}`}
                 label={
@@ -420,15 +585,17 @@ function ChargesCard({ invoice }: { invoice: InvoiceView }) {
                 value={<Money amount={tax.tax_amount} currency={currency} />}
               />
             ))}
-            <DetailRow
-              label={isCustomerInvoice(invoice) ? "Tax" : "Tax (input tax credit)"}
-              value={<Money amount={invoice.taxTotal} currency={currency} />}
-            />
+            {showTaxTotal && (
+              <DetailRow
+                label={isCustomer ? "Tax" : "Tax (input tax credit)"}
+                value={<Money amount={invoice.taxTotal} currency={currency} />}
+              />
+            )}
           </div>
           <div className="flex flex-col items-end gap-3 mt-6">
             <span className="font-medium text-sm">Invoice Total</span>
             <Money amount={invoice.total} currency={currency} className="font-medium text-xl" />
-            <span className="text-sm opacity-70">Including tax</span>
+            {isCustomer && <span className="text-sm opacity-70">Including tax</span>}
             <span className="text-sm">
               Paid <Money amount={invoice.amountPaid} currency={currency} /> · Balance{" "}
               <InvoiceBalance invoice={invoice} />

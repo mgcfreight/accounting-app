@@ -6,6 +6,7 @@ export { default as BaseCardWrapper } from "./base-card-wrapper";
 export { default as BaseTable } from "./base-table";
 export { BarChart, LineChart } from "./charts";
 export { default as DetailRow } from "./detail-row";
+export { default as DocumentList } from "./document-list";
 export { default as ErrorBoundary } from "./error-boundary";
 export { default as ErrorState } from "./error-state";
 export { default as FilterBar } from "./filter-bar";

@@ -19,4 +19,5 @@ export { queryClient } from "./query-client";
 export * from "./roles";
 export * from "./settings";
 export * from "./shipments";
+export * from "./sync";
 export * from "./users";

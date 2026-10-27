@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import {
   BaseCardWrapper,
   BaseTable,
+  DocumentList,
   ErrorState,
   InfoStrip,
   Money,
@@ -13,6 +14,7 @@ import {
 import { ArrowRight } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { paymentTermsLabels } from "@/lib/constants";
+import { documentLinks } from "@/lib/documents";
 import { InvoiceDirection, Permission, ShipmentSource } from "@/lib/enums";
 import { Paginated, PartyView, ShipmentView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
@@ -162,7 +164,7 @@ export default function ShipmentDetail() {
       <BaseCardWrapper heading="References">
         <div className="text-sm text-[#343A40] space-y-1">
           <Field label="Invoice number">{data.invoiceSequence ?? "Not taken"}</Field>
-          <Field label="TMS customer invoice code">
+          <Field label="TMS shipper invoice code">
             {data.tmsCustomerInvoiceCode ?? "Not set"}
           </Field>
           {data.carrierPartyId && (
@@ -178,13 +180,17 @@ export default function ShipmentDetail() {
         </div>
       </BaseCardWrapper>
 
+      <BaseCardWrapper heading="Documents">
+        <DocumentList documents={documentLinks(data.documents)} />
+      </BaseCardWrapper>
+
       {/* Each side only for those who may read its invoices. */}
       {can(Permission.CustomerInvoicesView) && (
         <ShipmentInvoices
           direction={InvoiceDirection.Receivable}
           shipment={data}
           parties={parties}
-          heading="Customer Invoice"
+          heading="Shipper Invoice"
         />
       )}
       {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (

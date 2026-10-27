@@ -15,7 +15,10 @@ import {
   SessionStatus,
   ShipmentSource,
   SignInStep,
+  SyncInboxStatus,
+  SyncTrigger,
   TaxBasis,
+  TmsDocumentKind,
   TaxTreatment,
   TwoFactorMethod,
 } from "@/lib/enums";
@@ -40,6 +43,9 @@ import {
   RoleRef,
   SettingsEditor,
   ShipmentView,
+  SyncEvent,
+  SyncRun,
+  SyncStatus,
   TaxRate,
   User,
   UserRef,
@@ -63,6 +69,9 @@ const percentText = z.string().regex(/^\d{1,3}(\.\d{1,3})?$/);
 const money = z.string().refine(isMoneyString, "Not a 2-decimal amount");
 // A quantity, unit price or rate: digits with their own precision.
 const decimalText = z.string().regex(/^-?\d+(\.\d+)?$/);
+// An S3 key of a TMS file (lib/documents.ts links it). Never a URL, never
+// "..", never a leading "/" or ".", so a link can't leave the storage URL.
+export const fileKey = z.string().regex(/^(?![./])(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/);
 
 // { message, data } — the envelope every Accounts API response uses.
 export const envelope = <T extends z.ZodType>(data: T) =>
@@ -343,6 +352,11 @@ export const partySchema: z.ZodType<PartyView> = z.object({
   country: z.string(),
   defaultCurrency: z.enum(Currency),
   isActive: z.boolean(),
+  email: z.string().nullable(),
+  businessEmail: z.string().nullable(),
+  phone: z.string().nullable(),
+  contactName: z.string().nullable(),
+  businessNumber: z.string().nullable(),
   createdAt: timestamp,
   updatedAt: timestamp,
   agreements: z.array(agreementSchema).optional(),
@@ -385,6 +399,11 @@ export const shipmentSchema: z.ZodType<ShipmentView> = z.object({
   sellTotal: money,
   buyCurrency: z.enum(Currency).nullable(),
   buyTotal: money.nullable(),
+  documents: z.object(
+    Object.fromEntries(
+      Object.values(TmsDocumentKind).map((kind) => [kind, fileKey.optional()])
+    ) as Record<TmsDocumentKind, z.ZodOptional<typeof fileKey>>
+  ),
   mgcCreatedAt: timestamp,
   createdAt: timestamp,
 });
@@ -493,4 +512,47 @@ export const createdShipmentSchema = z.object({
   shipment: shipmentSchema,
   customerInvoice: customerInvoiceSchema,
   carrierInvoice: carrierInvoiceSchema.nullable(),
+});
+
+// ------------------------------------------------------------- TMS sync
+
+const count = z.number().int().nonnegative();
+
+export const syncRunSchema: z.ZodType<SyncRun> = z.object({
+  trigger: z.enum(SyncTrigger),
+  startedAt: timestamp,
+  finishedAt: timestamp,
+  pulled: count,
+  applied: count,
+  failed: count,
+  skipped: count,
+  error: z.string().nullable(),
+});
+
+export const syncStatusSchema: z.ZodType<SyncStatus> = z.object({
+  enabled: z.boolean(),
+  running: z.boolean(),
+  cursor: z.string().regex(/^\d{1,19}:\d{1,19}$/),
+  cursorUpdatedAt: timestamp,
+  inbox: z.object({
+    [SyncInboxStatus.Received]: count,
+    [SyncInboxStatus.Applied]: count,
+    [SyncInboxStatus.Skipped]: count,
+    [SyncInboxStatus.Failed]: count,
+  }),
+  outbox: z.object({ pending: count, rejected: count }),
+  lastRun: syncRunSchema.nullable(),
+});
+
+export const syncEventSchema: z.ZodType<SyncEvent> = z.object({
+  eventId: z.string(),
+  seq: z.string(),
+  type: z.string(),
+  aggregateId: z.string(),
+  status: z.enum(SyncInboxStatus),
+  error: z.string().nullable(),
+  attempts: count,
+  occurredAt: timestamp,
+  receivedAt: timestamp,
+  appliedAt: timestamp.nullable(),
 });

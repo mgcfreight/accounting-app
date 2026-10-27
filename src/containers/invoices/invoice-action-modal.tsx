@@ -36,7 +36,6 @@ import {
 } from "@/services";
 import ChargeLines, {
   ChargeValues,
-  chargesFrom,
   emptyCharge,
   toCharges,
 } from "./charge-lines";
@@ -70,7 +69,7 @@ export default function InvoiceActionModal({
   onRevised,
 }: ModalProps & {
   action: InvoiceAction | null;
-  onRevised?: (newInvoiceId: string) => void;
+  onRevised?: (revised: InvoiceView) => void;
 }) {
   const props = { partyName, onClose };
   switch (action) {
@@ -86,8 +85,8 @@ export default function InvoiceActionModal({
       return isCustomerInvoice(invoice) ? null : (
         <ApproveInvoiceModal invoice={invoice} {...props} />
       );
-    // A new version replaces every charge, so it starts from the current
-    // ones: only an invoice read with its lines (the invoice page) offers it.
+    // A new version replaces every charge: only an invoice read with its
+    // lines (the invoice page) offers it, so they can be checked first.
     case "revise":
       return invoice.lines ? (
         <ReviseInvoiceModal
@@ -533,20 +532,21 @@ type ReviseValues = {
 };
 
 // A new version of an issued customer invoice, or of a carrier invoice
-// whose bill changed. The form starts from the current charges; the whole
-// set is sent, and the API works out amounts and tax again.
+// whose bill changed. The form starts empty: every charge of the new
+// version is entered, the whole set is sent, and the API works out amounts
+// and tax again.
 function ReviseInvoiceModal({
   invoice,
   partyName,
   onClose,
   onRevised,
-}: ModalProps & { onRevised?: (newInvoiceId: string) => void }) {
+}: ModalProps & { onRevised?: (revised: InvoiceView) => void }) {
   const isCustomer = isCustomerInvoice(invoice);
   const { control, handleSubmit } = useForm<ReviseValues>({
     defaultValues: {
-      lines: chargesFrom(invoice.lines ?? []),
+      lines: [emptyCharge],
       reason: "",
-      notes: invoice.notes ?? "",
+      notes: "",
       carrierInvoiceNumber: "",
       acknowledgeReview: false,
     },
@@ -562,8 +562,8 @@ function ReviseInvoiceModal({
         version: invoice.version,
         reason: values.reason.trim(),
         lines: toCharges(values.lines),
-        // Left out to keep the notes as they are.
-        ...(notes !== (invoice.notes ?? "") && { notes }),
+        // Left blank to keep the notes as they are.
+        ...(notes && notes !== (invoice.notes ?? "") && { notes }),
       };
       if (isCustomer) {
         return reviseCustomerInvoice(invoice.id, {
@@ -579,7 +579,7 @@ function ReviseInvoiceModal({
     },
     "New version issued.",
     onClose,
-    (revised) => onRevised?.(revised.id)
+    (revised) => onRevised?.(revised)
   );
 
   const submit = handleSubmit((values) => {
@@ -605,7 +605,9 @@ function ReviseInvoiceModal({
         {invoiceNumberOf(invoice) ?? "This invoice"} is kept exactly as it
         was and marked Replaced. The new version gets the next letter on the
         number (230 → 230a → 230b) and keeps the same invoice date, due date
-        and reference numbers. Tax is worked out again on the charges below.
+        and reference numbers. Enter every charge of the new version: any
+        charge left out is dropped. Tax is worked out again on the charges
+        below.
         What was already paid moves to the new version; its total can&apos;t
         be lower than that.
       </p>
@@ -646,6 +648,7 @@ function ReviseInvoiceModal({
         name="notes"
         control={control}
         label="Notes"
+        description="Leave blank to keep the current notes."
         rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
       />
       {flags.length > 0 && (

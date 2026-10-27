@@ -137,10 +137,29 @@ export enum ReviewKind {
   AmountChange = "AMOUNT_CHANGE",
 }
 
-export enum SyncRunStatus {
-  Success = "SUCCESS",
+// One TMS event in the Accounts API's sync inbox. SKIPPED: older than what
+// is already held for the same record. FAILED: held until its cause is
+// fixed; tried again on each run.
+export enum SyncInboxStatus {
+  Received = "RECEIVED",
+  Applied = "APPLIED",
+  Skipped = "SKIPPED",
   Failed = "FAILED",
-  Running = "RUNNING",
+}
+
+export enum SyncTrigger {
+  Schedule = "SCHEDULE",
+  Manual = "MANUAL",
+}
+
+// The TMS documents a shipment can have (the API's TMS_DOCUMENT_KINDS).
+export enum TmsDocumentKind {
+  Bol = "bol",
+  ShippingLabels = "shippingLabels",
+  CustomsInvoice = "customsInvoice",
+  Invoice = "invoice",
+  CustomerInvoicePdf = "customerInvoicePdf",
+  CarrierInvoicePdf = "carrierInvoicePdf",
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +241,9 @@ export enum InvoiceReviewFlag {
   NoReferenceNumber = "NO_REFERENCE_NUMBER",
   NoTmsCode = "NO_TMS_CODE",
   NoFxRate = "NO_FX_RATE",
+  TmsChanged = "TMS_CHANGED",
+  TmsCancelled = "TMS_CANCELLED",
+  UnknownCharge = "UNKNOWN_CHARGE",
 }
 
 // Invoice list sort columns (the API's InvoiceSortBy).

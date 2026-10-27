@@ -161,8 +161,8 @@ export default function InvoiceList({
             icon: <EyeIcon />,
             onPress: () => navigate(apiInvoiceHref(invoice)),
           },
-          // A new version starts from the invoice's lines, which only the
-          // invoice page has: it's offered there.
+          // A new version replaces the invoice's lines, which only the
+          // invoice page shows: it's offered there.
           ...availableActions(invoice, can)
             .filter((action) => action.key !== "revise")
             .map((action) => ({

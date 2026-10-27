@@ -114,6 +114,11 @@ export const reviewFlagLabels: Record<InvoiceReviewFlag, string> = {
     "No reference number (BOL, pickup, PO, SO, PRO, quote or bill)",
   [InvoiceReviewFlag.NoTmsCode]: "No TMS invoice code, so no invoice number",
   [InvoiceReviewFlag.NoFxRate]: "A USD invoice without a rate to CAD",
+  [InvoiceReviewFlag.TmsChanged]:
+    "The TMS changed the shipment after this invoice was edited or issued",
+  [InvoiceReviewFlag.TmsCancelled]: "The TMS cancelled the shipment",
+  [InvoiceReviewFlag.UnknownCharge]:
+    "A TMS charge with no matching charge type, entered as Other",
 };
 
 // The codes the API accepts for a Canadian address (its CANADIAN_PROVINCES).

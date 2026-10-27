@@ -49,6 +49,17 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </p>
 );
 
+// A mailto link, only for a plain address (TMS data): no "?" or "&" that
+// could add recipients or a body to the email.
+const EmailLink = ({ email }: { email: string | null }) =>
+  email && /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email) ? (
+    <a href={`mailto:${email}`} className="text-base-primary-300 hover:underline">
+      {email}
+    </a>
+  ) : (
+    <>{email ?? "Not on file"}</>
+  );
+
 // Calendar dates compare as text ("2026-10-14").
 const agreementState = (agreement: AgreementView, today: string) => {
   if (agreement.effectiveFrom > today) return "upcoming";
@@ -140,6 +151,9 @@ export default function PartyDetail({ type }: { type: PartyType }) {
         <div className="text-sm text-[#343A40] space-y-1">
           {data.legalName && <Field label="Legal name">{data.legalName}</Field>}
           <Field label="GST/HST #">{data.gstHstNumber ?? "Not on file"}</Field>
+          {isShipper && (
+            <Field label="Business number">{data.businessNumber ?? "Not on file"}</Field>
+          )}
           <Field label="Address">
             {[
               data.addressLine1,
@@ -152,6 +166,22 @@ export default function PartyDetail({ type }: { type: PartyType }) {
           </Field>
         </div>
       </BaseCardWrapper>
+
+      {/* As the TMS holds them; changed there, not here. */}
+      {isShipper && (
+        <BaseCardWrapper heading="Contact">
+          <div className="text-sm text-[#343A40] space-y-1">
+            <Field label="Contact name">{data.contactName ?? "Not on file"}</Field>
+            <Field label="Email">
+              <EmailLink email={data.email} />
+            </Field>
+            <Field label="Business email">
+              <EmailLink email={data.businessEmail} />
+            </Field>
+            <Field label="Contact number">{data.phone ?? "Not on file"}</Field>
+          </div>
+        </BaseCardWrapper>
+      )}
 
       <BaseCardWrapper heading="Agreements">
         {agreements.length === 0 ? (

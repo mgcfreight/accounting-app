@@ -32,10 +32,10 @@ src/
 ```
 
 **Sign-in, users, sessions, audit, settings, shippers and carriers,
-shipments, and shipper and carrier invoices run on the API; the rest still
-run on mock data.** The session is the API's httpOnly cookies, and the
-signed-in user comes from `GET /auth/me` (`UserProvider`). The dashboard,
-payments, reports, Needs Review and sync status read `lib/mock` and their
+shipments, shipper and carrier invoices, and the TMS sync status run on the
+API; the rest still run on mock data.** The session is the API's httpOnly
+cookies, and the signed-in user comes from `GET /auth/me` (`UserProvider`).
+The dashboard, payments, reports and Needs Review read `lib/mock` and their
 actions show a "demo only" toast.
 The design copies mokal-app's — same layout, components, theme and colours.
 

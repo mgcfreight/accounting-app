@@ -9,7 +9,6 @@ import {
 } from "react-hook-form";
 import { BaseButton, BaseInput, BaseSelect } from "@/components/common";
 import { QUANTITY_PATTERN, UNIT_PRICE_PATTERN } from "@/lib/constants";
-import { InvoiceLineView } from "@/lib/interfaces";
 import { Charge, getInvoiceChargeTypes } from "@/services";
 
 // One charge as typed: every field a string, as the API takes it.
@@ -28,18 +27,6 @@ export const emptyCharge: ChargeValues = {
 };
 
 const MAX_LINES = 50;
-
-// An invoice's lines as form rows, to start a new version from: the values
-// exactly as the API sent them, never re-formatted.
-export const chargesFrom = (lines: InvoiceLineView[]): ChargeValues[] =>
-  lines.length === 0
-    ? [emptyCharge]
-    : lines.map((line) => ({
-        chargeTypeCode: line.chargeTypeCode,
-        description: line.description,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-      }));
 
 // What the API takes; a blank description falls back to the charge type's
 // name.
