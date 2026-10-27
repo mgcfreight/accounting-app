@@ -7,6 +7,7 @@ export type MenuIconName =
   | "payments"
   | "shippers"
   | "carriers"
+  | "shipments"
   | "reports"
   | "system"
   | "users"
@@ -36,6 +37,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { icon: "payments", label: "Payments", route: "/payments/" },
   { icon: "shippers", label: "Shippers", route: "/shippers/" },
   { icon: "carriers", label: "Carriers", route: "/carriers/" },
+  { icon: "shipments", label: "Shipments", route: "/shipments/" },
   { icon: "reports", label: "Reports", route: "/reports/" },
   {
     icon: "system",

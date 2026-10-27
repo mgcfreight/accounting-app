@@ -31,11 +31,12 @@ src/
     └── mock/            the data the not-yet-wired screens run on
 ```
 
-**Sign-in, users, sessions, audit and settings run on the API; the rest
-still run on mock data.** The session is the API's httpOnly cookies, and
-the signed-in user comes from `GET /auth/me` (`UserProvider`). Invoice,
-payment, party and report screens read `lib/mock` and their actions show a
-"demo only" toast.
+**Sign-in, users, sessions, audit, settings, shippers and carriers,
+shipments, and shipper and carrier invoices run on the API; the rest still
+run on mock data.** The session is the API's httpOnly cookies, and the
+signed-in user comes from `GET /auth/me` (`UserProvider`). The dashboard,
+payments, reports, Needs Review and sync status read `lib/mock` and their
+actions show a "demo only" toast.
 The design copies mokal-app's — same layout, components, theme and colours.
 
 Layer rules, static-hosting limits, the UI kit, and money and date rules are

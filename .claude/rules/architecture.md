@@ -18,9 +18,16 @@ Last reviewed: 2026-10-20
 ## Current state: partly on the API
 
 Sign-in (with 2FA and password reset), My Account, Users, Roles &
-Permissions, Sessions, the Audit Report and Settings (company, notifications, tax rates, charge types) run on
-the Accounts API. Every other page still reads from `src/lib/mock/`, and its
-actions (issue, record payment, export) show a "demo only" toast.
+Permissions, Sessions, the Audit Report, Settings (company, notifications,
+tax rates, charge types), Shippers and Carriers (with agreements),
+Shipments, and Shipper and Carrier Invoices (with versions) run on the
+Accounts API. The dashboard, Payments, Reports, Needs Review and Sync Status
+still read from `src/lib/mock/`, and their actions (record payment, export)
+show a "demo only" toast.
+
+The API sends party ids, not names, on shipments and carrier invoices:
+look them up with `usePartyNames` (`containers/parties`), and show the id
+until the name arrives. A customer invoice carries its `billTo.name`.
 
 `services/` is the only path to the API: `apiClient` (the one axios
 instance — base URL and timeout from `VITE_API_URL` / `VITE_API_TIMEOUT_MS`,

@@ -74,3 +74,55 @@ export const torontoDayBounds = (date: string) => {
 // Lower-case label for an enum value: PARTIALLY_PAID -> "Partially paid".
 export const humanize = (value: string) =>
   value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, " ");
+
+// Today's calendar date in Toronto, "2026-10-14", to compare with the
+// API's date-only values.
+export const torontoToday = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(new Date());
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+// The wall-clock parts of an instant in Toronto.
+const torontoParts = (instant: number) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(instant));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+};
+
+// Now in Toronto, as a datetime-local input wants it: "2026-10-21T14:05".
+export const torontoNowLocal = () => {
+  const p = torontoParts(Date.now());
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
+};
+
+// A datetime-local value read as Toronto time, as an ISO date-time with its
+// offset: "2026-10-21T14:05" -> "2026-10-21T14:05:00-04:00". The browser's
+// own time zone plays no part.
+export const torontoLocalToIso = (local: string) => {
+  const asUtc = Date.parse(`${local}:00Z`);
+  const offsetAt = (instant: number) => {
+    const p = torontoParts(instant);
+    return (
+      (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - instant) / 60_000
+    );
+  };
+  // Twice, so a time near a DST change gets the offset in force at it.
+  const offset = offsetAt(asUtc - offsetAt(asUtc) * 60_000);
+  const abs = Math.abs(offset);
+  return `${local}:00${offset < 0 ? "-" : "+"}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+};

@@ -1,28 +1,51 @@
 import { z } from "zod";
 import {
+  AdjustmentMode,
+  BillingTrigger,
+  CarrierInvoiceStatus,
+  Currency,
+  CustomerInvoiceStatus,
+  InvoiceKind,
+  InvoiceReviewFlag,
+  PartyType,
+  PaymentStatus,
+  PaymentTerms,
   Permission,
   SessionEndReason,
   SessionStatus,
+  ShipmentSource,
   SignInStep,
+  TaxBasis,
+  TaxTreatment,
   TwoFactorMethod,
 } from "@/lib/enums";
 import {
   AccountingPeriod,
+  AgreementView,
   AuditEvent,
+  CarrierInvoiceView,
   ChargeType,
   CompanySettings,
+  CustomerInvoiceView,
+  InvoiceBillTo,
+  InvoiceChargeType,
+  InvoiceLineView,
+  InvoiceTax,
   Me,
   NoticeSettings,
   Paginated,
+  PartyView,
   PermissionCatalog,
   Role,
   RoleRef,
   SettingsEditor,
+  ShipmentView,
   TaxRate,
   User,
   UserRef,
   UserSession,
 } from "@/lib/interfaces";
+import { isMoneyString } from "@/lib/money";
 
 // Every API response is untrusted input (security.md): each service function
 // parses what came back with one of these before a screen sees it. A response
@@ -35,6 +58,11 @@ const timestamp = z.iso.datetime({ offset: true });
 const calendarDate = z.iso.date();
 // tax_rates.rate_percent, e.g. "13.000". Kept as text: never parsed.
 const percentText = z.string().regex(/^\d{1,3}(\.\d{1,3})?$/);
+// A 2-decimal amount, as lib/money.ts formats it. Anything else fails the
+// whole record rather than showing a wrong figure.
+const money = z.string().refine(isMoneyString, "Not a 2-decimal amount");
+// A quantity, unit price or rate: digits with their own precision.
+const decimalText = z.string().regex(/^-?\d+(\.\d+)?$/);
 
 // { message, data } — the envelope every Accounts API response uses.
 export const envelope = <T extends z.ZodType>(data: T) =>
@@ -276,3 +304,193 @@ export const permissionCatalogSchema: z.ZodType<PermissionCatalog> =
       ),
     })),
   }));
+
+// ---------------------------------------------------------------- parties
+
+export const agreementSchema: z.ZodType<AgreementView> = z.object({
+  id: z.string(),
+  partyId: z.string(),
+  paymentTerms: z.enum(PaymentTerms),
+  currency: z.enum(Currency),
+  taxTreatment: z.enum(TaxTreatment),
+  taxBasis: z.enum(TaxBasis),
+  billingTrigger: z.enum(BillingTrigger).nullable(),
+  noticeDaysBefore: z.number().int().nonnegative().nullable(),
+  alertDaysBefore: z.number().int().nonnegative().nullable(),
+  defaultAdjustmentMode: z.enum(AdjustmentMode),
+  autoSendInvoices: z.boolean(),
+  billingNoticeEnabled: z.boolean(),
+  remindersEnabled: z.boolean(),
+  weeklyStatementEnabled: z.boolean(),
+  effectiveFrom: calendarDate,
+  effectiveTo: calendarDate.nullable(),
+  notes: z.string().nullable(),
+  createdAt: timestamp,
+});
+
+export const partySchema: z.ZodType<PartyView> = z.object({
+  id: z.string(),
+  type: z.enum(PartyType),
+  mgcId: z.string(),
+  name: z.string(),
+  legalName: z.string().nullable(),
+  gstHstNumber: z.string().nullable(),
+  addressLine1: z.string().nullable(),
+  addressLine2: z.string().nullable(),
+  city: z.string().nullable(),
+  province: z.string().nullable(),
+  postalCode: z.string().nullable(),
+  country: z.string(),
+  defaultCurrency: z.enum(Currency),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  agreements: z.array(agreementSchema).optional(),
+});
+
+// ------------------------------------------------------------- shipments
+
+const referenceNumberFields = {
+  bolNumber: z.string().nullable(),
+  pickupNumber: z.string().nullable(),
+  poNumber: z.string().nullable(),
+  soNumber: z.string().nullable(),
+  proNumber: z.string().nullable(),
+  quoteNumber: z.string().nullable(),
+  billNumber: z.string().nullable(),
+};
+
+export const shipmentSchema: z.ZodType<ShipmentView> = z.object({
+  ...referenceNumberFields,
+  id: z.string(),
+  mgcShipmentId: z.string(),
+  loadNumber: z.string(),
+  source: z.enum(ShipmentSource),
+  shipperPartyId: z.string(),
+  carrierPartyId: z.string().nullable(),
+  tmsStatus: z.string(),
+  tmsPaymentTerms: z.enum(PaymentTerms),
+  invoiceSequence: z.string().nullable(),
+  tmsCustomerInvoiceCode: z.string().nullable(),
+  tmsCarrierInvoiceCode: z.string().nullable(),
+  originCity: z.string().nullable(),
+  originProvince: z.string().nullable(),
+  originCountry: z.string().nullable(),
+  destinationCity: z.string().nullable(),
+  destinationProvince: z.string().nullable(),
+  destinationCountry: z.string().nullable(),
+  pickupDate: calendarDate.nullable(),
+  deliveryDate: calendarDate.nullable(),
+  sellCurrency: z.enum(Currency),
+  sellTotal: money,
+  buyCurrency: z.enum(Currency).nullable(),
+  buyTotal: money.nullable(),
+  mgcCreatedAt: timestamp,
+  createdAt: timestamp,
+});
+
+// -------------------------------------------------------------- invoices
+
+export const invoiceChargeTypeSchema: z.ZodType<InvoiceChargeType> = z.object(
+  { code: z.string(), name: z.string(), defaultTaxable: z.boolean() }
+);
+
+const invoiceLineSchema: z.ZodType<InvoiceLineView> = z.object({
+  id: z.string(),
+  lineNo: z.number().int().nonnegative(),
+  chargeTypeCode: z.string(),
+  description: z.string(),
+  quantity: decimalText,
+  unitPrice: decimalText,
+  amount: money,
+  isTaxable: z.boolean(),
+  mgcChargeId: z.string().nullable(),
+});
+
+const invoiceTaxSchema: z.ZodType<InvoiceTax> = z.object({
+  tax_rate_id: z.string(),
+  code: z.string(),
+  jurisdiction: z.string(),
+  rate_percent: decimalText,
+  taxable_amount: money,
+  tax_amount: money,
+});
+
+const invoiceBillToSchema: z.ZodType<InvoiceBillTo> = z.object({
+  name: z.string(),
+  legal_name: z.string().nullable(),
+  gst_hst_number: z.string().nullable(),
+  address_line1: z.string().nullable(),
+  address_line2: z.string().nullable(),
+  city: z.string().nullable(),
+  province: z.string().nullable(),
+  postal_code: z.string().nullable(),
+  country: z.string(),
+});
+
+const invoiceBaseFields = {
+  ...referenceNumberFields,
+  id: z.string(),
+  tmsInvoiceCode: z.string().nullable(),
+  sequenceValue: z.string().nullable(),
+  suffix: z.string(),
+  kind: z.enum(InvoiceKind),
+  shipmentId: z.string().nullable(),
+  agreementId: z.string(),
+  paymentStatus: z.enum(PaymentStatus),
+  currency: z.enum(Currency),
+  fxRateToCad: decimalText.nullable(),
+  paymentTerms: z.enum(PaymentTerms),
+  invoiceDate: calendarDate.nullable(),
+  dueDate: calendarDate.nullable(),
+  taxBasis: z.enum(TaxBasis),
+  taxJurisdiction: z.string(),
+  subtotal: money,
+  taxes: z.array(invoiceTaxSchema),
+  taxTotal: money,
+  total: money,
+  amountPaid: money,
+  balanceDue: money,
+  notes: z.string().nullable(),
+  reviewFlags: z.array(z.enum(InvoiceReviewFlag)),
+  parentInvoiceId: z.string().nullable(),
+  revision: z.number().int().nonnegative(),
+  revisionReason: z.string().nullable(),
+  supersededAt: timestamp.nullable(),
+  version: z.number().int().positive(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  lines: z.array(invoiceLineSchema).optional(),
+};
+
+export const customerInvoiceSchema: z.ZodType<CustomerInvoiceView> = z.object({
+  ...invoiceBaseFields,
+  invoiceNumber: z.string().nullable(),
+  customerId: z.string(),
+  status: z.enum(CustomerInvoiceStatus),
+  billTo: invoiceBillToSchema,
+  issuedAt: timestamp.nullable(),
+  sentAt: timestamp.nullable(),
+});
+
+export const carrierInvoiceSchema: z.ZodType<CarrierInvoiceView> = z.object({
+  ...invoiceBaseFields,
+  referenceNumber: z.string().nullable(),
+  carrierInvoiceNumber: z.string().nullable(),
+  carrierId: z.string(),
+  status: z.enum(CarrierInvoiceStatus),
+  billingTrigger: z.enum(BillingTrigger),
+  expectedTotal: money,
+  varianceAmount: money.nullable(),
+  receivedAt: timestamp.nullable(),
+  approvedAt: timestamp.nullable(),
+  approvedById: z.string().nullable(),
+  holdReason: z.string().nullable(),
+});
+
+// POST /shipment: the shipment and the invoices it made.
+export const createdShipmentSchema = z.object({
+  shipment: shipmentSchema,
+  customerInvoice: customerInvoiceSchema,
+  carrierInvoice: carrierInvoiceSchema.nullable(),
+});

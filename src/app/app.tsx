@@ -15,6 +15,9 @@ import Payments from "@/containers/payments/payments";
 import Reports from "@/containers/reports/reports";
 import RoleList from "@/containers/roles/role-list";
 import Settings from "@/containers/settings/settings";
+import ShipmentDetail from "@/containers/shipments/shipment-detail";
+import ShipmentForm from "@/containers/shipments/shipment-form";
+import ShipmentList from "@/containers/shipments/shipment-list";
 import SyncStatus from "@/containers/sync-status/sync-status";
 import SessionReport from "@/containers/users/session-report";
 import UserList from "@/containers/users/user-list";
@@ -99,6 +102,9 @@ export default function App() {
                 path="carriers/view"
                 element={<PartyDetail type={PartyType.Carrier} />}
               />
+              <Route path="shipments" element={<ShipmentList />} />
+              <Route path="shipments/view" element={<ShipmentDetail />} />
+              <Route path="shipments/new" element={<ShipmentForm />} />
               <Route path="reports" element={<Reports />} />
               <Route path="sync-status" element={<SyncStatus />} />
               <Route path="users" element={<UserList />} />

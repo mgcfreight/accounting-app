@@ -142,3 +142,98 @@ export enum SyncRunStatus {
   Failed = "FAILED",
   Running = "RUNNING",
 }
+
+// ---------------------------------------------------------------------------
+// The Accounts API's invoicing enums, value for value (its src/types).
+
+export enum PaymentTerms {
+  COD = "COD",
+  Prepaid = "PREPAID",
+  Net7 = "NET_7",
+  Net15 = "NET_15",
+  Net30 = "NET_30",
+  Net60 = "NET_60",
+}
+
+export enum TaxTreatment {
+  Standard = "STANDARD",
+  ZeroRated = "ZERO_RATED",
+  Exempt = "EXEMPT",
+}
+
+// Which address picks the tax rate.
+export enum TaxBasis {
+  BillTo = "BILL_TO",
+  Destination = "DESTINATION",
+}
+
+// When a carrier's bill arrives, and so when MGC pays. Carriers only.
+export enum BillingTrigger {
+  Prepaid = "PREPAID",
+  COD = "COD",
+  OnShipmentCreated = "ON_SHIPMENT_CREATED",
+  OnDeliveryWithPod = "ON_DELIVERY_WITH_POD",
+}
+
+export enum AdjustmentMode {
+  Separate = "SEPARATE",
+  Merged = "MERGED",
+}
+
+export enum ShipmentSource {
+  Api = "API",
+  Manual = "MANUAL",
+}
+
+export enum InvoiceKind {
+  Standard = "STANDARD",
+  Adjustment = "ADJUSTMENT",
+  CreditNote = "CREDIT_NOTE",
+}
+
+// SUPERSEDED: replaced by a new version (230 -> 230a); kept as it was sent,
+// but no longer counts towards any balance.
+export enum CustomerInvoiceStatus {
+  Draft = "DRAFT",
+  Issued = "ISSUED",
+  Superseded = "SUPERSEDED",
+  Void = "VOID",
+}
+
+// EXPECTED: made with the shipment, the carrier's bill not in yet (owes 0).
+// ON_HOLD: the bill came in different from what was expected.
+export enum CarrierInvoiceStatus {
+  Expected = "EXPECTED",
+  Received = "RECEIVED",
+  OnHold = "ON_HOLD",
+  Approved = "APPROVED",
+  Superseded = "SUPERSEDED",
+  Void = "VOID",
+}
+
+// A part-payment stays UNPAID; amountPaid shows how much came in.
+export enum PaymentStatus {
+  Unpaid = "UNPAID",
+  Paid = "PAID",
+}
+
+export enum InvoiceReviewFlag {
+  TermsMismatch = "TERMS_MISMATCH",
+  NoReferenceNumber = "NO_REFERENCE_NUMBER",
+  NoTmsCode = "NO_TMS_CODE",
+  NoFxRate = "NO_FX_RATE",
+}
+
+// Invoice list sort columns (the API's InvoiceSortBy).
+export enum InvoiceSortBy {
+  InvoiceDate = "invoiceDate",
+  DueDate = "dueDate",
+  Total = "total",
+  BalanceDue = "balanceDue",
+  Sequence = "sequence",
+}
+
+export enum SortOrder {
+  Asc = "ASC",
+  Desc = "DESC",
+}

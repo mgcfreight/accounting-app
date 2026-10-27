@@ -1,16 +1,27 @@
 import {
+  AdjustmentMode,
+  BillingTrigger,
+  CarrierInvoiceStatus,
   Currency,
+  CustomerInvoiceStatus,
   InvoiceDirection,
+  InvoiceKind,
+  InvoiceReviewFlag,
   InvoiceStatus,
   MatchStatus,
   PartyType,
   PaymentDirection,
   PaymentMethod,
+  PaymentStatus,
+  PaymentTerms,
   ReviewKind,
   SessionEndReason,
   SessionStatus,
+  ShipmentSource,
   SyncRunStatus,
   Permission,
+  TaxBasis,
+  TaxTreatment,
   TwoFactorMethod,
 } from "../enums";
 import { PaginationMeta } from "../types";
@@ -342,6 +353,199 @@ export interface AccountingPeriod {
 export interface Paginated<T> {
   items: T[];
   meta: PaginationMeta;
+}
+
+// ---------------------------------------------------------------------------
+// Parties, shipments and invoices as the Accounts API sends them (its
+// *View types). Money is a 2-decimal string; quantities, unit prices and
+// rates are decimal strings with their own precision. Never parse either.
+
+// Agreed terms from a date. A carrier's has a billing trigger; a
+// customer's doesn't.
+export interface AgreementView {
+  id: string;
+  partyId: string;
+  paymentTerms: PaymentTerms;
+  currency: Currency;
+  taxTreatment: TaxTreatment;
+  taxBasis: TaxBasis;
+  billingTrigger: BillingTrigger | null;
+  noticeDaysBefore: number | null;
+  alertDaysBefore: number | null;
+  defaultAdjustmentMode: AdjustmentMode;
+  autoSendInvoices: boolean;
+  billingNoticeEnabled: boolean;
+  remindersEnabled: boolean;
+  weeklyStatementEnabled: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PartyView {
+  id: string;
+  type: PartyType;
+  mgcId: string;
+  name: string;
+  legalName: string | null;
+  gstHstNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  province: string | null;
+  postalCode: string | null;
+  country: string;
+  defaultCurrency: Currency;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Newest first. Only from the single-party endpoint.
+  agreements?: AgreementView[];
+}
+
+// The seven numbers that tell a party which load an invoice is for.
+export interface ReferenceNumbers {
+  bolNumber: string | null;
+  pickupNumber: string | null;
+  poNumber: string | null;
+  soNumber: string | null;
+  proNumber: string | null;
+  quoteNumber: string | null;
+  billNumber: string | null;
+}
+
+// Carries party ids only: names are looked up from the parties.
+export interface ShipmentView extends ReferenceNumbers {
+  id: string;
+  mgcShipmentId: string;
+  loadNumber: string;
+  source: ShipmentSource;
+  shipperPartyId: string;
+  carrierPartyId: string | null;
+  tmsStatus: string;
+  tmsPaymentTerms: PaymentTerms;
+  invoiceSequence: string | null;
+  tmsCustomerInvoiceCode: string | null;
+  tmsCarrierInvoiceCode: string | null;
+  originCity: string | null;
+  originProvince: string | null;
+  originCountry: string | null;
+  destinationCity: string | null;
+  destinationProvince: string | null;
+  destinationCountry: string | null;
+  pickupDate: string | null;
+  deliveryDate: string | null;
+  sellCurrency: Currency;
+  sellTotal: string;
+  buyCurrency: Currency | null;
+  buyTotal: string | null;
+  mgcCreatedAt: string;
+  createdAt: string;
+}
+
+// GET /invoice/charge-types: the active ones an invoice line can use.
+export type InvoiceChargeType = Pick<
+  ChargeType,
+  "code" | "name" | "defaultTaxable"
+>;
+
+export interface InvoiceLineView {
+  id: string;
+  lineNo: number;
+  chargeTypeCode: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  amount: string;
+  isTaxable: boolean;
+  mgcChargeId: string | null;
+}
+
+// One tax on an invoice. Snake case, as the API stores and sends it.
+export interface InvoiceTax {
+  tax_rate_id: string;
+  code: string;
+  jurisdiction: string;
+  rate_percent: string;
+  taxable_amount: string;
+  tax_amount: string;
+}
+
+// The customer's billing address as it was when the invoice was made.
+export interface InvoiceBillTo {
+  name: string;
+  legal_name: string | null;
+  gst_hst_number: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string;
+}
+
+export interface InvoiceViewBase extends ReferenceNumbers {
+  id: string;
+  tmsInvoiceCode: string | null;
+  sequenceValue: string | null;
+  suffix: string;
+  kind: InvoiceKind;
+  shipmentId: string | null;
+  agreementId: string;
+  paymentStatus: PaymentStatus;
+  currency: Currency;
+  fxRateToCad: string | null;
+  paymentTerms: PaymentTerms;
+  invoiceDate: string | null;
+  dueDate: string | null;
+  taxBasis: TaxBasis;
+  taxJurisdiction: string;
+  subtotal: string;
+  taxes: InvoiceTax[];
+  taxTotal: string;
+  total: string;
+  amountPaid: string;
+  balanceDue: string;
+  notes: string | null;
+  reviewFlags: InvoiceReviewFlag[];
+  // The version this one replaced (230 for 230a); null on the first.
+  parentInvoiceId: string | null;
+  // 0 on the first version, then 1, 2… Not `version`, the edit counter.
+  revision: number;
+  revisionReason: string | null;
+  supersededAt: string | null;
+  // Sent back with every change; a stale one gets a 409.
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  // Only from the single-invoice endpoints.
+  lines?: InvoiceLineView[];
+}
+
+// `billTo.name` is the customer's name as invoiced.
+export interface CustomerInvoiceView extends InvoiceViewBase {
+  invoiceNumber: string | null;
+  customerId: string;
+  status: CustomerInvoiceStatus;
+  billTo: InvoiceBillTo;
+  issuedAt: string | null;
+  sentAt: string | null;
+}
+
+// Carries the carrier's id only: its name is looked up from the parties.
+export interface CarrierInvoiceView extends InvoiceViewBase {
+  referenceNumber: string | null;
+  carrierInvoiceNumber: string | null;
+  carrierId: string;
+  status: CarrierInvoiceStatus;
+  billingTrigger: BillingTrigger;
+  expectedTotal: string;
+  varianceAmount: string | null;
+  receivedAt: string | null;
+  approvedAt: string | null;
+  approvedById: string | null;
+  holdReason: string | null;
 }
 
 // One row of the aging report: open balances by days past due (design §8.6).
