@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Me } from "@/lib/interfaces";
 import { getRouteConfig, headerButtonFor } from "@/lib/routes.config";
@@ -21,6 +22,14 @@ export default function Header({
   const route = getRouteConfig(pathname);
   const button = headerButtonFor(pathname, user);
   const id = searchParams.get("id");
+  const title =
+    route?.includeIdInHeader && id ? `${route.header} #${id}` : route?.header;
+
+  // Name the browser tab after the page, so several open tabs can be told
+  // apart.
+  useEffect(() => {
+    document.title = title ? `${title} · MGC Accounts` : "MGC Accounts";
+  }, [title]);
 
   return (
     <header className="flex bg-[#FAFEFF] xl:rounded-tl-lg">
@@ -42,11 +51,7 @@ export default function Header({
                 <ArrowLeft />
               </Link>
             )}
-            <span>
-              {route?.includeIdInHeader && id
-                ? `${route.header} #${id}`
-                : route?.header}
-            </span>
+            <span>{title}</span>
             {button && (
               <BaseButton
                 className="rounded-full px-6 ml-1"

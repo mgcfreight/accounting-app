@@ -43,7 +43,7 @@ const columns: BaseTableColumn[] = [
   { key: "side", label: "Side" },
   { key: "dueDate", label: "Due Date", sortable: true, sortType: "date" },
   { key: "remindOn", label: "Remind On", sortable: true, sortType: "date" },
-  { key: "balance", label: "Balance", sortType: "money" },
+  { key: "balance", label: "Balance", sortType: "money", align: "end" },
   { key: "channel", label: "Channel" },
   { key: "recipient", label: "Recipient" },
   { key: "status", label: "Status" },
@@ -231,7 +231,7 @@ export default function Reminders() {
   const close = () => setOpen(null);
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <AlertBanner
         message={`Reminders go out ${REMINDER_DAYS_BEFORE_DUE} days before an invoice's due date: shippers get an email to their accounts department, and each carrier bill raises an alert to MGC's accounts team. Demo data — nothing is sent yet.`}
       />
@@ -243,8 +243,7 @@ export default function Reminders() {
         onSelectionChange={(key) => setView(key as View)}
         // As on Payments: capped, so the tab list scrolls on a phone.
         classNames={{
-          base: "max-w-full mt-4",
-          tabList: "mb-4",
+          base: "max-w-full",
           cursor: "bg-base-primary",
         }}
       >
@@ -288,7 +287,7 @@ export default function Reminders() {
           )}
         </div>
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         <BaseTable
           ariaLabel="Payment reminders"
           columns={columns}
@@ -305,7 +304,7 @@ export default function Reminders() {
       </Card>
       {open?.modal === "send" && <SendNowModal reminder={open.reminder} onClose={close} />}
       {open?.modal === "skip" && <SkipModal reminder={open.reminder} onClose={close} />}
-    </>
+    </div>
   );
 }
 

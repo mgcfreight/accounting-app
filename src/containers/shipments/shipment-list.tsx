@@ -144,7 +144,7 @@ export default function ShipmentList() {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -155,7 +155,7 @@ export default function ShipmentList() {
           endContent={<SearchNormalSm />}
         />
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         {shipments.isError ? (
           <ErrorState
             message="We couldn't load the shipments. Please try again."
@@ -167,6 +167,8 @@ export default function ShipmentList() {
             columns={columns}
             data={items}
             loading={shipments.isPending}
+            refreshing={shipments.isPlaceholderData}
+            onRowClick={(row) => navigate(shipmentHref(row))}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(shipments.data?.meta)}
@@ -176,6 +178,6 @@ export default function ShipmentList() {
           />
         )}
       </Card>
-    </>
+    </div>
   );
 }

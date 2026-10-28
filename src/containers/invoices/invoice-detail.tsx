@@ -243,7 +243,7 @@ export default function InvoiceDetail({
                 {formatDate(remindOn)} ({REMINDER_DAYS_BEFORE_DUE} days before
                 due
                 {isReceivable
-                  ? ", emailed to the customer's accounts department"
+                  ? ", emailed to the shipper's accounts department"
                   : ", an alert to the accounts team"}
                 ).{" "}
                 <span className="text-content-5">
@@ -330,7 +330,7 @@ export default function InvoiceDetail({
       <InvoiceHistory invoice={data} />
 
       {data.notes && (
-        <BaseCardWrapper heading="Notes" className="mb-5">
+        <BaseCardWrapper heading="Notes">
           {/* Rendered as text by React, so a note can't inject markup. */}
           <p className="text-sm text-[#343A40] whitespace-pre-wrap">{data.notes}</p>
         </BaseCardWrapper>

@@ -90,10 +90,10 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="flex flex-col h-full gap-2">
+    <div className="flex flex-col gap-6">
       <div>
         <h3 className="text-base">
-          Welcome in <strong>{fullName(user)}</strong>
+          Welcome back, <strong>{fullName(user)}</strong>
         </h3>
         <h1 className="text-2xl sm:text-3xl">Your Dashboard</h1>
         <p className="text-xs text-[#8F9494] mt-1">
@@ -117,134 +117,127 @@ export default function Dashboard() {
         />
       )}
 
-      <div className="flex flex-col gap-4 pb-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-2 mb-6">
-          <Card className="bg-white p-2">
-            <CardBody>
-              <LineChart
-                title="Revenue vs carrier cost (CAD)"
-                categories={mockMarginChart.categories}
-                series={[
-                  { name: "Revenue", data: mockMarginChart.revenue },
-                  { name: "Carrier cost", data: mockMarginChart.carrierCost },
-                ]}
-              />
-            </CardBody>
-          </Card>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-rows-3 gap-4">
-            <StatCard
-              className="sm:col-span-2"
-              card={{
-                icon: <HiOutlineCurrencyDollar className="text-base-primary-200" />,
-                iconBgClass: "bg-icon-lightDarkBlue",
-                name: "Outstanding Receivable / Payable",
-                value: `${receivable ?? "—"}  /  ${payable ?? "—"}`,
-                caption: totalsLabel[view],
-              }}
-              footer={
-                <RadioGroup
-                  orientation="horizontal"
-                  aria-label="Currency"
-                  className="justify-center text-xs"
-                  classNames={{ wrapper: "flex-wrap gap-x-4 gap-y-2" }}
-                  value={view}
-                  onValueChange={(value) => setView(value as TotalsView)}
-                  size="md"
-                >
-                  <Radio value="CAD">
-                    <span className="text-base-primary">CAD</span>
-                  </Radio>
-                  <Radio value="USD">
-                    <span className="text-base-primary">USD</span>
-                  </Radio>
-                  <Radio value="IN_CAD">
-                    <span className="text-base-primary">Total in CAD</span>
-                  </Radio>
-                </RadioGroup>
-              }
-            />
-            {cards.map((card) => (
-              <StatCard key={card.name} card={card} />
-            ))}
-          </div>
-        </div>
-
-        <div className="grid lg:grid-cols-2 grid-cols-1 gap-8">
-          <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
-            <SectionTitle icon={<PiReceipt />} title="Gross Margin by Month" />
-            <BarChart
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="bg-white">
+          <CardBody className="p-4">
+            <LineChart
+              title="Revenue vs carrier cost (CAD)"
               categories={mockMarginChart.categories}
               series={[
-                { name: "Gross margin (CAD)", data: mockMarginChart.grossMargin },
+                { name: "Revenue", data: mockMarginChart.revenue },
+                { name: "Carrier cost", data: mockMarginChart.carrierCost },
               ]}
             />
-          </div>
-          <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
-            <SectionTitle
-              icon={<LuClock />}
-              title="Aging"
-              action={
-                <Link to="/reports/" className="text-sm text-[#8F9494]">
-                  Full report
-                </Link>
-              }
-            />
-            <AgingTable rows={[...mockAging.receivable, ...mockAging.payable]} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="rounded-xl bg-content-12 p-3">
-                <p className="text-xs text-[#8F9494] font-semibold">
-                  Avg. payment cycle — shippers
-                </p>
-                <p className="text-lg font-bold">
-                  {d.averagePaymentCycleDays.shipper} days
-                </p>
-              </div>
-              <div className="rounded-xl bg-content-12 p-3">
-                <p className="text-xs text-[#8F9494] font-semibold">
-                  Avg. payment cycle — carriers
-                </p>
-                <p className="text-lg font-bold">
-                  {d.averagePaymentCycleDays.carrier} days
-                </p>
-              </div>
-            </div>
-          </div>
+          </CardBody>
+        </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-rows-3 gap-4">
+          <StatCard
+            className="sm:col-span-2"
+            card={{
+              icon: <HiOutlineCurrencyDollar className="text-base-primary-200" />,
+              iconBgClass: "bg-icon-lightDarkBlue",
+              name: "Outstanding Receivable / Payable",
+              value: `${receivable ?? "—"}  /  ${payable ?? "—"}`,
+              caption: totalsLabel[view],
+            }}
+            footer={
+              <RadioGroup
+                orientation="horizontal"
+                aria-label="Currency"
+                className="justify-center text-xs"
+                classNames={{ wrapper: "flex-wrap gap-x-4 gap-y-2" }}
+                value={view}
+                onValueChange={(value) => setView(value as TotalsView)}
+                size="md"
+              >
+                <Radio value="CAD">
+                  <span className="text-base-primary">CAD</span>
+                </Radio>
+                <Radio value="USD">
+                  <span className="text-base-primary">USD</span>
+                </Radio>
+                <Radio value="IN_CAD">
+                  <span className="text-base-primary">Total in CAD</span>
+                </Radio>
+              </RadioGroup>
+            }
+          />
+          {cards.map((card) => (
+            <StatCard key={card.name} card={card} />
+          ))}
         </div>
+      </div>
 
+      <div className="grid lg:grid-cols-2 grid-cols-1 gap-6">
+        <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
+          <SectionTitle icon={<PiReceipt />} title="Gross Margin by Month" />
+          <BarChart
+            categories={mockMarginChart.categories}
+            series={[
+              { name: "Gross margin (CAD)", data: mockMarginChart.grossMargin },
+            ]}
+          />
+        </div>
         <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
           <SectionTitle
             icon={<LuClock />}
-            title="Average Payment Cycle by Party"
+            title="Aging"
             action={
-              <Link to="/statements/" className="text-sm text-[#8F9494]">
-                Statements
+              <Link to="/reports/" className="text-sm text-[#8F9494]">
+                Full report
               </Link>
             }
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <PaymentCycleList
-              title="Shippers (days to pay us)"
-              rows={mockAccountSummaries.filter((row) => row.type === PartyType.Shipper)}
-            />
-            <PaymentCycleList
-              title="Carriers (days we take to pay)"
-              rows={mockAccountSummaries.filter((row) => row.type === PartyType.Carrier)}
-            />
+          <AgingTable rows={[...mockAging.receivable, ...mockAging.payable]} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-xl bg-content-12 p-3">
+              <p className="text-xs text-[#8F9494] font-semibold">
+                Avg. payment cycle — shippers
+              </p>
+              <p className="text-lg font-bold">
+                {d.averagePaymentCycleDays.shipper} days
+              </p>
+            </div>
+            <div className="rounded-xl bg-content-12 p-3">
+              <p className="text-xs text-[#8F9494] font-semibold">
+                Avg. payment cycle — carriers
+              </p>
+              <p className="text-lg font-bold">
+                {d.averagePaymentCycleDays.carrier} days
+              </p>
+            </div>
           </div>
         </div>
-
-        {can(Permission.CustomerInvoicesView) && (
-          <div className="p-4 bg-white rounded-xl shadow-xs border">
-            <div className="flex items-center mb-2">
-              <BsTruck className="text-base-primary-200 text-xl" />
-              <div className="capitalize text-base-primary-900 text-xl sm:text-2xl ml-3">
-                <strong>Recent Shipper Invoices</strong>
-              </div>
-            </div>
-            <RecentInvoices />
-          </div>
-        )}
       </div>
+
+      <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
+        <SectionTitle
+          icon={<LuClock />}
+          title="Average Payment Cycle by Party"
+          action={
+            <Link to="/statements/" className="text-sm text-[#8F9494]">
+              Statements
+            </Link>
+          }
+        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <PaymentCycleList
+            title="Shippers (days to pay us)"
+            rows={mockAccountSummaries.filter((row) => row.type === PartyType.Shipper)}
+          />
+          <PaymentCycleList
+            title="Carriers (days we take to pay)"
+            rows={mockAccountSummaries.filter((row) => row.type === PartyType.Carrier)}
+          />
+        </div>
+      </div>
+
+      {can(Permission.CustomerInvoicesView) && (
+        <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
+          <SectionTitle icon={<BsTruck />} title="Recent Shipper Invoices" />
+          <RecentInvoices />
+        </div>
+      )}
     </div>
   );
 }

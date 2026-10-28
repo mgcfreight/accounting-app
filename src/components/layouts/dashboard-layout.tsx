@@ -32,7 +32,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="overflow-auto h-full flex flex-col w-full min-w-0 pt-5">
           <Header user={user} onOpenSidebar={() => setCollapsed(false)} />
           <main className="bg-[#FAFEFF] flex-1 xl:rounded-bl-lg overflow-auto">
-            <div className="relative p-4 sm:p-6 w-full h-full">{children}</div>
+            <div className="relative p-4 sm:p-6 w-full min-h-full">{children}</div>
           </main>
         </div>
       </div>

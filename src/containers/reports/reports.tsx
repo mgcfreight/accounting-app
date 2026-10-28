@@ -61,19 +61,19 @@ const percent = (value: string) => `${value}%`;
 
 const pnlColumns: BaseTableColumn[] = [
   { key: "month", label: "Month" },
-  { key: "revenue", label: "Revenue" },
-  { key: "carrierCost", label: "Carrier Cost" },
-  { key: "grossMargin", label: "Gross Margin" },
-  { key: "marginPercent", label: "Margin %" },
+  { key: "revenue", label: "Revenue", align: "end" },
+  { key: "carrierCost", label: "Carrier Cost", align: "end" },
+  { key: "grossMargin", label: "Gross Margin", align: "end" },
+  { key: "marginPercent", label: "Margin %", align: "end" },
 ];
 
 const partyColumns = (side: string): BaseTableColumn[] => [
   { key: "partyName", label: side },
-  { key: "shipmentCount", label: "Shipments" },
-  { key: "revenue", label: "Revenue" },
-  { key: "carrierCost", label: "Carrier Cost" },
-  { key: "grossMargin", label: "Gross Margin" },
-  { key: "marginPercent", label: "Margin %" },
+  { key: "shipmentCount", label: "Shipments", align: "end" },
+  { key: "revenue", label: "Revenue", align: "end" },
+  { key: "carrierCost", label: "Carrier Cost", align: "end" },
+  { key: "grossMargin", label: "Gross Margin", align: "end" },
+  { key: "marginPercent", label: "Margin %", align: "end" },
 ];
 
 // The tax table's rows, with the totals as the last one. The totals come
@@ -86,11 +86,11 @@ type TaxRow = Omit<TaxSummaryRow, "taxableSales" | "taxablePurchases"> & {
 
 const taxColumns: BaseTableColumn[] = [
   { key: "tax", label: "Tax" },
-  { key: "taxableSales", label: "Taxable Sales" },
-  { key: "taxCollected", label: "Collected" },
-  { key: "taxablePurchases", label: "Taxable Purchases" },
-  { key: "inputTaxCredits", label: "Input Tax Credits" },
-  { key: "netTax", label: "Net" },
+  { key: "taxableSales", label: "Taxable Sales", align: "end" },
+  { key: "taxCollected", label: "Collected", align: "end" },
+  { key: "taxablePurchases", label: "Taxable Purchases", align: "end" },
+  { key: "inputTaxCredits", label: "Input Tax Credits", align: "end" },
+  { key: "netTax", label: "Net", align: "end" },
 ];
 
 const taxRows: TaxRow[] = [
@@ -273,7 +273,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-5">
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <span className="text-sm font-semibold text-base-primary">Period</span>
         <BaseSelect

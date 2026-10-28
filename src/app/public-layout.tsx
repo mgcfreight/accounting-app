@@ -1,3 +1,5 @@
+import { Spinner } from "@heroui/react";
+import { Suspense } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { CarouselLayout } from "@/components/layouts";
 import { useUser } from "@/components/providers/user-provider";
@@ -16,7 +18,16 @@ export default function PublicLayout() {
   return (
     <div className="p-4 sm:p-8 h-dvh">
       <CarouselLayout>
-        <Outlet />
+        {/* The forms are lazy (routes.tsx); the carousel shows while they load. */}
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-16">
+              <Spinner label="Loading" />
+            </div>
+          }
+        >
+          <Outlet />
+        </Suspense>
       </CarouselLayout>
     </div>
   );

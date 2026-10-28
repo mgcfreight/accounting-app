@@ -44,7 +44,7 @@ export default function SyncStatus() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-5">
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           card={{

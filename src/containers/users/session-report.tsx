@@ -221,7 +221,7 @@ export default function SessionReport() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         {isAdmin && (
           <BaseSelect
@@ -262,12 +262,13 @@ export default function SessionReport() {
           }
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<UserSession>
           ariaLabel="Sessions"
           columns={columns}
           data={sessions.isError ? [] : (sessions.data?.items ?? [])}
           loading={sessions.isPending}
+          refreshing={sessions.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(sessions.data?.meta)}
@@ -294,6 +295,6 @@ export default function SessionReport() {
           </p>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

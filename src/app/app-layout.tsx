@@ -1,4 +1,5 @@
 import { Spinner } from "@heroui/react";
+import { Suspense } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ErrorBoundary, ErrorState } from "@/components/common";
 import { DashboardLayout } from "@/components/layouts";
@@ -12,6 +13,11 @@ import RouteGuard from "./route-guard";
 //
 // The error boundary sits inside the layout, so a page that throws keeps the
 // sidebar and header usable, and clears when another page is opened.
+//
+// Pages are lazy (routes.tsx): the first one opened shows a spinner in the
+// content area while its chunk loads. Router navigations are transitions, so
+// moving between pages keeps the current one on screen until the next is
+// ready.
 export default function AppLayout() {
   const { pathname, search } = useLocation();
   const { user, loadError, retry } = useUser();
@@ -46,7 +52,15 @@ export default function AppLayout() {
     <DashboardLayout>
       <ErrorBoundary resetKey={pathname}>
         <RouteGuard>
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-16">
+                <Spinner label="Loading" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </RouteGuard>
       </ErrorBoundary>
     </DashboardLayout>

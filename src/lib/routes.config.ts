@@ -187,7 +187,7 @@ export const getRouteConfig = (pathname: string): RouteConfig | undefined => {
 type AccessHolder = Pick<Me, "isAdmin" | "permissions">;
 
 // Deny by default: a path missing from the table, or a route with no access
-// rule of its own or from its parent, is refused — so a route added to app.tsx
+// rule of its own or from its parent, is refused — so a route added to routes.tsx
 // without an entry here shows "No access" rather than opening to everyone.
 export const canAccessRoute = (pathname: string, me: AccessHolder): boolean => {
   const config = getRouteConfig(pathname);

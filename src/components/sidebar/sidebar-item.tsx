@@ -13,7 +13,7 @@ export const isRouteActive = (route: string, pathname: string) => {
   return current === target || current.startsWith(`${target}/`);
 };
 
-const isItemActive = (item: MenuItem, pathname: string): boolean =>
+export const isItemActive = (item: MenuItem, pathname: string): boolean =>
   isRouteActive(item.route, pathname) ||
   !!item.children?.some((child) => isItemActive(child, pathname));
 
@@ -63,7 +63,9 @@ export default function SidebarItem({
         onClick={handleClick}
         className={`${
           active ? "border-t-1 border-white" : ""
-        } group relative h-14 w-full flex items-center gap-2 rounded-2xl px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] whitespace-nowrap`}
+        } group relative h-14 w-full flex items-center gap-2 rounded-2xl px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] whitespace-nowrap focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-2`}
+        aria-expanded={item.children ? isOpen : undefined}
+        aria-current={!item.children && active ? "page" : undefined}
       >
         {icon}
         {!collapsed && item.label}
@@ -83,7 +85,8 @@ export default function SidebarItem({
               <Link
                 to={child.route}
                 onClick={onNavigate}
-                className={`pl-6 py-2 uppercase group relative flex items-center font-medium duration-300 ease-in-out ${
+                aria-current={child === activeChild ? "page" : undefined}
+                className={`pl-6 py-2 uppercase group relative flex items-center font-medium duration-300 ease-in-out hover:bg-[#304573] focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-2 ${
                   child === activeChild
                     ? "border-l-3 border-base-primary-50 text-base-primary-50"
                     : "text-white rounded-md"

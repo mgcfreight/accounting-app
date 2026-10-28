@@ -261,7 +261,7 @@ export default function UserList() {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -307,12 +307,13 @@ export default function UserList() {
           }
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<User>
           ariaLabel="Users"
           columns={columns}
           data={users.isError ? [] : (users.data?.items ?? [])}
           loading={users.isPending}
+          refreshing={users.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(users.data?.meta)}
@@ -363,6 +364,6 @@ export default function UserList() {
           )}
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

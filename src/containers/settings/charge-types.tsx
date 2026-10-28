@@ -111,8 +111,8 @@ export default function ChargeTypes() {
   });
 
   return (
-    <div className="border-t-1 py-6">
-      <div className="flex justify-end mb-4">
+    <div className="border-t-1 py-6 flex flex-col gap-4">
+      <div className="flex justify-end">
         <BaseButton
           text="Add Charge Type"
           className="rounded-full px-6"

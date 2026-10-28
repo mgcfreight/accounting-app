@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ReactNode, useState } from "react";
 import {
   BaseButton,
@@ -30,7 +30,7 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { InvoiceView } from "../invoices/invoice-view";
+import InvoiceViewCell, { apiInvoiceHref, InvoiceView } from "../invoices/invoice-view";
 import { AgreementFormModal } from "./party-modals";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -38,8 +38,8 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "reference", label: "Load Ref" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 
@@ -236,6 +236,7 @@ function AgreementRow({
 }
 
 function PartyInvoices({ party }: { party: PartyView }) {
+  const navigate = useNavigate();
   const isShipper = party.type === PartyType.Shipper;
   const paging = useServerPaging(party.id);
   const params = { page: paging.page, limit: paging.limit };
@@ -256,7 +257,7 @@ function PartyInvoices({ party }: { party: PartyView }) {
   });
 
   return (
-    <BaseCardWrapper heading="Invoices" className="mb-5">
+    <BaseCardWrapper heading="Invoices">
       {invoices.isError ? (
         <ErrorState
           message="We couldn't load the invoices. Please try again."
@@ -268,6 +269,8 @@ function PartyInvoices({ party }: { party: PartyView }) {
           columns={invoiceColumns}
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
+          refreshing={invoices.isPlaceholderData}
+          onRowClick={(row) => navigate(apiInvoiceHref(row))}
           rowKey={(row) => row.id}
           renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
           meta={paging.tableMeta(invoices.data?.meta)}

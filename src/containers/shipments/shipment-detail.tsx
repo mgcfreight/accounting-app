@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ReactNode } from "react";
 import {
   BaseCardWrapper,
@@ -24,7 +24,11 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { InvoiceView, referencesOf } from "../invoices/invoice-view";
+import InvoiceViewCell, {
+  apiInvoiceHref,
+  InvoiceView,
+  referencesOf,
+} from "../invoices/invoice-view";
 import { partyHref } from "../parties/party-list";
 import usePartyNames from "../parties/use-party-names";
 import { place } from "./shipment-list";
@@ -34,8 +38,8 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "party", label: "Party" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 
@@ -162,7 +166,7 @@ export default function ShipmentDetail() {
       <BaseCardWrapper heading="References">
         <div className="text-sm text-[#343A40] space-y-1">
           <Field label="Invoice number">{data.invoiceSequence ?? "Not taken"}</Field>
-          <Field label="TMS customer invoice code">
+          <Field label="TMS shipper invoice code">
             {data.tmsCustomerInvoiceCode ?? "Not set"}
           </Field>
           {data.carrierPartyId && (
@@ -184,7 +188,7 @@ export default function ShipmentDetail() {
           direction={InvoiceDirection.Receivable}
           shipment={data}
           parties={parties}
-          heading="Customer Invoice"
+          heading="Shipper Invoice"
         />
       )}
       {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (
@@ -212,6 +216,7 @@ function ShipmentInvoices({
   parties: Map<string, PartyView>;
   heading: string;
 }) {
+  const navigate = useNavigate();
   const params = { page: 1, limit: 20, shipmentId: shipment.id };
   const invoices = useQuery({
     queryKey: ["invoices", direction, "shipment", params],
@@ -222,10 +227,7 @@ function ShipmentInvoices({
   });
 
   return (
-    <BaseCardWrapper
-      heading={heading}
-      className={direction === InvoiceDirection.Payable || !shipment.carrierPartyId ? "mb-5" : ""}
-    >
+    <BaseCardWrapper heading={heading}>
       {invoices.isError ? (
         <ErrorState
           message="We couldn't load the invoices. Please try again."
@@ -237,6 +239,7 @@ function ShipmentInvoices({
           columns={invoiceColumns}
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
+          onRowClick={(row) => navigate(apiInvoiceHref(row))}
           rowKey={(row) => row.id}
           renderCell={(row, key) => (
             <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />

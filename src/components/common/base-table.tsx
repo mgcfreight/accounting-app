@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@heroui/react";
-import { Dispatch, Key, ReactNode, SetStateAction } from "react";
+import { Dispatch, Key, MouseEvent, ReactNode, SetStateAction } from "react";
 import { nextTableSort, toSortDescriptor } from "@/lib/table-sort";
 import { BaseTableColumn, PaginationMeta, TableSort } from "@/lib/types";
 import TableBottomContent from "./table-bottom-content";
@@ -32,6 +32,27 @@ type BaseTableProps<T> = {
   onSelectionChange?: (keys: Selection) => void;
   emptyContent?: ReactNode;
   ariaLabel?: string;
+  // Opens a row when it is clicked anywhere. A mouse convenience only: the
+  // row must still have a link (its number or name) for keyboard users.
+  onRowClick?: (row: T) => void;
+  // True while the rows shown are the previous page's or filter's, kept on
+  // screen until the new ones arrive (keepPreviousData). They are dimmed so
+  // they are not read as the answer to the new filter.
+  refreshing?: boolean;
+};
+
+// A click on something inside the row that does its own thing — a link, a
+// button, the "…" menu — or one that ends a text selection is not a row click.
+// Clicks inside a portal (a menu or modal opened from the row) bubble through
+// React to the row too, so anything outside the row's own DOM is ignored.
+const INTERACTIVE =
+  "a, button, input, select, textarea, label, [role=button], [role=menuitem], [role=checkbox]";
+
+const isRowClick = (event: MouseEvent<HTMLElement>) => {
+  const target = event.target as Element;
+  if (!event.currentTarget.contains(target)) return false;
+  if (target.closest(INTERACTIVE)) return false;
+  return !window.getSelection()?.toString();
 };
 
 export default function BaseTable<T>({
@@ -49,6 +70,8 @@ export default function BaseTable<T>({
   onSelectionChange,
   emptyContent = "No Data Found",
   ariaLabel = "Table",
+  onRowClick,
+  refreshing = false,
 }: BaseTableProps<T>) {
   if (loading) return <TableSkeleton />;
 
@@ -60,6 +83,7 @@ export default function BaseTable<T>({
   return (
     <Table
       aria-label={ariaLabel}
+      aria-busy={refreshing}
       bottomContentPlacement="inside"
       selectionMode={selectMode}
       onSelectionChange={onSelectionChange}
@@ -75,7 +99,14 @@ export default function BaseTable<T>({
           "text-xs",
         ],
         td: ["text-xs"],
-        table: "overflow-auto",
+        // The cells take the hover colour, not the row: globals.css stripes
+        // odd rows with an unlayered rule that a row utility can't override.
+        tr: onRowClick
+          ? "cursor-pointer hover:*:bg-content-12 transition-colors"
+          : "",
+        table: `overflow-auto transition-opacity ${
+          refreshing ? "opacity-50" : ""
+        }`,
       }}
       bottomContent={
         meta && setMeta ? (
@@ -96,6 +127,7 @@ export default function BaseTable<T>({
         {(column) => (
           <TableColumn
             key={column.key}
+            align={column.align}
             allowsSorting={!!onSortChange && !!column.sortable}
           >
             {column.label}
@@ -104,7 +136,16 @@ export default function BaseTable<T>({
       </TableHeader>
       <TableBody emptyContent={emptyContent} items={data}>
         {(row) => (
-          <TableRow key={rowKey(row)}>
+          <TableRow
+            key={rowKey(row)}
+            onClick={
+              onRowClick
+                ? (event: MouseEvent<HTMLElement>) => {
+                    if (isRowClick(event)) onRowClick(row);
+                  }
+                : undefined
+            }
+          >
             {(columnKey: Key) => (
               <TableCell>
                 {renderCell

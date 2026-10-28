@@ -30,6 +30,8 @@ export type BaseTableColumn = {
   sortType?: "string" | "number" | "date" | "money";
   // The value to sort a row by, when no single field holds it.
   sortValue?: (row: never) => unknown;
+  // Amounts and counts go "end", so their digits line up down the column.
+  align?: "start" | "center" | "end";
 };
 
 export type SelectOption = {

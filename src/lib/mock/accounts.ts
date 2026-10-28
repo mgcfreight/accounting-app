@@ -204,7 +204,7 @@ export const REMINDER_DAYS_BEFORE_DUE = 7;
 // An open dispute's balance sits in the aging report's Disputed column
 // (INV-10424: USD 1,475.00, as in reports.ts).
 export const mockDisputes: Dispute[] = [
-  { id: "D-7", direction: InvoiceDirection.Receivable, invoiceNumber: "INV-10424", partyName: "Great Lakes Supply", currency: Currency.USD, disputedAmount: "1475.00", reason: "Customer says the liftgate was not used", openedOn: "2026-09-30", openedBy: "Sam Patel", status: DisputeStatus.Open, resolution: null, resolvedOn: null },
+  { id: "D-7", direction: InvoiceDirection.Receivable, invoiceNumber: "INV-10424", partyName: "Great Lakes Supply", currency: Currency.USD, disputedAmount: "1475.00", reason: "Shipper says the liftgate was not used", openedOn: "2026-09-30", openedBy: "Sam Patel", status: DisputeStatus.Open, resolution: null, resolvedOn: null },
   { id: "D-6", direction: InvoiceDirection.Payable, invoiceNumber: "CINV-10419", partyName: "TST-CF Express", currency: Currency.CAD, disputedAmount: "240.00", reason: "Carrier billed a second fuel surcharge", openedOn: "2026-09-20", openedBy: "Sam Patel", status: DisputeStatus.Resolved, resolution: "Carrier sent a corrected bill without the second surcharge", resolvedOn: "2026-09-26" },
   { id: "D-5", direction: InvoiceDirection.Receivable, invoiceNumber: "INV-10398", partyName: "Northwind Distribution", currency: Currency.CAD, disputedAmount: "185.00", reason: "Detention charged twice", openedOn: "2026-09-02", openedBy: "Sam Patel", status: DisputeStatus.Resolved, resolution: "Credit note CN-1042 for CAD 185.00 issued", resolvedOn: "2026-09-12" },
 ];

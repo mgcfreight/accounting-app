@@ -15,7 +15,7 @@ export default function FormModal({
   onOpenChange,
   title,
   children,
-  confirmText = "Save",
+  confirmText,
   onConfirm,
   isConfirming = false,
   size = "md",
@@ -25,7 +25,10 @@ export default function FormModal({
   title: string;
   children: ReactNode;
   confirmText?: string;
-  onConfirm: () => void;
+  // Leave unset for a modal that only shows something: its footer is then
+  // one button that closes it, rather than a Cancel and a Close that do the
+  // same thing.
+  onConfirm?: () => void;
   isConfirming?: boolean;
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "5xl";
 }) {
@@ -48,20 +51,28 @@ export default function FormModal({
             </ModalHeader>
             <ModalBody className="gap-4">{children}</ModalBody>
             <ModalFooter>
-              <div className="flex gap-3">
+              {onConfirm ? (
+                <div className="flex gap-3">
+                  <BaseButton
+                    text="Cancel"
+                    varient="bordered"
+                    className="text-base-primary px-6"
+                    onPress={onClose}
+                  />
+                  <BaseButton
+                    text={confirmText ?? "Save"}
+                    className="px-6"
+                    isLoading={isConfirming}
+                    onPress={onConfirm}
+                  />
+                </div>
+              ) : (
                 <BaseButton
-                  text="Cancel"
-                  varient="bordered"
-                  className="text-base-primary px-6"
+                  text={confirmText ?? "Close"}
+                  className="px-6"
                   onPress={onClose}
                 />
-                <BaseButton
-                  text={confirmText}
-                  className="px-6"
-                  isLoading={isConfirming}
-                  onPress={onConfirm}
-                />
-              </div>
+              )}
             </ModalFooter>
           </>
         )}

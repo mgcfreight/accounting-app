@@ -44,8 +44,8 @@ const columns: BaseTableColumn[] = [
   { key: "method", label: "Method" },
   { key: "reference", label: "Reference" },
   { key: "paidOn", label: "Paid On", sortable: true, sortType: "date" },
-  { key: "amount", label: "Amount", sortable: true, sortType: "money" },
-  { key: "unapplied", label: "Unapplied", sortType: "money" },
+  { key: "amount", label: "Amount", sortable: true, sortType: "money", align: "end" },
+  { key: "unapplied", label: "Unapplied", sortType: "money", align: "end" },
   { key: "match", label: "Match" },
   { key: "matchedBy", label: "How Matched" },
   { key: "actions", label: "" },
@@ -210,7 +210,7 @@ export default function Payments() {
   const close = () => setOpen(null);
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Tabs
         aria-label="Payments view"
         color="primary"
@@ -221,7 +221,6 @@ export default function Payments() {
         // page on a phone; capped, the tab list scrolls instead.
         classNames={{
           base: "max-w-full",
-          tabList: "mb-4",
           cursor: "bg-base-primary",
         }}
       >
@@ -262,7 +261,7 @@ export default function Payments() {
               disallowEmptySelection
             />
           </FilterBar>
-          <Card className="mt-4">
+          <Card>
             <BaseTable
               ariaLabel="Payments"
               columns={columns}
@@ -282,6 +281,6 @@ export default function Payments() {
       {open?.modal === "allocate" && <AllocateModal payment={open.payment} onClose={close} />}
       {open?.modal === "view" && <ViewAllocationModal payment={open.payment} onClose={close} />}
       {open?.modal === "credit" && <UnappliedCreditModal payment={open.payment} onClose={close} />}
-    </>
+    </div>
   );
 }

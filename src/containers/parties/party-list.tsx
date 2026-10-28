@@ -120,7 +120,7 @@ export default function PartyList({ type }: { type: PartyType }) {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -140,7 +140,7 @@ export default function PartyList({ type }: { type: PartyType }) {
           disallowEmptySelection
         />
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         {parties.isError ? (
           <ErrorState
             message={`We couldn't load the ${isShipper ? "shippers" : "carriers"}. Please try again.`}
@@ -152,6 +152,8 @@ export default function PartyList({ type }: { type: PartyType }) {
             columns={columns}
             data={parties.data?.items ?? []}
             loading={parties.isPending}
+            refreshing={parties.isPlaceholderData}
+            onRowClick={(row) => navigate(partyHref(row))}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(parties.data?.meta)}
@@ -168,6 +170,6 @@ export default function PartyList({ type }: { type: PartyType }) {
           onClose={() => setAdding(false)}
         />
       )}
-    </>
+    </div>
   );
 }

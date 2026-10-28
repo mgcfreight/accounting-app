@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 // mokal-app's invoice pages.
 export default function FilterBar({ children }: { children: ReactNode }) {
   return (
-    <div className="p-4 flex flex-wrap items-center gap-4 bg-layout-stats rounded-lg mb-6">
+    <div className="p-4 flex flex-wrap items-center gap-4 bg-layout-stats rounded-lg">
       {children}
     </div>
   );

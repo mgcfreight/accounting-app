@@ -178,7 +178,7 @@ export default function AuditLog() {
   const dateInput = { classNames: { inputWrapper: "bg-white h-12 border-none rounded-lg" }, className: "w-full sm:w-44" };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         {isAdmin && (
           <BaseSelect
@@ -217,12 +217,14 @@ export default function AuditLog() {
           action={<button type="button" className="underline text-sm" onClick={() => void events.refetch()}>Retry</button>}
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<AuditEvent>
           ariaLabel="Audit report"
           columns={columns}
           data={events.isError ? [] : (events.data?.items ?? [])}
           loading={events.isPending}
+          refreshing={events.isPlaceholderData}
+          onRowClick={setOpen}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(events.data?.meta)}
@@ -236,8 +238,6 @@ export default function AuditLog() {
           isOpen
           onOpenChange={(isOpen) => !isOpen && setOpen(null)}
           title={open.action}
-          confirmText="Close"
-          onConfirm={() => setOpen(null)}
           size="2xl"
         >
           <div className="flex flex-col gap-2">
@@ -255,6 +255,6 @@ export default function AuditLog() {
           </pre>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

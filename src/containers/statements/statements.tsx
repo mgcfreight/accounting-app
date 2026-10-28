@@ -45,11 +45,11 @@ const formatMonth = (date: string) =>
 
 const columnsFor = (view: View): BaseTableColumn[] => [
   { key: "party", label: view === "carriers" ? "Carrier" : "Shipper", sortable: true, sortKey: "partyName" },
-  { key: "volume", label: "Business Volume", sortable: true, sortKey: "businessVolume", sortType: "money" },
-  { key: "balance", label: "Remaining Balance", sortable: true, sortType: "money" },
-  { key: "overdue", label: "Overdue", sortable: true, sortType: "money" },
+  { key: "volume", label: "Business Volume", sortable: true, sortKey: "businessVolume", sortType: "money", align: "end" },
+  { key: "balance", label: "Remaining Balance", sortable: true, sortType: "money", align: "end" },
+  { key: "overdue", label: "Overdue", sortable: true, sortType: "money", align: "end" },
   { key: "lastPayment", label: "Last Payment", sortable: true, sortKey: "lastPayment.paidOn", sortType: "date" },
-  { key: "averagePaymentDays", label: "Avg. Payment Days", sortable: true, sortType: "number" },
+  { key: "averagePaymentDays", label: "Avg. Payment Days", sortable: true, sortType: "number", align: "end" },
   ...(view === "shippers" ? [{ key: "weekly", label: "Weekly Statement" }] : []),
   { key: "actions", label: "" },
 ];
@@ -228,7 +228,7 @@ export default function Statements() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-5">
+    <div className="flex flex-col gap-6">
       <AlertBanner message="Statements run on demo data until the Accounts API has payments and statements. Exports download these demo figures." />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -287,7 +287,7 @@ export default function Statements() {
       </Card>
 
       <BaseCardWrapper
-        heading="Weekly Customer Statements"
+        heading="Weekly Shipper Statements"
         action={
           can(Permission.ReportsSendEmail) && (
             <BaseButton
