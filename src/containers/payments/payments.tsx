@@ -1,7 +1,6 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { toast } from "sonner";
 import {
   BaseInput,
   BaseSelect,
@@ -21,14 +20,22 @@ import { useClientTable } from "@/hooks";
 import { paymentMethodLabel, paymentMethodOptions } from "@/lib/constants";
 import { MatchStatus, PaymentDirection, Permission } from "@/lib/enums";
 import { Payment } from "@/lib/interfaces";
-import { mockPayments } from "@/lib/mock";
+import { mockInstallmentPlans, mockPayments } from "@/lib/mock";
 import { isZeroMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import {
+  AllocateModal,
+  matchedBy,
+  UnappliedCreditModal,
+  ViewAllocationModal,
+} from "./allocation-modals";
+import InstallmentPlans from "./installment-plans";
 import RecordPaymentModal from "./record-payment-modal";
 
 type Filters = { search: string; method: string };
-type View = "all" | "in" | "out" | "unmatched";
+type View = "all" | "in" | "out" | "unmatched" | "plans";
+type OpenModal = { modal: "allocate" | "view" | "credit"; payment: Payment };
 
 const columns: BaseTableColumn[] = [
   { key: "number", label: "Payment #", sortable: true },
@@ -40,6 +47,7 @@ const columns: BaseTableColumn[] = [
   { key: "amount", label: "Amount", sortable: true, sortType: "money" },
   { key: "unapplied", label: "Unapplied", sortType: "money" },
   { key: "match", label: "Match" },
+  { key: "matchedBy", label: "How Matched" },
   { key: "actions", label: "" },
 ];
 
@@ -48,11 +56,12 @@ const methodOptions = [
   ...paymentMethodOptions,
 ];
 
-// Design §8.5 and §9: record payments, auto-match, manual allocation, and the
-// "Unmatched" list.
+// Design §8.5 and §9: record payments, auto-match, manual allocation, the
+// "Unmatched" list, and installment plans.
 export default function Payments() {
   const [view, setView] = useState<View>("all");
   const [recording, setRecording] = useState(false);
+  const [open, setOpen] = useState<OpenModal | null>(null);
   const { control } = useForm<Filters>({
     defaultValues: { search: "", method: "ALL" },
   });
@@ -74,6 +83,13 @@ export default function Payments() {
       ),
     [canViewIn, canViewOut]
   );
+  const plans = useMemo(
+    () =>
+      mockInstallmentPlans.filter((plan) =>
+        plan.direction === PaymentDirection.In ? canViewIn : canViewOut
+      ),
+    [canViewIn, canViewOut]
+  );
   // Allocating is part of recording a payment; there is no separate edit.
   const canRecord = (direction: PaymentDirection) =>
     can(
@@ -81,6 +97,12 @@ export default function Payments() {
         ? Permission.CustomerPaymentsCreate
         : Permission.CarrierPaymentsCreate
     );
+  // Sides the role may both see and record, for a new installment plan.
+  const plannable = [PaymentDirection.In, PaymentDirection.Out].filter(
+    (direction) =>
+      canRecord(direction) &&
+      (direction === PaymentDirection.In ? canViewIn : canViewOut)
+  );
 
   const counts = {
     all: visible.length,
@@ -88,6 +110,7 @@ export default function Payments() {
     out: visible.filter((p) => p.direction === PaymentDirection.Out).length,
     unmatched: visible.filter((p) => p.match === MatchStatus.Unmatched)
       .length,
+    plans: plans.length,
   };
 
   const filtered = useMemo(
@@ -143,6 +166,12 @@ export default function Payments() {
         );
       case "match":
         return <MatchStatusChip status={payment.match} />;
+      case "matchedBy":
+        return payment.allocations.length > 0 ? (
+          <span className="whitespace-nowrap">{matchedBy(payment)}</span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        );
       case "actions":
         if (payment.match === MatchStatus.Unmatched && !canRecord(payment.direction)) {
           return null;
@@ -155,22 +184,19 @@ export default function Payments() {
                     {
                       key: "allocate",
                       label: "Allocate to invoices",
-                      onPress: () =>
-                        toast.info("Manual allocation — demo only, nothing was saved."),
+                      onPress: () => setOpen({ modal: "allocate", payment }),
                     },
                     {
                       key: "credit",
                       label: "Keep as unapplied credit",
-                      onPress: () =>
-                        toast.info("Unapplied credit — demo only, nothing was saved."),
+                      onPress: () => setOpen({ modal: "credit", payment }),
                     },
                   ]
                 : [
                     {
                       key: "view",
                       label: "View allocation",
-                      onPress: () =>
-                        toast.info(`${payment.number} is fully allocated (demo).`),
+                      onPress: () => setOpen({ modal: "view", payment }),
                     },
                   ]
             }
@@ -180,6 +206,8 @@ export default function Payments() {
         return null;
     }
   };
+
+  const close = () => setOpen(null);
 
   return (
     <>
@@ -209,41 +237,51 @@ export default function Payments() {
             </div>
           }
         />
+        <Tab key="plans" title={`Installment plans (${counts.plans})`} />
       </Tabs>
-      <FilterBar>
-        <BaseInput
-          name="search"
-          control={control}
-          className="max-w-sm"
-          classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
-          placeholder="Search by payment #, party or reference"
-          endContent={<SearchNormalSm />}
-        />
-        <BaseSelect
-          name="method"
-          control={control}
-          options={methodOptions}
-          className="w-full sm:w-48"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="Method"
-          disallowEmptySelection
-        />
-      </FilterBar>
-      <Card className="mt-4">
-        <BaseTable
-          ariaLabel="Payments"
-          columns={columns}
-          data={table.pageRows}
-          rowKey={(row) => row.id}
-          renderCell={renderCell}
-          meta={table.meta}
-          setMeta={table.setMeta}
-          sort={table.sort}
-          onSortChange={table.onSortChange}
-          bottomContent="Payments"
-        />
-      </Card>
+      {view === "plans" ? (
+        <InstallmentPlans plans={plans} directions={plannable} />
+      ) : (
+        <>
+          <FilterBar>
+            <BaseInput
+              name="search"
+              control={control}
+              className="max-w-sm"
+              classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
+              placeholder="Search by payment #, party or reference"
+              endContent={<SearchNormalSm />}
+            />
+            <BaseSelect
+              name="method"
+              control={control}
+              options={methodOptions}
+              className="w-full sm:w-48"
+              classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
+              aria-label="Method"
+              disallowEmptySelection
+            />
+          </FilterBar>
+          <Card className="mt-4">
+            <BaseTable
+              ariaLabel="Payments"
+              columns={columns}
+              data={table.pageRows}
+              rowKey={(row) => row.id}
+              renderCell={renderCell}
+              meta={table.meta}
+              setMeta={table.setMeta}
+              sort={table.sort}
+              onSortChange={table.onSortChange}
+              bottomContent="Payments"
+            />
+          </Card>
+        </>
+      )}
       <RecordPaymentModal isOpen={recording} onClose={() => setRecording(false)} />
+      {open?.modal === "allocate" && <AllocateModal payment={open.payment} onClose={close} />}
+      {open?.modal === "view" && <ViewAllocationModal payment={open.payment} onClose={close} />}
+      {open?.modal === "credit" && <UnappliedCreditModal payment={open.payment} onClose={close} />}
     </>
   );
 }

@@ -27,6 +27,7 @@ const menuIcons: Record<MenuIconName, ReactNode> = {
   shippers: <User />,
   carriers: <CarrrierTruck />,
   shipments: <TrackingIcon />,
+  statements: <ReciptItemSm />,
   reports: <ReportingIcon />,
   system: <TrackingIcon />,
   users: <User />,

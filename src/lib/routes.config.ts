@@ -126,9 +126,21 @@ export const routeConfig: Record<string, RouteConfig> = {
       },
     },
   },
+  // Statements are filed under reports in the API's permission catalog.
+  statements: {
+    header: "Statements",
+    access: { allOf: [Permission.ReportsView] },
+  },
   reports: { header: "Reports", access: { allOf: [Permission.ReportsView] } },
   "needs-review": {
     header: "Needs Review",
+    access: {
+      anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
+    },
+  },
+  // Payment reminders on either side; open with either invoice view.
+  reminders: {
+    header: "Payment Reminders",
     access: {
       anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
     },

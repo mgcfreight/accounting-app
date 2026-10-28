@@ -126,3 +126,18 @@ export const torontoLocalToIso = (local: string) => {
   const abs = Math.abs(offset);
   return `${local}:00${offset < 0 ? "-" : "+"}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 };
+
+const DAY_MS = 86_400_000;
+
+// A calendar date ("2026-10-14") as UTC midnight, for whole-day arithmetic
+// that no time zone or DST change can shift.
+const utcDay = (date: string) => Date.parse(`${date}T00:00:00Z`);
+
+// Whole days from a due date to `today`, both calendar dates; 0 on or before
+// the due date. NaN for a value that isn't a date.
+export const daysPastDue = (dueDate: string, today: string) =>
+  Math.max(0, Math.round((utcDay(today) - utcDay(dueDate)) / DAY_MS));
+
+// A calendar date moved by whole days: ("2026-10-31", -7) -> "2026-10-24".
+export const addDays = (date: string, days: number) =>
+  new Date(utcDay(date) + days * DAY_MS).toISOString().slice(0, 10);

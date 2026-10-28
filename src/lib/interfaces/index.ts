@@ -1,9 +1,12 @@
 import {
   AdjustmentMode,
+  AllocationRule,
   BillingTrigger,
   CarrierInvoiceStatus,
   Currency,
   CustomerInvoiceStatus,
+  DisputeStatus,
+  InstallmentStatus,
   InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
@@ -14,10 +17,13 @@ import {
   PaymentMethod,
   PaymentStatus,
   PaymentTerms,
+  ReminderChannel,
+  ReminderStatus,
   ReviewKind,
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
+  StatementRunKind,
   SyncRunStatus,
   Permission,
   TaxBasis,
@@ -236,6 +242,11 @@ export interface Payment {
   amount: string;
   unapplied: string;
   match: MatchStatus;
+  // Where the payment went. Empty while unmatched.
+  allocations: Allocation[];
+  // For an unmatched payment: what auto-matching proposes, for staff to
+  // confirm. Empty when it found nothing.
+  suggested: Allocation[];
 }
 
 export interface ReviewItem {
@@ -400,6 +411,10 @@ export interface PartyView {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // Contact addresses as the TMS holds them (shippers); null when it has
+  // none. Absent until the API's TMS sync ships.
+  email?: string | null;
+  businessEmail?: string | null;
   // Newest first. Only from the single-party endpoint.
   agreements?: AgreementView[];
 }
@@ -575,4 +590,155 @@ export interface MonthlyPnl {
   carrierCost: string;
   grossMargin: string;
   marginPercent: string;
+}
+
+// ---------------------------------------------------------------------------
+// Provisional shapes for the screens with no API yet (statements, reminders,
+// allocation, installment plans, disputes, report breakdowns), filled from
+// lib/mock. Every amount is already calculated, as the API will send it.
+
+// A shipper's or carrier's account at a glance (statements, requirement 2).
+export interface PartyAccountSummary {
+  partyId: string;
+  partyName: string;
+  type: PartyType;
+  currency: Currency;
+  // Invoiced this calendar year, and the number of shipments behind it.
+  businessVolume: string;
+  shipmentCount: number;
+  balance: string;
+  overdue: string;
+  // Days past due of the oldest overdue invoice; 0 when nothing is overdue.
+  oldestOverdueDays: number;
+  // Null when nothing has been paid yet. `invoiceRef` is null for a payment
+  // that isn't allocated to an invoice yet.
+  lastPayment: {
+    paidOn: string;
+    paymentNumber: string;
+    invoiceRef: string | null;
+    amount: string;
+  } | null;
+  // Average days from invoice date to full payment, over the last 12 months.
+  averagePaymentDays: number | null;
+  // Shippers only: emailed a statement every Friday.
+  weeklyStatement: boolean;
+  statementEmail: string | null;
+}
+
+// One run of the statement jobs: the daily refresh of every balance, and the
+// Friday email of shipper statements.
+export interface StatementRun {
+  id: string;
+  kind: StatementRunKind;
+  ranAt: string;
+  partyCount: number;
+  // Weekly email only.
+  sentCount: number | null;
+  failedCount: number | null;
+}
+
+// A payment reminder, 7 days before an invoice's due date.
+export interface Reminder {
+  id: string;
+  direction: InvoiceDirection;
+  invoiceNumber: string;
+  partyName: string;
+  dueDate: string;
+  remindOn: string;
+  currency: Currency;
+  balance: string;
+  channel: ReminderChannel;
+  recipient: string;
+  status: ReminderStatus;
+  sentAt: string | null;
+  // Why a reminder was skipped (paid in full, reminders off, disputed).
+  note: string | null;
+}
+
+// Part of a payment applied to one invoice, and how it was matched.
+export interface Allocation {
+  invoiceNumber: string;
+  invoiceBalanceBefore: string;
+  amount: string;
+  invoiceBalanceAfter: string;
+  rule: AllocationRule;
+}
+
+export interface Installment {
+  number: number;
+  dueDate: string;
+  amount: string;
+  status: InstallmentStatus;
+  paidOn: string | null;
+}
+
+// An agreed plan to pay one or more invoices in parts.
+export interface InstallmentPlan {
+  id: string;
+  direction: PaymentDirection;
+  partyName: string;
+  invoiceNumbers: string[];
+  currency: Currency;
+  total: string;
+  paid: string;
+  remaining: string;
+  agreedOn: string;
+  installments: Installment[];
+}
+
+// An invoice the shipper or carrier disputes. While open, its balance sits in
+// the aging report's Disputed column and reminders are paused.
+export interface Dispute {
+  id: string;
+  direction: InvoiceDirection;
+  invoiceNumber: string;
+  partyName: string;
+  currency: Currency;
+  disputedAmount: string;
+  reason: string;
+  openedOn: string;
+  openedBy: string;
+  status: DisputeStatus;
+  resolution: string | null;
+  resolvedOn: string | null;
+}
+
+// A month or quarter of the books, CAD at invoice-date rates.
+export interface PeriodSummary {
+  key: string;
+  period: string;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+  taxCollected: string;
+  inputTaxCredits: string;
+  collected: string;
+  paidOut: string;
+}
+
+// Profit and loss for one shipper or carrier over a period, CAD.
+export interface PartyPnl {
+  partyId: string;
+  partyName: string;
+  type: PartyType;
+  shipmentCount: number;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+}
+
+// One line of the HST/GST summary: tax charged on shipper invoices against
+// input tax credits on carrier bills, per tax and province.
+export interface TaxSummaryRow {
+  key: string;
+  jurisdiction: string;
+  taxCode: string;
+  ratePercent: string;
+  taxableSales: string;
+  taxCollected: string;
+  taxablePurchases: string;
+  inputTaxCredits: string;
+  netTax: string;
 }

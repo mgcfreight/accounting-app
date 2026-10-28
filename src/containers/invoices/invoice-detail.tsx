@@ -9,6 +9,7 @@ import {
   ErrorState,
   InfoStrip,
   Money,
+  RowActions,
   TableSkeleton,
 } from "@/components/common";
 import { ArrowRight, Send } from "@/components/icons";
@@ -19,9 +20,13 @@ import {
   reviewFlagLabels,
   taxBasisLabels,
 } from "@/lib/constants";
-import { CarrierInvoiceStatus, InvoiceDirection } from "@/lib/enums";
+import {
+  CarrierInvoiceStatus,
+  InvoiceDirection,
+  InvoiceReviewFlag,
+} from "@/lib/enums";
 import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
-import { formatDate, formatDateTime, humanize } from "@/lib/utils";
+import { addDays, formatDate, formatDateTime, humanize } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
@@ -32,6 +37,13 @@ import {
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
+import InvoiceExtraActionModal, {
+  canBeVoided,
+  CancelledLoadBanner,
+  ExtraAction,
+  extraActionsFor,
+} from "./invoice-extra-actions";
+import InvoiceHistory from "./invoice-history";
 import { availableActions } from "./invoice-row-actions";
 import {
   apiInvoiceHref,
@@ -44,10 +56,14 @@ import {
   InvoiceTotal,
   InvoiceView,
   isCustomerInvoice,
+  isOwed,
   isSuperseded,
   partyOf,
   referencesOf,
 } from "./invoice-view";
+
+// Reminders go out this many days before the due date (the requirement).
+const REMINDER_DAYS_BEFORE_DUE = 7;
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -69,6 +85,7 @@ export default function InvoiceDetail({
   const navigate = useNavigate();
   const { can } = useCan();
   const [action, setAction] = useState<InvoiceAction | null>(null);
+  const [extraAction, setExtraAction] = useState<ExtraAction | null>(null);
   const isReceivable = direction === InvoiceDirection.Receivable;
   const listHref = invoiceListHref(direction);
 
@@ -114,7 +131,17 @@ export default function InvoiceDetail({
   const number = invoiceNumberOf(data);
   const party = partyOf(data, carriers);
   const actions = availableActions(data, can);
+  const extraActions = extraActionsFor(data, can, setExtraAction);
+  const canVoid = extraActions.some((item) => item.key === "void");
   const references = referencesOf(data);
+  // The TMS cancelled the load: until the invoice is void, point to voiding.
+  const loadCancelled =
+    data.reviewFlags.includes(InvoiceReviewFlag.TmsCancelled) &&
+    canBeVoided(data);
+  const remindOn =
+    isOwed(data) && data.dueDate
+      ? addDays(data.dueDate, -REMINDER_DAYS_BEFORE_DUE)
+      : null;
   const replacedBy = isSuperseded(data)
     ? versions.data?.find((version) => version.parentInvoiceId === data.id)
     : undefined;
@@ -142,8 +169,16 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
+          {extraActions.length > 0 && <RowActions actions={extraActions} />}
         </div>
       </div>
+
+      {loadCancelled && (
+        <CancelledLoadBanner
+          canVoid={canVoid}
+          onVoid={() => setExtraAction("void")}
+        />
+      )}
 
       {isSuperseded(data) && (
         <AlertBanner
@@ -203,10 +238,32 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
-            <Field label="Tax">
-              {taxBasisLabels[data.taxBasis]}
-              {data.taxJurisdiction && ` · ${data.taxJurisdiction}`}
-            </Field>
+            {remindOn && (
+              <Field label="Payment reminder">
+                {formatDate(remindOn)} ({REMINDER_DAYS_BEFORE_DUE} days before
+                due
+                {isReceivable
+                  ? ", emailed to the customer's accounts department"
+                  : ", an alert to the accounts team"}
+                ).{" "}
+                <span className="text-content-5">
+                  Not sent yet: reminders aren&apos;t built.{" "}
+                  <Link
+                    to="/reminders/"
+                    className="text-base-primary-300 hover:underline"
+                  >
+                    All reminders
+                  </Link>
+                </span>
+              </Field>
+            )}
+            {/* Carrier invoices print no tax (decided 2026-10-27). */}
+            {isCustomerInvoice(data) && (
+              <Field label="Tax">
+                {taxBasisLabels[data.taxBasis]}
+                {data.taxJurisdiction && ` · ${data.taxJurisdiction}`}
+              </Field>
+            )}
             <Field label="Kind">{humanize(data.kind)}</Field>
             <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
             <Field label="Shipment">{data.shipmentId ?? "—"}</Field>
@@ -270,6 +327,8 @@ export default function InvoiceDetail({
         )
       )}
 
+      <InvoiceHistory invoice={data} />
+
       {data.notes && (
         <BaseCardWrapper heading="Notes" className="mb-5">
           {/* Rendered as text by React, so a note can't inject markup. */}
@@ -285,6 +344,12 @@ export default function InvoiceDetail({
         onRevised={(newId) =>
           navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`)
         }
+      />
+      <InvoiceExtraActionModal
+        action={extraAction}
+        invoice={data}
+        partyName={party.name}
+        onClose={() => setExtraAction(null)}
       />
     </div>
   );

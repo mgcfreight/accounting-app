@@ -12,12 +12,14 @@ import NeedsReview from "@/containers/needs-review/needs-review";
 import PartyDetail from "@/containers/parties/party-detail";
 import PartyList from "@/containers/parties/party-list";
 import Payments from "@/containers/payments/payments";
+import Reminders from "@/containers/reminders/reminders";
 import Reports from "@/containers/reports/reports";
 import RoleList from "@/containers/roles/role-list";
 import Settings from "@/containers/settings/settings";
 import ShipmentDetail from "@/containers/shipments/shipment-detail";
 import ShipmentForm from "@/containers/shipments/shipment-form";
 import ShipmentList from "@/containers/shipments/shipment-list";
+import Statements from "@/containers/statements/statements";
 import SyncStatus from "@/containers/sync-status/sync-status";
 import SessionReport from "@/containers/users/session-report";
 import UserList from "@/containers/users/user-list";
@@ -85,6 +87,7 @@ export default function App() {
                 element={<InvoiceDetail direction={InvoiceDirection.Payable} />}
               />
               <Route path="needs-review" element={<NeedsReview />} />
+              <Route path="reminders" element={<Reminders />} />
               <Route path="payments" element={<Payments />} />
               <Route
                 path="shippers"
@@ -105,6 +108,7 @@ export default function App() {
               <Route path="shipments" element={<ShipmentList />} />
               <Route path="shipments/view" element={<ShipmentDetail />} />
               <Route path="shipments/new" element={<ShipmentForm />} />
+              <Route path="statements" element={<Statements />} />
               <Route path="reports" element={<Reports />} />
               <Route path="sync-status" element={<SyncStatus />} />
               <Route path="users" element={<UserList />} />

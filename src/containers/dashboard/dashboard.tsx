@@ -15,13 +15,14 @@ import {
   SectionTitle,
   StatCard,
 } from "@/components/common";
-import { useCurrentUser } from "@/components/providers/user-provider";
-import { Currency } from "@/lib/enums";
+import { useCan } from "@/components/providers/user-provider";
+import { Currency, PartyType, Permission } from "@/lib/enums";
+import { PartyAccountSummary } from "@/lib/interfaces";
 import {
+  mockAccountSummaries,
   mockAging,
   mockDashboard,
   mockMarginChart,
-  mockShipperInvoices,
 } from "@/lib/mock";
 import { formatMoney } from "@/lib/money";
 import { fullName } from "@/lib/utils";
@@ -37,8 +38,10 @@ const totalsLabel: Record<TotalsView, string> = {
 
 // mokal-app's admin dashboard layout: welcome header, chart beside a grid of
 // KPI cards, two panels, then a recent-items table. Figures are design §9/§10.
+// The KPIs, charts, aging and payment cycles are demo data until the API
+// has payments and reports; Recent Shipper Invoices come from the API.
 export default function Dashboard() {
-  const user = useCurrentUser();
+  const { me: user, can } = useCan();
   const [view, setView] = useState<TotalsView>("CAD");
   const d = mockDashboard;
 
@@ -93,6 +96,10 @@ export default function Dashboard() {
           Welcome in <strong>{fullName(user)}</strong>
         </h3>
         <h1 className="text-2xl sm:text-3xl">Your Dashboard</h1>
+        <p className="text-xs text-[#8F9494] mt-1">
+          Totals, charts, aging and payment cycles are demo data until the API
+          has payments and reports. Recent Shipper Invoices are live.
+        </p>
       </div>
 
       {d.needsReview > 0 && (
@@ -204,16 +211,67 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-xl shadow-xs border">
-          <div className="flex items-center mb-2">
-            <BsTruck className="text-base-primary-200 text-xl" />
-            <div className="capitalize text-base-primary-900 text-xl sm:text-2xl ml-3">
-              <strong>Recent Shipper Invoices</strong>
-            </div>
+        <div className="bg-white shadow-xs border p-4 rounded-xl flex flex-col gap-4">
+          <SectionTitle
+            icon={<LuClock />}
+            title="Average Payment Cycle by Party"
+            action={
+              <Link to="/statements/" className="text-sm text-[#8F9494]">
+                Statements
+              </Link>
+            }
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <PaymentCycleList
+              title="Shippers (days to pay us)"
+              rows={mockAccountSummaries.filter((row) => row.type === PartyType.Shipper)}
+            />
+            <PaymentCycleList
+              title="Carriers (days we take to pay)"
+              rows={mockAccountSummaries.filter((row) => row.type === PartyType.Carrier)}
+            />
           </div>
-          <RecentInvoices invoices={mockShipperInvoices.slice(0, 5)} />
         </div>
+
+        {can(Permission.CustomerInvoicesView) && (
+          <div className="p-4 bg-white rounded-xl shadow-xs border">
+            <div className="flex items-center mb-2">
+              <BsTruck className="text-base-primary-200 text-xl" />
+              <div className="capitalize text-base-primary-900 text-xl sm:text-2xl ml-3">
+                <strong>Recent Shipper Invoices</strong>
+              </div>
+            </div>
+            <RecentInvoices />
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// Each party's average days from invoice date to full payment.
+function PaymentCycleList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: PartyAccountSummary[];
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-[#8F9494] font-semibold">{title}</p>
+      <ul className="flex flex-col gap-2 text-sm">
+        {rows.map((row) => (
+          <li key={row.partyId} className="flex justify-between gap-3">
+            <span>{row.partyName}</span>
+            {row.averagePaymentDays === null ? (
+              <span className="text-gray-400">No payments yet</span>
+            ) : (
+              <strong>{row.averagePaymentDays} days</strong>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { torontoLocalToIso } from "./utils";
+import { addDays, daysPastDue, torontoLocalToIso } from "./utils";
 
 // The shipment form sends "Created in TMS" through this; the API takes the
 // Toronto date of the result as the invoice date, which picks the tax rate.
@@ -40,5 +40,29 @@ describe("torontoLocalToIso", () => {
     expect(torontoLocalToIso("2026-03-08T03:30")).toBe(
       "2026-03-08T03:30:00-04:00"
     );
+  });
+});
+
+describe("daysPastDue", () => {
+  it("is 0 on and before the due date", () => {
+    expect(daysPastDue("2026-10-14", "2026-10-14")).toBe(0);
+    expect(daysPastDue("2026-10-14", "2026-10-01")).toBe(0);
+  });
+
+  it("counts whole days after it, across a DST change", () => {
+    expect(daysPastDue("2026-10-14", "2026-10-19")).toBe(5);
+    expect(daysPastDue("2026-10-25", "2026-11-04")).toBe(10);
+  });
+});
+
+describe("addDays", () => {
+  it("moves a calendar date across months and years", () => {
+    expect(addDays("2026-10-31", -7)).toBe("2026-10-24");
+    expect(addDays("2026-03-03", -7)).toBe("2026-02-24");
+    expect(addDays("2027-01-05", -7)).toBe("2026-12-29");
+  });
+
+  it("is not shifted by the autumn clock change", () => {
+    expect(addDays("2026-11-05", -7)).toBe("2026-10-29");
   });
 });

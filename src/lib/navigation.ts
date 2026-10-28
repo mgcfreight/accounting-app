@@ -8,6 +8,7 @@ export type MenuIconName =
   | "shippers"
   | "carriers"
   | "shipments"
+  | "statements"
   | "reports"
   | "system"
   | "users"
@@ -32,12 +33,14 @@ export const MENU_ITEMS: MenuItem[] = [
       { label: "Shipper Invoices", route: "/shipper-invoices/" },
       { label: "Carrier Invoices", route: "/carrier-invoices/" },
       { label: "Needs Review", route: "/needs-review/" },
+      { label: "Payment Reminders", route: "/reminders/" },
     ],
   },
   { icon: "payments", label: "Payments", route: "/payments/" },
   { icon: "shippers", label: "Shippers", route: "/shippers/" },
   { icon: "carriers", label: "Carriers", route: "/carriers/" },
   { icon: "shipments", label: "Shipments", route: "/shipments/" },
+  { icon: "statements", label: "Statements", route: "/statements/" },
   { icon: "reports", label: "Reports", route: "/reports/" },
   {
     icon: "system",
