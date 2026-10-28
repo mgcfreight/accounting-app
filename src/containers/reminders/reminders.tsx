@@ -1,6 +1,7 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { LuSend, LuSkipForward } from "react-icons/lu";
 import { PiFileCsv, PiFilePdf } from "react-icons/pi";
 import { toast } from "sonner";
 import {
@@ -16,6 +17,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
+import { RowAction } from "@/components/common/row-actions";
 import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import {
@@ -48,7 +50,7 @@ const columns: BaseTableColumn[] = [
   { key: "recipient", label: "Recipient" },
   { key: "status", label: "Status" },
   { key: "sentAt", label: "Sent / Note" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const channelLabels: Record<ReminderChannel, string> = {
@@ -213,14 +215,14 @@ export default function Reminders() {
         );
       case "actions": {
         if (reminder.status !== ReminderStatus.Scheduled) return null;
-        const actions = [
+        const actions: RowAction[] = [
           ...(canSend(reminder)
-            ? [{ key: "send", label: "Send now", onPress: () => setOpen({ modal: "send", reminder }) }]
+            ? [{ key: "send", label: "Send now", icon: <LuSend />, onPress: () => setOpen({ modal: "send", reminder }) }]
             : []),
           ...(canSkip(reminder)
-            ? [{ key: "skip", label: "Skip", onPress: () => setOpen({ modal: "skip", reminder }) }]
+            ? [{ key: "skip", label: "Skip", icon: <LuSkipForward />, onPress: () => setOpen({ modal: "skip", reminder }) }]
             : []),
-        ] as { key: string; label: string; onPress: () => void }[];
+        ];
         return actions.length ? <RowActions actions={actions} /> : null;
       }
       default:

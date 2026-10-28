@@ -34,7 +34,7 @@ const columns: BaseTableColumn[] = [
   { key: "mgcCode", label: "MGC Code" },
   { key: "defaultTaxable", label: "Taxable by Default" },
   { key: "isActive", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 type Values = {

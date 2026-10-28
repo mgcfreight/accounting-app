@@ -13,7 +13,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
-import { SearchNormalSm } from "@/components/icons";
+import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
 import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
@@ -48,7 +48,7 @@ const columns: BaseTableColumn[] = [
   { key: "unapplied", label: "Unapplied", sortType: "money", align: "end" },
   { key: "match", label: "Match" },
   { key: "matchedBy", label: "How Matched" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const methodOptions = [
@@ -196,6 +196,7 @@ export default function Payments() {
                     {
                       key: "view",
                       label: "View allocation",
+                      icon: <EyeIcon />,
                       onPress: () => setOpen({ modal: "view", payment }),
                     },
                   ]

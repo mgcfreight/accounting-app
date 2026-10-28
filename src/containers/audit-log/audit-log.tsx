@@ -132,7 +132,7 @@ export default function AuditLog() {
     { key: "action", label: "Action" },
     { key: "target", label: "Record" },
     { key: "ipAddress", label: "IP Address" },
-    { key: "actions", label: "" },
+    { key: "actions", label: "Actions", align: "center" },
   ];
 
   const renderCell = (event: AuditEvent, key: string) => {

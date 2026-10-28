@@ -38,7 +38,7 @@ const columns: BaseTableColumn[] = [
   { key: "sell", label: "Sell" },
   { key: "buy", label: "Buy" },
   { key: "source", label: "Source" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 // Shipments from the TMS (§9), from the API's /shipment routes. Entering

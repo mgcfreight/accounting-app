@@ -32,7 +32,7 @@ const columns: BaseTableColumn[] = [
   { key: "description", label: "Description" },
   { key: "userCount", label: "Users" },
   { key: "permissions", label: "Permissions" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 // Staff roles and what each may do (Admin only: routes.config, and the API

@@ -15,6 +15,7 @@ import {
   StatCard,
   StatusChip,
 } from "@/components/common";
+import { EyeIcon } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import { Currency, PartyType, Permission, StatementRunKind } from "@/lib/enums";
@@ -51,7 +52,7 @@ const columnsFor = (view: View): BaseTableColumn[] => [
   { key: "lastPayment", label: "Last Payment", sortable: true, sortKey: "lastPayment.paidOn", sortType: "date" },
   { key: "averagePaymentDays", label: "Avg. Payment Days", sortable: true, sortType: "number", align: "end" },
   ...(view === "shippers" ? [{ key: "weekly", label: "Weekly Statement" }] : []),
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const lastPaymentText = (row: PartyAccountSummary) =>
@@ -218,7 +219,7 @@ export default function Statements() {
         return (
           <RowActions
             actions={[
-              { key: "view", label: "View statement", onPress: () => setOpen(row) },
+              { key: "view", label: "View statement", icon: <EyeIcon />, onPress: () => setOpen(row) },
             ]}
           />
         );

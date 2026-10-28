@@ -50,7 +50,7 @@ const columns: BaseTableColumn[] = [
   { key: "twoFactor", label: "2FA" },
   { key: "lastLoginAt", label: "Last Sign-in", sortable: true },
   { key: "createdAt", label: "Added", sortable: true },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const ALL = "ALL";

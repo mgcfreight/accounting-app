@@ -1,6 +1,7 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { LuCircleCheck } from "react-icons/lu";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -36,7 +37,7 @@ const columns: BaseTableColumn[] = [
   { key: "previous", label: "Amount Before", align: "end" },
   { key: "next", label: "Amount Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions" },
 ];
 
 const disputeColumns: BaseTableColumn[] = [
@@ -48,7 +49,7 @@ const disputeColumns: BaseTableColumn[] = [
   { key: "opened", label: "Opened" },
   { key: "status", label: "Status" },
   { key: "resolution", label: "Resolution" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const isReceivable = (dispute: Dispute) =>
@@ -174,7 +175,7 @@ export default function NeedsReview() {
         if (dispute.status !== DisputeStatus.Open || !canEdit) return null;
         return (
           <RowActions
-            actions={[{ key: "resolve", label: "Resolve", onPress: () => setResolving(dispute) }]}
+            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, onPress: () => setResolving(dispute) }]}
           />
         );
       }

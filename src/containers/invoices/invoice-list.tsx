@@ -93,7 +93,7 @@ const columnsFor = (direction: InvoiceDirection): BaseTableColumn[] => [
   { key: "total", label: "Total", sortable: true, sortKey: InvoiceSortBy.Total, align: "end" },
   { key: "balance", label: "Balance", sortable: true, sortKey: InvoiceSortBy.BalanceDue, align: "end" },
   { key: "status", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const filterTrigger = { trigger: "bg-white border-none h-12 rounded-lg" };

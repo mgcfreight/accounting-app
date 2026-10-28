@@ -27,7 +27,7 @@ const columns: BaseTableColumn[] = [
   { key: "effectiveFrom", label: "From" },
   { key: "effectiveTo", label: "To" },
   { key: "isRecoverable", label: "ITC" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 type NewRate = {

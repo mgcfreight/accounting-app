@@ -38,7 +38,7 @@ const columns: BaseTableColumn[] = [
   { key: "currency", label: "Currency" },
   { key: "status", label: "Status" },
   { key: "createdAt", label: "Added" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const activeOptions = [

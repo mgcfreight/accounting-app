@@ -14,7 +14,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
-import { Add } from "@/components/icons";
+import { Add, EyeIcon } from "@/components/icons";
 import { InstallmentStatus, PaymentDirection } from "@/lib/enums";
 import { Installment, InstallmentPlan } from "@/lib/interfaces";
 import { mockCarriers, mockShippers } from "@/lib/mock";
@@ -59,7 +59,7 @@ const columns: BaseTableColumn[] = [
   { key: "remaining", label: "Remaining", align: "end" },
   { key: "next", label: "Next Installment" },
   { key: "status", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 export default function InstallmentPlans({
@@ -110,7 +110,7 @@ export default function InstallmentPlans({
       case "actions":
         return (
           <RowActions
-            actions={[{ key: "schedule", label: "View schedule", onPress: () => setViewing(plan) }]}
+            actions={[{ key: "schedule", label: "View schedule", icon: <EyeIcon />, onPress: () => setViewing(plan) }]}
           />
         );
       default:
