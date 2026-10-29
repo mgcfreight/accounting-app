@@ -26,8 +26,8 @@ const columns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 
@@ -89,8 +89,6 @@ export default function StatementModal({
       isOpen
       onOpenChange={(open) => !open && onClose()}
       title={`Statement: ${summary.partyName}`}
-      confirmText="Close"
-      onConfirm={onClose}
       size="5xl"
     >
       <div className="flex flex-wrap justify-between items-center gap-3">

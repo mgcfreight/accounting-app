@@ -27,6 +27,9 @@ export const isChallengeExpired = (error: unknown) =>
 
 const LOW_RECOVERY_CODES = 3;
 
+export const isSixDigits = (value: string) =>
+  /^\d{6}$/.test(value.replace(/\s/g, ""));
+
 export const warnIfFewRecoveryCodes = (signedIn: SignedIn) =>
   signedIn.user.twoFactorEnabled &&
   signedIn.recoveryCodesRemaining < LOW_RECOVERY_CODES;
@@ -114,6 +117,13 @@ export default function TwoFactorStep({
           error={errors.code}
           rules={{
             required: "Enter the code",
+            // A 6-digit code is complete once typed or pasted, so it goes
+            // straight in; a recovery code still waits for Verify.
+            onChange: (event) => {
+              if (!submitting && isSixDigits(event.target.value)) {
+                void handleSubmit(onSubmit)();
+              }
+            },
             validate: (value) => {
               const code = value.replace(/\s/g, "");
               if (mode === "email") {
@@ -142,7 +152,7 @@ export default function TwoFactorStep({
         <BaseButton
           text="Email me a code"
           isLoading={sending}
-          className="my-4 w-full"
+          className="my-6 w-full"
           onPress={emailMe}
         />
       ) : (
@@ -150,7 +160,7 @@ export default function TwoFactorStep({
           type="submit"
           text="Verify"
           isLoading={submitting}
-          className="my-4 w-full"
+          className="my-6 w-full"
         />
       )}
       <div className="flex flex-col items-center gap-2 text-xs">

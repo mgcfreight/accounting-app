@@ -84,7 +84,7 @@ export default function NoticeSettingsSection() {
 
   return (
     <form
-      className="border-t-1 grid grid-cols-1 md:grid-cols-2 gap-8 py-6"
+      className="border-t-1 grid grid-cols-1 md:grid-cols-2 gap-6 py-6"
       onSubmit={handleSubmit((values) => save.mutate(values))}
       noValidate
     >
@@ -108,7 +108,7 @@ export default function NoticeSettingsSection() {
           ))}
         </div>
         <p className="text-xs text-content-5">
-          COD and prepaid customers get no notice.
+          COD and prepaid shippers get no notice.
         </p>
       </div>
       <div className="flex flex-col gap-4">

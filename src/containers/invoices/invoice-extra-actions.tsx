@@ -84,7 +84,7 @@ export const extraActionsFor = (
     invoice.status === CustomerInvoiceStatus.Issued &&
     can(Permission.CustomerInvoicesSendEmail)
   ) {
-    actions.push({ key: "email", label: "Email to customer", onPress: () => onOpen("email") });
+    actions.push({ key: "email", label: "Email to shipper", onPress: () => onOpen("email") });
   }
   if (
     printable &&
@@ -230,17 +230,17 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     >
       <Summary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
-        Goes to the customer&apos;s accounts department. Sending isn&apos;t
+        Goes to the shipper&apos;s accounts department. Sending isn&apos;t
         built yet: this checks the form only.
       </p>
       <BaseInput
         name="to"
         control={control}
         label="To"
-        placeholder="ap@customer.com"
+        placeholder="ap@shipper.com"
         description={
           party.isPending && customerId
-            ? "Looking up the customer's email…"
+            ? "Looking up the shipper's email…"
             : "Separate several addresses with commas."
         }
         rules={{ validate: emailList(true) }}
@@ -377,7 +377,7 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         name="reason"
         control={control}
         label="What is disputed"
-        placeholder="Customer says the liftgate was not used"
+        placeholder="Shipper says the liftgate was not used"
         rules={{
           required: "Say what is disputed",
           maxLength: { value: 500, message: "At most 500 characters" },

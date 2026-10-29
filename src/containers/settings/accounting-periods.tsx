@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { LuLock, LuLockOpen } from "react-icons/lu";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -31,7 +32,7 @@ const columns: BaseTableColumn[] = [
   { key: "period", label: "Month" },
   { key: "status", label: "Status" },
   { key: "closed", label: "Closed" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -158,6 +159,7 @@ export default function AccountingPeriods() {
                       ? {
                           key: "reopen",
                           label: "Reopen",
+                          icon: <LuLockOpen />,
                           danger: true,
                           onPress: () =>
                             setPending({ action: "reopen", period: row.period }),
@@ -165,6 +167,7 @@ export default function AccountingPeriods() {
                       : {
                           key: "close",
                           label: "Close",
+                          icon: <LuLock />,
                           onPress: () =>
                             setPending({ action: "close", period: row.period }),
                         },

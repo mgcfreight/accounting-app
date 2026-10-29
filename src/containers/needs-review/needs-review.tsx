@@ -1,6 +1,7 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { LuCircleCheck } from "react-icons/lu";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -33,10 +34,10 @@ const columns: BaseTableColumn[] = [
   { key: "shipment", label: "Shipment" },
   { key: "invoice", label: "Invoice" },
   { key: "party", label: "Shipper" },
-  { key: "previous", label: "Amount Before" },
-  { key: "next", label: "Amount Now" },
+  { key: "previous", label: "Amount Before", align: "end" },
+  { key: "next", label: "Amount Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions" },
 ];
 
 const disputeColumns: BaseTableColumn[] = [
@@ -48,7 +49,7 @@ const disputeColumns: BaseTableColumn[] = [
   { key: "opened", label: "Opened" },
   { key: "status", label: "Status" },
   { key: "resolution", label: "Resolution" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const isReceivable = (dispute: Dispute) =>
@@ -174,7 +175,7 @@ export default function NeedsReview() {
         if (dispute.status !== DisputeStatus.Open || !canEdit) return null;
         return (
           <RowActions
-            actions={[{ key: "resolve", label: "Resolve", onPress: () => setResolving(dispute) }]}
+            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, onPress: () => setResolving(dispute) }]}
           />
         );
       }
@@ -184,7 +185,7 @@ export default function NeedsReview() {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Tabs
         aria-label="Needs review view"
         color="primary"
@@ -194,7 +195,6 @@ export default function NeedsReview() {
         // As on Payments: capped, so the tab list scrolls on a phone.
         classNames={{
           base: "max-w-full",
-          tabList: "mb-4",
           cursor: "bg-base-primary",
         }}
       >
@@ -212,7 +212,7 @@ export default function NeedsReview() {
       {view === "changes" ? (
         <>
           <AlertBanner message="Issued invoices are never changed. Each change below is resolved with a credit or debit note, which is emailed with the invoice and logged in the audit trail." />
-          <Card className="mt-4">
+          <Card>
             <BaseTable
               ariaLabel="Needs review"
               columns={columns}
@@ -226,7 +226,7 @@ export default function NeedsReview() {
       ) : (
         <>
           <AlertBanner message="While a dispute is open, its amount shows in the aging report's Disputed column and payment reminders for the invoice are paused. Demo data: resolving saves nothing." />
-          <Card className="mt-4">
+          <Card>
             <BaseTable
               ariaLabel="Disputes"
               columns={disputeColumns}
@@ -241,7 +241,7 @@ export default function NeedsReview() {
       {resolving && (
         <ResolveDisputeModal dispute={resolving} onClose={() => setResolving(null)} />
       )}
-    </>
+    </div>
   );
 }
 

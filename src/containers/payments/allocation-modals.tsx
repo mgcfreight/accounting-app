@@ -259,7 +259,6 @@ export function ViewAllocationModal({
       onOpenChange={(open) => !open && onClose()}
       title={`Allocation of ${payment.number}`}
       confirmText="Done"
-      onConfirm={onClose}
       size="2xl"
     >
       <PaymentSummary payment={payment} />

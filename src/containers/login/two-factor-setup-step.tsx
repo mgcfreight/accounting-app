@@ -16,7 +16,11 @@ import {
   verifyEmailCode,
 } from "@/services";
 import type { Challenge } from "./login-form";
-import { CHALLENGE_EXPIRED, isChallengeExpired } from "./two-factor-step";
+import {
+  CHALLENGE_EXPIRED,
+  isChallengeExpired,
+  isSixDigits,
+} from "./two-factor-step";
 
 type CodeValues = { code: string };
 
@@ -154,9 +158,14 @@ export default function TwoFactorSetupStep({
             error={errors.code}
             rules={{
               required: "Enter the code",
+              // Six digits is the whole code, so it goes straight in.
+              onChange: (event) => {
+                if (!busy && isSixDigits(event.target.value)) {
+                  void handleSubmit(confirm)();
+                }
+              },
               validate: (value) =>
-                /^\d{6}$/.test(value.replace(/\s/g, "")) ||
-                "The code is 6 digits",
+                isSixDigits(value) || "The code is 6 digits",
             }}
             label="6-digit code"
             autoComplete="one-time-code"

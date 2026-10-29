@@ -14,7 +14,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
-import { Add } from "@/components/icons";
+import { Add, EyeIcon } from "@/components/icons";
 import { InstallmentStatus, PaymentDirection } from "@/lib/enums";
 import { Installment, InstallmentPlan } from "@/lib/interfaces";
 import { mockCarriers, mockShippers } from "@/lib/mock";
@@ -54,12 +54,12 @@ const columns: BaseTableColumn[] = [
   { key: "party", label: "Party" },
   { key: "direction", label: "Direction" },
   { key: "invoices", label: "Invoices" },
-  { key: "total", label: "Total" },
-  { key: "paid", label: "Paid" },
-  { key: "remaining", label: "Remaining" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "paid", label: "Paid", align: "end" },
+  { key: "remaining", label: "Remaining", align: "end" },
   { key: "next", label: "Next Installment" },
   { key: "status", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 export default function InstallmentPlans({
@@ -110,7 +110,7 @@ export default function InstallmentPlans({
       case "actions":
         return (
           <RowActions
-            actions={[{ key: "schedule", label: "View schedule", onPress: () => setViewing(plan) }]}
+            actions={[{ key: "schedule", label: "View schedule", icon: <EyeIcon />, onPress: () => setViewing(plan) }]}
           />
         );
       default:
@@ -130,7 +130,7 @@ export default function InstallmentPlans({
           />
         </div>
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable
           ariaLabel="Installment plans"
           columns={columns}
@@ -155,7 +155,6 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
       onOpenChange={(open) => !open && onClose()}
       title={`Installment Plan ${plan.id}`}
       confirmText="Done"
-      onConfirm={onClose}
       size="xl"
     >
       <p className="text-sm text-[#707070]">

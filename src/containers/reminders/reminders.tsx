@@ -1,6 +1,7 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { LuSend, LuSkipForward } from "react-icons/lu";
 import { PiFileCsv, PiFilePdf } from "react-icons/pi";
 import { toast } from "sonner";
 import {
@@ -16,6 +17,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
+import { RowAction } from "@/components/common/row-actions";
 import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
 import {
@@ -43,12 +45,12 @@ const columns: BaseTableColumn[] = [
   { key: "side", label: "Side" },
   { key: "dueDate", label: "Due Date", sortable: true, sortType: "date" },
   { key: "remindOn", label: "Remind On", sortable: true, sortType: "date" },
-  { key: "balance", label: "Balance", sortType: "money" },
+  { key: "balance", label: "Balance", sortType: "money", align: "end" },
   { key: "channel", label: "Channel" },
   { key: "recipient", label: "Recipient" },
   { key: "status", label: "Status" },
   { key: "sentAt", label: "Sent / Note" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const channelLabels: Record<ReminderChannel, string> = {
@@ -213,14 +215,14 @@ export default function Reminders() {
         );
       case "actions": {
         if (reminder.status !== ReminderStatus.Scheduled) return null;
-        const actions = [
+        const actions: RowAction[] = [
           ...(canSend(reminder)
-            ? [{ key: "send", label: "Send now", onPress: () => setOpen({ modal: "send", reminder }) }]
+            ? [{ key: "send", label: "Send now", icon: <LuSend />, onPress: () => setOpen({ modal: "send", reminder }) }]
             : []),
           ...(canSkip(reminder)
-            ? [{ key: "skip", label: "Skip", onPress: () => setOpen({ modal: "skip", reminder }) }]
+            ? [{ key: "skip", label: "Skip", icon: <LuSkipForward />, onPress: () => setOpen({ modal: "skip", reminder }) }]
             : []),
-        ] as { key: string; label: string; onPress: () => void }[];
+        ];
         return actions.length ? <RowActions actions={actions} /> : null;
       }
       default:
@@ -231,7 +233,7 @@ export default function Reminders() {
   const close = () => setOpen(null);
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <AlertBanner
         message={`Reminders go out ${REMINDER_DAYS_BEFORE_DUE} days before an invoice's due date: shippers get an email to their accounts department, and each carrier bill raises an alert to MGC's accounts team. Demo data — nothing is sent yet.`}
       />
@@ -243,8 +245,7 @@ export default function Reminders() {
         onSelectionChange={(key) => setView(key as View)}
         // As on Payments: capped, so the tab list scrolls on a phone.
         classNames={{
-          base: "max-w-full mt-4",
-          tabList: "mb-4",
+          base: "max-w-full",
           cursor: "bg-base-primary",
         }}
       >
@@ -288,7 +289,7 @@ export default function Reminders() {
           )}
         </div>
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         <BaseTable
           ariaLabel="Payment reminders"
           columns={columns}
@@ -305,7 +306,7 @@ export default function Reminders() {
       </Card>
       {open?.modal === "send" && <SendNowModal reminder={open.reminder} onClose={close} />}
       {open?.modal === "skip" && <SkipModal reminder={open.reminder} onClose={close} />}
-    </>
+    </div>
   );
 }
 

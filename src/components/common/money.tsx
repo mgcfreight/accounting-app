@@ -21,5 +21,8 @@ export default function Money({
       </span>
     );
   }
-  return <span className={`whitespace-nowrap ${className}`}>{text}</span>;
+  // tabular-nums: every digit the same width, so amounts in a column line up.
+  return (
+    <span className={`whitespace-nowrap tabular-nums ${className}`}>{text}</span>
+  );
 }

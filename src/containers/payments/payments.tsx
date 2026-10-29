@@ -13,7 +13,7 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
-import { SearchNormalSm } from "@/components/icons";
+import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
 import { useCan } from "@/components/providers/user-provider";
 import { useClientTable } from "@/hooks";
@@ -44,11 +44,11 @@ const columns: BaseTableColumn[] = [
   { key: "method", label: "Method" },
   { key: "reference", label: "Reference" },
   { key: "paidOn", label: "Paid On", sortable: true, sortType: "date" },
-  { key: "amount", label: "Amount", sortable: true, sortType: "money" },
-  { key: "unapplied", label: "Unapplied", sortType: "money" },
+  { key: "amount", label: "Amount", sortable: true, sortType: "money", align: "end" },
+  { key: "unapplied", label: "Unapplied", sortType: "money", align: "end" },
   { key: "match", label: "Match" },
   { key: "matchedBy", label: "How Matched" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const methodOptions = [
@@ -196,6 +196,7 @@ export default function Payments() {
                     {
                       key: "view",
                       label: "View allocation",
+                      icon: <EyeIcon />,
                       onPress: () => setOpen({ modal: "view", payment }),
                     },
                   ]
@@ -210,7 +211,7 @@ export default function Payments() {
   const close = () => setOpen(null);
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <Tabs
         aria-label="Payments view"
         color="primary"
@@ -221,7 +222,6 @@ export default function Payments() {
         // page on a phone; capped, the tab list scrolls instead.
         classNames={{
           base: "max-w-full",
-          tabList: "mb-4",
           cursor: "bg-base-primary",
         }}
       >
@@ -262,7 +262,7 @@ export default function Payments() {
               disallowEmptySelection
             />
           </FilterBar>
-          <Card className="mt-4">
+          <Card>
             <BaseTable
               ariaLabel="Payments"
               columns={columns}
@@ -282,6 +282,6 @@ export default function Payments() {
       {open?.modal === "allocate" && <AllocateModal payment={open.payment} onClose={close} />}
       {open?.modal === "view" && <ViewAllocationModal payment={open.payment} onClose={close} />}
       {open?.modal === "credit" && <UnappliedCreditModal payment={open.payment} onClose={close} />}
-    </>
+    </div>
   );
 }

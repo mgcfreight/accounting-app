@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { LuLogOut } from "react-icons/lu";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
@@ -135,7 +136,7 @@ export default function SessionReport() {
     { key: "end", label: "Ended / Expires" },
     { key: "duration", label: "Duration" },
     { key: "status", label: "Status" },
-    { key: "actions", label: "" },
+    { key: "actions", label: "Actions", align: "center" },
   ];
 
   const renderCell = (row: UserSession, key: string) => {
@@ -196,6 +197,7 @@ export default function SessionReport() {
               {
                 key: "end",
                 label: row.isCurrent ? "End (signs you out)" : "End session",
+                icon: <LuLogOut />,
                 danger: true,
                 onPress: () => setEnding(row),
               },
@@ -221,7 +223,7 @@ export default function SessionReport() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         {isAdmin && (
           <BaseSelect
@@ -262,12 +264,13 @@ export default function SessionReport() {
           }
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<UserSession>
           ariaLabel="Sessions"
           columns={columns}
           data={sessions.isError ? [] : (sessions.data?.items ?? [])}
           loading={sessions.isPending}
+          refreshing={sessions.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(sessions.data?.meta)}
@@ -294,6 +297,6 @@ export default function SessionReport() {
           </p>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

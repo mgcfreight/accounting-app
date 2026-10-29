@@ -34,8 +34,8 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "party", label: "Party" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 
@@ -162,7 +162,7 @@ export default function ShipmentDetail() {
       <BaseCardWrapper heading="References">
         <div className="text-sm text-[#343A40] space-y-1">
           <Field label="Invoice number">{data.invoiceSequence ?? "Not taken"}</Field>
-          <Field label="TMS customer invoice code">
+          <Field label="TMS shipper invoice code">
             {data.tmsCustomerInvoiceCode ?? "Not set"}
           </Field>
           {data.carrierPartyId && (
@@ -184,7 +184,7 @@ export default function ShipmentDetail() {
           direction={InvoiceDirection.Receivable}
           shipment={data}
           parties={parties}
-          heading="Customer Invoice"
+          heading="Shipper Invoice"
         />
       )}
       {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (
@@ -222,10 +222,7 @@ function ShipmentInvoices({
   });
 
   return (
-    <BaseCardWrapper
-      heading={heading}
-      className={direction === InvoiceDirection.Payable || !shipment.carrierPartyId ? "mb-5" : ""}
-    >
+    <BaseCardWrapper heading={heading}>
       {invoices.isError ? (
         <ErrorState
           message="We couldn't load the invoices. Please try again."

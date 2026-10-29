@@ -27,7 +27,7 @@ const columns: BaseTableColumn[] = [
   { key: "effectiveFrom", label: "From" },
   { key: "effectiveTo", label: "To" },
   { key: "isRecoverable", label: "ITC" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 type NewRate = {
@@ -102,9 +102,9 @@ export default function TaxRates() {
   );
 
   return (
-    <div className="border-t-1 py-6">
+    <div className="border-t-1 py-6 flex flex-col gap-4">
       <AlertBanner message="Verify every rate with MGC's accountant before go-live. Whether provincial PST applies to freight is still to be confirmed." />
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
+      <div className="flex flex-wrap justify-between items-center gap-4">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={showHistory} onChange={(e) => setShowHistory(e.target.checked)} />
           Show ended rates

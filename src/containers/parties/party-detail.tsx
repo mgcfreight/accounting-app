@@ -38,8 +38,8 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "reference", label: "Load Ref" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 
@@ -256,7 +256,7 @@ function PartyInvoices({ party }: { party: PartyView }) {
   });
 
   return (
-    <BaseCardWrapper heading="Invoices" className="mb-5">
+    <BaseCardWrapper heading="Invoices">
       {invoices.isError ? (
         <ErrorState
           message="We couldn't load the invoices. Please try again."
@@ -268,6 +268,7 @@ function PartyInvoices({ party }: { party: PartyView }) {
           columns={invoiceColumns}
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
+          refreshing={invoices.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
           meta={paging.tableMeta(invoices.data?.meta)}

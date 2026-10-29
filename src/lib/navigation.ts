@@ -72,8 +72,10 @@ export const MENU_ITEMS: MenuItem[] = [
 ];
 
 // The items a user may open, by the access rules in routes.config. A group
-// shows while any of its children does. Hiding an item is presentation only —
-// the API enforces access on every endpoint.
+// shows while any of its children does, and a group left with one child is
+// shown as that child, under the group's icon, so it opens in one click
+// rather than two. Hiding an item is presentation only — the API enforces
+// access on every endpoint.
 export const menuForUser = (
   me: Pick<Me, "isAdmin" | "permissions">,
   items: MenuItem[] = MENU_ITEMS
@@ -81,5 +83,6 @@ export const menuForUser = (
   items.flatMap((item) => {
     if (!item.children) return canAccessRoute(item.route, me) ? [item] : [];
     const children = menuForUser(me, item.children);
+    if (children.length === 1) return [{ ...children[0], icon: item.icon }];
     return children.length ? [{ ...item, children }] : [];
   });

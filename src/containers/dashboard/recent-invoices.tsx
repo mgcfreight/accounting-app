@@ -9,8 +9,8 @@ const columns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
   { key: "party", label: "Shipper" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
 ];
 

@@ -90,10 +90,10 @@ const columnsFor = (direction: InvoiceDirection): BaseTableColumn[] => [
     : []),
   { key: "invoiceDate", label: "Invoice Date", sortable: true, sortKey: InvoiceSortBy.InvoiceDate },
   { key: "dueDate", label: "Due Date", sortable: true, sortKey: InvoiceSortBy.DueDate },
-  { key: "total", label: "Total", sortable: true, sortKey: InvoiceSortBy.Total },
-  { key: "balance", label: "Balance", sortable: true, sortKey: InvoiceSortBy.BalanceDue },
+  { key: "total", label: "Total", sortable: true, sortKey: InvoiceSortBy.Total, align: "end" },
+  { key: "balance", label: "Balance", sortable: true, sortKey: InvoiceSortBy.BalanceDue, align: "end" },
   { key: "status", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const filterTrigger = { trigger: "bg-white border-none h-12 rounded-lg" };
@@ -175,7 +175,7 @@ export default function InvoiceList({
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -210,7 +210,7 @@ export default function InvoiceList({
           disallowEmptySelection
         />
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         {/* A failed refetch keeps the last page beside the error; amounts
             that may be out of date are not shown as current. */}
         {invoices.isError ? (
@@ -224,6 +224,7 @@ export default function InvoiceList({
             columns={columnsFor(direction)}
             data={rows}
             loading={invoices.isPending}
+            refreshing={invoices.isPlaceholderData}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(invoices.data?.meta)}
@@ -243,6 +244,6 @@ export default function InvoiceList({
           onClose={() => setActive(null)}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -177,7 +177,7 @@ export default function ShipmentForm() {
   return (
     <form
       noValidate
-      className="grid grid-cols-1 gap-6 mb-5"
+      className="grid grid-cols-1 gap-6"
       onSubmit={handleSubmit((values) => save.mutate(values))}
     >
       <div className="flex items-center gap-4">
@@ -256,7 +256,7 @@ export default function ShipmentForm() {
           <BaseInput
             name="tmsCustomerInvoiceCode"
             control={control}
-            label="TMS customer invoice code"
+            label="TMS shipper invoice code"
             placeholder="EGP9wr"
             description="6 letters or digits. Without it the invoice waits for a number."
             rules={tmsCodeRules}
@@ -311,7 +311,7 @@ export default function ShipmentForm() {
         </p>
       </BaseCardWrapper>
 
-      <BaseCardWrapper heading="Customer Charges">
+      <BaseCardWrapper heading="Shipper Charges">
         <p className="text-xs text-content-5 mb-3">
           What the shipper is charged, before tax, in the currency of their
           agreement.

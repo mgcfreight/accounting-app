@@ -38,7 +38,7 @@ const columns: BaseTableColumn[] = [
   { key: "sell", label: "Sell" },
   { key: "buy", label: "Buy" },
   { key: "source", label: "Source" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 // Shipments from the TMS (§9), from the API's /shipment routes. Entering
@@ -144,7 +144,7 @@ export default function ShipmentList() {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -155,7 +155,7 @@ export default function ShipmentList() {
           endContent={<SearchNormalSm />}
         />
       </FilterBar>
-      <Card className="mt-4">
+      <Card>
         {shipments.isError ? (
           <ErrorState
             message="We couldn't load the shipments. Please try again."
@@ -167,6 +167,7 @@ export default function ShipmentList() {
             columns={columns}
             data={items}
             loading={shipments.isPending}
+            refreshing={shipments.isPlaceholderData}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(shipments.data?.meta)}
@@ -176,6 +177,6 @@ export default function ShipmentList() {
           />
         )}
       </Card>
-    </>
+    </div>
   );
 }

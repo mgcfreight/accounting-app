@@ -1,5 +1,5 @@
 import { ReactNode, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useLocalStorage } from "@/hooks";
 import { LOGIN_PATH } from "@/lib/constants";
 import { Me } from "@/lib/interfaces";
@@ -18,7 +18,7 @@ import {
   User,
 } from "../icons";
 import { useUser } from "../providers/user-provider";
-import SidebarItem from "./sidebar-item";
+import SidebarItem, { isItemActive } from "./sidebar-item";
 
 const menuIcons: Record<MenuIconName, ReactNode> = {
   dashboard: <DashboardIcon />,
@@ -58,6 +58,17 @@ export default function Sidebar({
   const { signOut } = useUser();
   const [openGroup, setOpenGroup] = useLocalStorage("selectedMenu", "");
   const items = menuForUser(user);
+  const { pathname } = useLocation();
+
+  // Open the group holding the current page, so the page you are on is
+  // visible in the menu without first opening its group — also when it was
+  // reached from a link rather than the menu.
+  const activeGroup = items
+    .find((item) => item.children && isItemActive(item, pathname))
+    ?.label.toLowerCase();
+  useEffect(() => {
+    if (activeGroup) setOpenGroup(activeGroup);
+  }, [activeGroup, setOpenGroup]);
 
   useEffect(() => {
     if (collapsed) return;
@@ -134,7 +145,7 @@ export default function Sidebar({
           <li>
             <button
               type="button"
-              className="rounded-2xl group relative h-14 flex items-center gap-2 px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] w-40 whitespace-nowrap"
+              className="rounded-2xl group relative h-14 flex items-center gap-2 px-4 py-2 text-xs text-white uppercase duration-300 ease-in-out hover:bg-[#304573] w-40 whitespace-nowrap focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-2"
               // Ends the session on the API (which clears its cookies), then
               // the user here.
               onClick={async () => {
