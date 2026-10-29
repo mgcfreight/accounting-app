@@ -15,6 +15,7 @@ export * from "./activity";
 export * from "./auth";
 export * from "./invoices";
 export * from "./parties";
+export * from "./payments";
 export { queryClient } from "./query-client";
 export * from "./roles";
 export * from "./settings";

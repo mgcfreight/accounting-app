@@ -1,0 +1,29 @@
+{
+  "message": "Success",
+  "data": {
+    "paymentId": "spy_aD4xOHTES8",
+    "currency": "CAD",
+    "unapplied": "1500.00",
+    "allocations": [
+      {
+        "invoiceId": "csi_cNKZUzpMMi",
+        "invoiceNumber": "sin_EGP9wr_31",
+        "dueDate": "2026-10-19",
+        "invoiceBalanceBefore": "1130.00",
+        "amount": "1130.00",
+        "invoiceBalanceAfter": "0.00",
+        "rule": "OLDEST_OPEN"
+      },
+      {
+        "invoiceId": "csi_eAuNeRxpgR",
+        "invoiceNumber": "sin_EGP9wr_32",
+        "dueDate": "2026-11-18",
+        "invoiceBalanceBefore": "1130.00",
+        "amount": "370.00",
+        "invoiceBalanceAfter": "760.00",
+        "rule": "OLDEST_OPEN"
+      }
+    ],
+    "leftOver": "0.00"
+  }
+}

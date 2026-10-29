@@ -1,13 +1,19 @@
 import { z } from "zod";
 import {
   AdjustmentMode,
+  AllocationRule,
   BillingTrigger,
   CarrierInvoiceStatus,
   Currency,
   CustomerInvoiceStatus,
+  FxRateSource,
   InvoiceKind,
   InvoiceReviewFlag,
+  MatchStatus,
   PartyType,
+  PaymentDirection,
+  PaymentMethod,
+  PaymentRecordStatus,
   PaymentStatus,
   PaymentTerms,
   Permission,
@@ -22,6 +28,8 @@ import {
 import {
   AccountingPeriod,
   AgreementView,
+  Allocation,
+  AllocationSuggestion,
   AuditEvent,
   CarrierInvoiceView,
   ChargeType,
@@ -35,11 +43,13 @@ import {
   NoticeSettings,
   Paginated,
   PartyView,
+  Payment,
   PermissionCatalog,
   Role,
   RoleRef,
   SettingsEditor,
   ShipmentView,
+  SuggestedAllocation,
   TaxRate,
   User,
   UserRef,
@@ -463,6 +473,7 @@ const invoiceBaseFields = {
   createdAt: timestamp,
   updatedAt: timestamp,
   lines: z.array(invoiceLineSchema).optional(),
+  disputed: z.boolean().optional(),
 };
 
 export const customerInvoiceSchema: z.ZodType<CustomerInvoiceView> = z.object({
@@ -489,6 +500,66 @@ export const carrierInvoiceSchema: z.ZodType<CarrierInvoiceView> = z.object({
   approvedById: z.string().nullable(),
   holdReason: z.string().nullable(),
 });
+
+const suggestedAllocationSchema: z.ZodType<SuggestedAllocation> = z.object({
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  dueDate: calendarDate.nullable(),
+  invoiceBalanceBefore: money,
+  amount: money,
+  invoiceBalanceAfter: money,
+  rule: z.enum(AllocationRule),
+});
+
+const allocationSchema: z.ZodType<Allocation> = z.object({
+  id: z.string(),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  creditNoteId: z.string().nullable(),
+  amount: money,
+  allocatedOn: calendarDate,
+  invoiceBalanceBefore: money.nullable(),
+  invoiceBalanceAfter: money.nullable(),
+  rule: z.enum(AllocationRule),
+  reversedAt: timestamp.nullable(),
+  reversedById: z.string().nullable(),
+  createdAt: timestamp,
+});
+
+export const paymentSchema: z.ZodType<Payment> = z.object({
+  id: z.string(),
+  number: z.string(),
+  direction: z.enum(PaymentDirection),
+  partyId: z.string(),
+  partyName: z.string().nullable(),
+  paidOn: calendarDate,
+  amount: money,
+  currency: z.enum(Currency),
+  fxRateToCad: decimalText.nullable(),
+  fxRateSource: z.enum(FxRateSource).nullable(),
+  method: z.enum(PaymentMethod),
+  reference: z.string().nullable(),
+  unapplied: money,
+  source: z.enum(["MANUAL", "MGC_STRIPE"]),
+  match: z.enum(MatchStatus),
+  status: z.enum(PaymentRecordStatus),
+  reversedAt: timestamp.nullable(),
+  reversalReason: z.string().nullable(),
+  notes: z.string().nullable(),
+  version: z.number().int().positive(),
+  createdAt: timestamp,
+  suggested: z.array(suggestedAllocationSchema),
+  allocations: z.array(allocationSchema),
+});
+
+export const allocationSuggestionSchema: z.ZodType<AllocationSuggestion> =
+  z.object({
+    paymentId: z.string(),
+    currency: z.enum(Currency),
+    unapplied: money,
+    allocations: z.array(suggestedAllocationSchema),
+    leftOver: money,
+  });
 
 // POST /shipment: the shipment and the invoices it made.
 export const createdShipmentSchema = z.object({

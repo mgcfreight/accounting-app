@@ -6,6 +6,7 @@ import {
   Currency,
   CustomerInvoiceStatus,
   DisputeStatus,
+  FxRateSource,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceKind,
@@ -15,6 +16,7 @@ import {
   PartyType,
   PaymentDirection,
   PaymentMethod,
+  PaymentRecordStatus,
   PaymentStatus,
   PaymentTerms,
   ReminderChannel,
@@ -229,24 +231,77 @@ export interface Invoice {
   history: HistoryEntry[];
 }
 
+// A payment as the Accounts API returns it (GET /payment/all,
+// /payment/customer|carrier). Amounts are 2-decimal strings in `currency`.
 export interface Payment {
   id: string;
+  // SPAY-<n> (money in) or CPAY-<n> (money out).
   number: string;
   direction: PaymentDirection;
-  partyName: string;
-  method: PaymentMethod;
-  source: "MANUAL" | "MGC_STRIPE";
-  reference: string;
+  partyId: string;
+  partyName: string | null;
+  // The day the money moved.
   paidOn: string;
-  currency: Currency;
   amount: string;
+  currency: Currency;
+  // USD: null until the Bank of Canada publishes that day's rate.
+  fxRateToCad: string | null;
+  fxRateSource: FxRateSource | null;
+  method: PaymentMethod;
+  reference: string | null;
+  // Not yet allocated: credit on the party's account.
   unapplied: string;
+  source: "MANUAL" | "MGC_STRIPE";
   match: MatchStatus;
-  // Where the payment went. Empty while unmatched.
+  status: PaymentRecordStatus;
+  reversedAt: string | null;
+  reversalReason: string | null;
+  notes: string | null;
+  version: number;
+  createdAt: string;
+  // What matching proposes for the unapplied money, for staff to confirm.
+  suggested: SuggestedAllocation[];
+  // Where the money went: newest first, reversed ones included.
   allocations: Allocation[];
-  // For an unmatched payment: what auto-matching proposes, for staff to
-  // confirm. Empty when it found nothing.
-  suggested: Allocation[];
+}
+
+// Part of a payment applied to one invoice, and how it was matched.
+export interface Allocation {
+  id: string;
+  invoiceId: string;
+  // Null until the invoice has its TMS code.
+  invoiceNumber: string | null;
+  creditNoteId: string | null;
+  amount: string;
+  allocatedOn: string;
+  // Null on rows from before these were kept.
+  invoiceBalanceBefore: string | null;
+  invoiceBalanceAfter: string | null;
+  rule: AllocationRule;
+  reversedAt: string | null;
+  reversedById: string | null;
+  createdAt: string;
+}
+
+// One line of the matching suggestion. Nothing is saved until staff confirm.
+export interface SuggestedAllocation {
+  invoiceId: string;
+  invoiceNumber: string | null;
+  dueDate: string | null;
+  invoiceBalanceBefore: string;
+  amount: string;
+  invoiceBalanceAfter: string;
+  rule: AllocationRule;
+}
+
+// GET .../suggestion: how matching would spread what is unapplied.
+export interface AllocationSuggestion {
+  paymentId: string;
+  currency: Currency;
+  unapplied: string;
+  allocations: SuggestedAllocation[];
+  // What would stay on the payment as unapplied credit.
+  leftOver: string;
 }
 
 export interface ReviewItem {
@@ -536,6 +591,8 @@ export interface InvoiceViewBase extends ReferenceNumbers {
   updatedAt: string;
   // Only from the single-invoice endpoints.
   lines?: InvoiceLineView[];
+  // An open dispute on it. Absent from an API without disputes.
+  disputed?: boolean;
 }
 
 // `billTo.name` is the customer's name as invoiced.
@@ -655,14 +712,6 @@ export interface Reminder {
   note: string | null;
 }
 
-// Part of a payment applied to one invoice, and how it was matched.
-export interface Allocation {
-  invoiceNumber: string;
-  invoiceBalanceBefore: string;
-  amount: string;
-  invoiceBalanceAfter: string;
-  rule: AllocationRule;
-}
 
 export interface Installment {
   number: number;

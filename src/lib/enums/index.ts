@@ -117,13 +117,36 @@ export enum PaymentDirection {
   Out = "OUT",
 }
 
+// The Accounts API's methods.
 export enum PaymentMethod {
   Card = "CARD",
   ETransfer = "E_TRANSFER",
   Eft = "EFT",
+  Ach = "ACH",
   Cheque = "CHEQUE",
   Wire = "WIRE",
   Cash = "CASH",
+  Other = "OTHER",
+}
+
+// A recorded payment stays POSTED until it is reversed (bounced cheque,
+// wrong party); a reversed one keeps its record.
+export enum PaymentRecordStatus {
+  Posted = "POSTED",
+  Reversed = "REVERSED",
+}
+
+// Where a USD rate to CAD came from: the Bank of Canada's daily rate, or
+// typed by staff.
+export enum FxRateSource {
+  BankOfCanada = "BANK_OF_CANADA",
+  Manual = "MANUAL",
+}
+
+export enum PaymentSortBy {
+  PaymentDate = "paymentDate",
+  Amount = "amount",
+  Unapplied = "unappliedAmount",
 }
 
 export enum MatchStatus {
