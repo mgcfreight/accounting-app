@@ -1,4 +1,4 @@
-import { Fragment, ReactNode, useEffect, useRef } from "react";
+import { FocusEvent, Fragment, ReactNode, useEffect, useRef } from "react";
 import {
   LuBuilding2,
   LuChartColumn,
@@ -66,6 +66,7 @@ export default function Sidebar({
   const [pinned, setPinned] = useLocalStorage("sidebarPinned", false);
   const drawer = useMediaQuery(DRAWER_QUERY);
   const hoverTimer = useRef<number | undefined>(undefined);
+  const asideRef = useRef<HTMLElement>(null);
   const items = menuForUser(user);
   const { pathname } = useLocation();
 
@@ -112,9 +113,24 @@ export default function Sidebar({
     if (!drawer && !pinned) setCollapsed(true);
   };
 
+  // Keyboard focus opens the unpinned rail as hover does, so its groups and
+  // the pin button can be reached without a pointer. It closes once focus
+  // leaves the rail, unless the pointer is still over it.
+  const onFocus = () => {
+    if (!drawer && !pinned) setCollapsed(false);
+  };
+  const onBlur = (event: FocusEvent<HTMLElement>) => {
+    if (drawer || pinned) return;
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    if (!event.currentTarget.matches(":hover")) setCollapsed(true);
+  };
+
   const togglePin = () => {
-    // Unpinning under the pointer leaves it open until the pointer leaves.
-    if (pinned) setCollapsed(false);
+    // Pinning: the pin keeps the rail open, so mark it collapsed underneath —
+    // otherwise dropping below xl later opens the drawer unasked. Unpinning:
+    // stay open only while the pointer is over the rail, not when unpinned
+    // from the keyboard with the pointer elsewhere.
+    setCollapsed(pinned ? !asideRef.current?.matches(":hover") : true);
     setPinned(!pinned);
   };
 
@@ -129,13 +145,18 @@ export default function Sidebar({
         }`}
       />
       <aside
+        ref={asideRef}
         // `invisible` while collapsed keeps the hidden drawer's links out of
         // the tab order; the rail is visible again from xl up.
-        className={`fixed left-0 top-0 h-full z-100 flex flex-col overflow-hidden bg-linear-to-b from-base-primary to-base-primary-300 transition-[width,visibility,box-shadow] duration-300 ease-out ${
+        // z-100 covers the drawer's backdrop; from xl up the rail stays below
+        // HeroUI's modals and popovers (z-50) but above the page.
+        className={`fixed left-0 top-0 h-full z-100 xl:z-40 flex flex-col overflow-hidden bg-linear-to-b from-base-primary to-base-primary-300 transition-[width,visibility,box-shadow] duration-300 ease-out ${
           expanded ? "w-64" : "w-0 invisible xl:w-18 xl:visible"
         } ${expanded && !pinnedRail ? "shadow-2xl shadow-base-primary-900/40" : ""}`}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+        onFocus={onFocus}
+        onBlur={onBlur}
       >
         <div className="relative flex items-center h-20 px-4 shrink-0 border-b border-white/10">
           {/* The monogram on the rail, the full logo when open. */}
@@ -165,9 +186,11 @@ export default function Sidebar({
           {expanded && (
             <button
               type="button"
-              aria-label={drawer ? "Close menu" : pinned ? "Unpin menu" : "Pin menu open"}
+              // A fixed label with aria-pressed, so a screen reader announces
+              // "Pin menu, pressed" rather than "Unpin menu, pressed".
+              aria-label={drawer ? "Close menu" : "Pin menu"}
               aria-pressed={drawer ? undefined : pinned}
-              title={drawer ? undefined : pinned ? "Unpin menu" : "Keep menu open"}
+              title={drawer ? undefined : "Pin menu"}
               onClick={drawer ? () => setCollapsed(true) : togglePin}
               className="ml-auto size-8 grid place-items-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-2 focus-visible:outline-white"
             >
