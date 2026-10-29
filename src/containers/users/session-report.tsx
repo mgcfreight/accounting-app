@@ -14,6 +14,7 @@ import {
   AlertBanner,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   FilterBar,
   FormModal,
   PartyAvatar,
@@ -80,7 +81,7 @@ export default function SessionReport() {
   const isAdmin = me.isAdmin;
   const [searchParams] = useSearchParams();
   const linkedUser = searchParams.get("userId") ?? "";
-  const { control } = useForm<Filters>({
+  const { control, reset } = useForm<Filters>({
     defaultValues: {
       userId: isAdmin && USER_ID_SHAPE.test(linkedUser) ? linkedUser : ALL,
       status: ALL,
@@ -89,6 +90,9 @@ export default function SessionReport() {
   const userId = useWatch({ control, name: "userId" });
   const status = useWatch({ control, name: "status" });
   const paging = useServerPaging(JSON.stringify([userId, status]));
+  // Measured against "everyone, any status" rather than the form's defaults:
+  // a link from a user's row starts filtered to them, and clearing shows all.
+  const filtered = userId !== ALL || status !== ALL;
 
   // The user picker, for Admins only (other roles can't list users).
   const users = useQuery({
@@ -245,6 +249,10 @@ export default function SessionReport() {
           classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
           aria-label="Status"
           disallowEmptySelection
+        />
+        <ClearFiltersButton
+          active={filtered}
+          onClear={() => reset({ userId: ALL, status: ALL })}
         />
         {!isAdmin && (
           <p className="text-sm text-content-6">Showing your own sign-ins.</p>

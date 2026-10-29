@@ -5,6 +5,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   DirectionChip,
   FilterBar,
   MatchStatusChip,
@@ -62,7 +63,11 @@ export default function Payments() {
   const [view, setView] = useState<View>("all");
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<OpenModal | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", method: "ALL" },
   });
   const search = useWatch({ control, name: "search" }).trim().toLowerCase();
@@ -261,6 +266,7 @@ export default function Payments() {
               aria-label="Method"
               disallowEmptySelection
             />
+            <ClearFiltersButton active={isDirty} onClear={() => reset()} />
           </FilterBar>
           <Card>
             <BaseTable

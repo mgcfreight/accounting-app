@@ -7,6 +7,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   ErrorState,
   FilterBar,
   RowActions,
@@ -114,7 +115,11 @@ export default function InvoiceList({
     invoice: InvoiceView;
   } | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", status: ALL, payment: ALL },
   });
   const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
@@ -209,6 +214,7 @@ export default function InvoiceList({
           aria-label="Payment"
           disallowEmptySelection
         />
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       <Card>
         {/* A failed refetch keeps the last page beside the error; amounts
