@@ -23,8 +23,9 @@ tax rates, charge types), Shippers and Carriers (with agreements),
 Shipments, Shipper and Carrier Invoices (with versions), Payments (record,
 allocate, reverse), the Dashboard, Statements (with their PDF and Excel
 downloads, via `getFile` and `useFileDownload`), Reminders (send now,
-skip), Disputes (Needs Review, and "Flag as disputed" on an invoice) and
-Reports (with the API's Excel and PDF of each) run on the Accounts API.
+skip), Disputes (Needs Review, and "Flag as disputed" on an invoice),
+Reports (with the API's Excel and PDF of each) and the invoice page's PDF,
+email, void, documents and write-offs run on the Accounts API.
 Installment plans, Needs Review's MGC changes (they come with the TMS sync)
 and Sync Status still read from `src/lib/mock/`, and their actions (new
 plan, the accountant export) show a "demo only" toast.

@@ -26,9 +26,11 @@ import {
   InvoiceReviewFlag,
 } from "@/lib/enums";
 import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
-import { addDays, formatDate, formatDateTime, humanize } from "@/lib/utils";
+import { useFileDownload } from "@/hooks";
+import { formatDate, formatDateTime, humanize } from "@/lib/utils";
 import {
   ApiError,
+  downloadInvoicePdf,
   errorMessage,
   getCarrierInvoice,
   getCarrierInvoiceVersions,
@@ -37,6 +39,7 @@ import {
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
+import { DocumentsCard, WriteOffsCard } from "./invoice-documents";
 import InvoiceExtraActionModal, {
   canBeVoided,
   CancelledLoadBanner,
@@ -61,9 +64,6 @@ import {
   partyOf,
   referencesOf,
 } from "./invoice-view";
-
-// Reminders go out this many days before the due date (the requirement).
-const REMINDER_DAYS_BEFORE_DUE = 7;
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -107,6 +107,13 @@ export default function InvoiceDetail({
     enabled: !!id,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
+  const pdf = useFileDownload((target: InvoiceView) =>
+    downloadInvoicePdf(
+      direction,
+      target.id,
+      `${invoiceNumberOf(target) ?? "invoice"}.pdf`
+    )
+  );
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
@@ -131,17 +138,15 @@ export default function InvoiceDetail({
   const number = invoiceNumberOf(data);
   const party = partyOf(data, carriers);
   const actions = availableActions(data, can);
-  const extraActions = extraActionsFor(data, can, setExtraAction);
+  const extraActions = extraActionsFor(data, can, setExtraAction, () =>
+    pdf.mutate(data)
+  );
   const canVoid = extraActions.some((item) => item.key === "void");
   const references = referencesOf(data);
   // The TMS cancelled the load: until the invoice is void, point to voiding.
   const loadCancelled =
     data.reviewFlags.includes(InvoiceReviewFlag.TmsCancelled) &&
     canBeVoided(data);
-  const remindOn =
-    isOwed(data) && data.dueDate
-      ? addDays(data.dueDate, -REMINDER_DAYS_BEFORE_DUE)
-      : null;
   const replacedBy = isSuperseded(data)
     ? versions.data?.find((version) => version.parentInvoiceId === data.id)
     : undefined;
@@ -238,23 +243,18 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
-            {remindOn && (
-              <Field label="Payment reminder">
-                {formatDate(remindOn)} ({REMINDER_DAYS_BEFORE_DUE} days before
-                due
+            {isOwed(data) && data.dueDate && (
+              <Field label="Payment reminders">
                 {isReceivable
-                  ? ", emailed to the shipper's accounts department"
-                  : ", an alert to the accounts team"}
-                ).{" "}
-                <span className="text-content-5">
-                  Not sent yet: reminders aren&apos;t built.{" "}
-                  <Link
-                    to="/reminders/"
-                    className="text-base-primary-300 hover:underline"
-                  >
-                    All reminders
-                  </Link>
-                </span>
+                  ? "Emailed to the shipper before the due date, and again if overdue"
+                  : "An alert to the accounts team before the due date"}
+                , on the days set in Settings.{" "}
+                <Link
+                  to="/reminders/"
+                  className="text-base-primary-300 hover:underline"
+                >
+                  All reminders
+                </Link>
               </Field>
             )}
             {/* Carrier invoices print no tax (decided 2026-10-27). */}
@@ -277,6 +277,10 @@ export default function InvoiceDetail({
       </div>
 
       <ChargesCard invoice={data} />
+
+      <WriteOffsCard invoice={data} />
+
+      <DocumentsCard invoice={data} />
 
       {versions.isError ? (
         <BaseCardWrapper heading="Versions">

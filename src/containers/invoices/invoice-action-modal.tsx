@@ -611,7 +611,7 @@ function ReviseInvoiceModal({
       </p>
       <p className="text-xs text-content-5">
         {isCustomer
-          ? "Emailing isn't built yet: the new version is issued but not sent."
+          ? "The new version is issued but not emailed: send it from More › Email to shipper."
           : "The new version has to be approved again before it can be paid."}
       </p>
       <ChargeLines

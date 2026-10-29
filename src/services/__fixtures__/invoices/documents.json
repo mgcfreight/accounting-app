@@ -1,0 +1,15 @@
+{
+  "message": "Success",
+  "data": [
+    {
+      "id": "doc_GWu6FOoeOl",
+      "kind": "POD",
+      "source": "UPLOAD",
+      "fileName": "demo-pod.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 191,
+      "uploadedBy": "Cap Inv",
+      "createdAt": "2026-10-29T19:49:49.857Z"
+    }
+  ]
+}

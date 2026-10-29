@@ -7,6 +7,8 @@ import {
   CustomerInvoiceStatus,
   DisputeOutcome,
   DisputeStatus,
+  DocumentKind,
+  DocumentSource,
   FxRateSource,
   InstallmentStatus,
   InvoiceDirection,
@@ -706,6 +708,59 @@ export interface MonthlyPnlReport {
   period: ReportPeriod;
   months: MonthlyPnl[];
   total: MonthlyPnl;
+}
+
+// GET /invoice/{side}/documents: a file on an invoice.
+export interface InvoiceDocument {
+  id: string;
+  kind: DocumentKind;
+  source: DocumentSource;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy: string | null;
+  createdAt: string;
+}
+
+// POST /invoice/customer/email: who it went to.
+export interface InvoiceEmailed {
+  emailId: string;
+  to: string[];
+  cc: string[];
+  sentAt: string;
+}
+
+// The GST/HST share of a write-off, per tax.
+export interface WriteOffTax {
+  code: string;
+  jurisdiction: string;
+  rate_percent: string;
+  tax_relief: string;
+}
+
+// A shipper invoice's balance, or part of it, written off as bad debt.
+// Amounts are tax included.
+export interface WriteOff {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  customerId: string;
+  customerName: string | null;
+  currency: Currency;
+  amount: string;
+  // The GST/HST share, claimable as bad-debt relief.
+  taxRelief: string;
+  // amount - taxRelief: the bad-debt expense.
+  badDebt: string;
+  taxes: WriteOffTax[];
+  writtenOffOn: string;
+  reason: string;
+  disputeId: string | null;
+  createdById: string;
+  createdAt: string;
+  reversedAt: string | null;
+  reversedById: string | null;
+  reversalReason: string | null;
 }
 
 // What a CAD figure had to leave out: USD records without a rate.

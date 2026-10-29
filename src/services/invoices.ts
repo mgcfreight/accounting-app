@@ -105,6 +105,15 @@ type Revision = {
 export type CustomerRevision = Revision & { acknowledgeReview?: boolean };
 export type CarrierRevision = Revision & { carrierInvoiceNumber?: string };
 
+// Void for a cancelled load. An optional cancellation fee, before tax, is
+// billed on a new draft invoice with the next letter (230 -> 230a).
+export type VoidInvoice = {
+  version: number;
+  // 3-255 characters.
+  reason: string;
+  cancellationFee?: string;
+};
+
 // The API rejects empty query values, so leave out unset ones.
 const listQuery = (params: InvoiceListParams) => ({
   page: params.page,
@@ -195,6 +204,12 @@ export const reviseCustomerInvoice = (
     .post("/invoice/customer/revise", revision, { params: { invoiceId } })
     .then((res) => parseBody(customerInvoice, res.data).data);
 
+// A draft or issued invoice nothing has been applied to.
+export const voidCustomerInvoice = (invoiceId: string, body: VoidInvoice) =>
+  apiClient
+    .put("/invoice/customer/void", body, { params: { invoiceId } })
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
 // -------------------------------------------------------------- carrier
 
 export const listCarrierInvoices = (
@@ -264,4 +279,10 @@ export const reviseCarrierInvoice = (
 ) =>
   apiClient
     .post("/invoice/carrier/revise", revision, { params: { invoiceId } })
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// A carrier invoice nothing has been paid on.
+export const voidCarrierInvoice = (invoiceId: string, body: VoidInvoice) =>
+  apiClient
+    .put("/invoice/carrier/void", body, { params: { invoiceId } })
     .then((res) => parseBody(carrierInvoice, res.data).data);

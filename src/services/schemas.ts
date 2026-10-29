@@ -8,6 +8,8 @@ import {
   CustomerInvoiceStatus,
   DisputeOutcome,
   DisputeStatus,
+  DocumentKind,
+  DocumentSource,
   EmailStatus,
   FxRateSource,
   InvoiceDirection,
@@ -57,6 +59,8 @@ import {
   FxGainLossRow,
   InvoiceBillTo,
   InvoiceChargeType,
+  InvoiceDocument,
+  InvoiceEmailed,
   InvoiceLineView,
   InvoiceTax,
   Me,
@@ -94,6 +98,7 @@ import {
   User,
   UserRef,
   UserSession,
+  WriteOff,
 } from "@/lib/interfaces";
 import { isMoneyString } from "@/lib/money";
 
@@ -712,6 +717,52 @@ export const disputeSchema: z.ZodType<Dispute> = z.object({
   resolvedBy: z.string().nullable(),
   creditNoteId: z.string().nullable(),
   creditNoteNumber: z.string().nullable(),
+});
+
+export const invoiceDocumentSchema: z.ZodType<InvoiceDocument> = z.object({
+  id: z.string(),
+  kind: z.enum(DocumentKind),
+  source: z.enum(DocumentSource),
+  fileName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: count,
+  uploadedBy: z.string().nullable(),
+  createdAt: timestamp,
+});
+
+export const invoiceEmailedSchema: z.ZodType<InvoiceEmailed> = z.object({
+  emailId: z.string(),
+  to: z.array(z.string()),
+  cc: z.array(z.string()),
+  sentAt: timestamp,
+});
+
+export const writeOffSchema: z.ZodType<WriteOff> = z.object({
+  id: z.string(),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  customerId: z.string(),
+  customerName: z.string().nullable(),
+  currency: z.enum(Currency),
+  amount: money,
+  taxRelief: money,
+  badDebt: money,
+  taxes: z.array(
+    z.object({
+      code: z.string(),
+      jurisdiction: z.string(),
+      rate_percent: decimalText,
+      tax_relief: money,
+    })
+  ),
+  writtenOffOn: calendarDate,
+  reason: z.string(),
+  disputeId: z.string().nullable(),
+  createdById: z.string(),
+  createdAt: timestamp,
+  reversedAt: timestamp.nullable(),
+  reversedById: z.string().nullable(),
+  reversalReason: z.string().nullable(),
 });
 
 export const reminderCountsSchema: z.ZodType<ReminderCounts> = z.object({
