@@ -1,0 +1,53 @@
+{
+  "message": "Success",
+  "data": {
+    "receivable": [
+      {
+        "label": "Receivable (CAD)",
+        "current": "8001.81",
+        "days1to30": "2923.19",
+        "days31to60": "0.00",
+        "days61to90": "3679.20",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "14604.20",
+        "currency": "CAD"
+      },
+      {
+        "label": "Receivable (USD)",
+        "current": "2599.00",
+        "days1to30": "2633.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "5232.00",
+        "currency": "USD"
+      }
+    ],
+    "payable": [
+      {
+        "label": "Payable (CAD)",
+        "current": "9781.40",
+        "days1to30": "0.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "9781.40",
+        "currency": "CAD"
+      },
+      {
+        "label": "Payable (USD)",
+        "current": "0.00",
+        "days1to30": "0.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "0.00",
+        "currency": "USD"
+      }
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "partyId": "pty_61pcfGJq23",
+        "partyName": "Demo Great Lakes Supply",
+        "type": "SHIPPER",
+        "currency": "USD",
+        "businessVolume": "7232.00",
+        "shipmentCount": 2,
+        "balance": "5232.00",
+        "overdue": "2633.00",
+        "oldestOverdueDays": 6,
+        "lastPayment": {
+          "paidOn": "2026-10-22",
+          "paymentNumber": "SPAY-12",
+          "invoiceRef": "sin_DEMO01_28",
+          "amount": "2000.00"
+        },
+        "averagePaymentDays": null,
+        "weeklyStatement": false,
+        "statementEmail": null
+      },
+      {
+        "partyId": "pty_zTHfVGL7GD",
+        "partyName": "Demo Maple Leaf Foods",
+        "type": "SHIPPER",
+        "currency": "CAD",
+        "businessVolume": "8278.20",
+        "shipmentCount": 3,
+        "balance": "8278.20",
+        "overdue": "5116.39",
+        "oldestOverdueDays": 71,
+        "lastPayment": {
+          "paidOn": "2026-10-26",
+          "paymentNumber": "SPAY-11",
+          "invoiceRef": null,
+          "amount": "500.00"
+        },
+        "averagePaymentDays": null,
+        "weeklyStatement": true,
+        "statementEmail": "payables@maple.demo.local"
+      },
+      {
+        "partyId": "pty_pYM2Ft3Kyc",
+        "partyName": "Demo Northwind Distribution",
+        "type": "SHIPPER",
+        "currency": "CAD",
+        "businessVolume": "7288.50",
+        "shipmentCount": 4,
+        "balance": "4593.50",
+        "overdue": "1486.00",
+        "oldestOverdueDays": 21,
+        "lastPayment": {
+          "paidOn": "2026-10-23",
+          "paymentNumber": "SPAY-10",
+          "invoiceRef": "sin_DEMO01_22",
+          "amount": "1000.00"
+        },
+        "averagePaymentDays": 75,
+        "weeklyStatement": true,
+        "statementEmail": "ap@northwind.demo.local"
+      }
+    ],
+    "meta": {
+      "totalItems": 4,
+      "itemCount": 3,
+      "itemsPerPage": 3,
+      "totalPages": 2,
+      "currentPage": 1
+    }
+  }
+}

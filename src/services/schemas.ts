@@ -27,24 +27,34 @@ import {
 } from "@/lib/enums";
 import {
   AccountingPeriod,
+  AgingRow,
+  AgingView,
   AgreementView,
   Allocation,
   AllocationSuggestion,
   AuditEvent,
+  BySide,
   CarrierInvoiceView,
   ChargeType,
   CompanySettings,
+  CurrencyAmounts,
   CustomerInvoiceView,
+  DashboardSummary,
+  ExcludedFromCad,
   InvoiceBillTo,
   InvoiceChargeType,
   InvoiceLineView,
   InvoiceTax,
   Me,
+  MonthlyPnl,
+  MonthlyPnlReport,
   NoticeSettings,
   Paginated,
+  PartyAccountSummary,
   PartyView,
   Payment,
   PermissionCatalog,
+  ReportPeriod,
   Role,
   RoleRef,
   SettingsEditor,
@@ -560,6 +570,100 @@ export const allocationSuggestionSchema: z.ZodType<AllocationSuggestion> =
     allocations: z.array(suggestedAllocationSchema),
     leftOver: money,
   });
+
+const currencyAmountsSchema: z.ZodType<CurrencyAmounts> = z.object({
+  CAD: money,
+  USD: money,
+});
+
+const excludedFromCadSchema: z.ZodType<ExcludedFromCad> = z.object({
+  invoiceCount: z.number().int().nonnegative(),
+  amount: money,
+});
+
+const bySide = <T>(value: z.ZodType<T>): z.ZodType<BySide<T>> =>
+  z.object({ shipper: value.nullable(), carrier: value.nullable() });
+
+const count = z.number().int().nonnegative();
+
+export const dashboardSchema: z.ZodType<DashboardSummary> = z.object({
+  receivable: currencyAmountsSchema.nullable(),
+  payable: currencyAmountsSchema.nullable(),
+  payableOnHold: currencyAmountsSchema.nullable(),
+  receivableInCad: money.nullable(),
+  payableInCad: money.nullable(),
+  receivableExcludedFromCad: excludedFromCadSchema.nullable(),
+  payableExcludedFromCad: excludedFromCadSchema.nullable(),
+  overdueCount: bySide(count),
+  collectedThisMonth: currencyAmountsSchema.nullable(),
+  needsReview: count,
+  unmatchedPayments: count,
+  disputed: count,
+  averagePaymentCycleDays: bySide(count),
+});
+
+const agingRowSchema: z.ZodType<AgingRow> = z.object({
+  label: z.string(),
+  current: money,
+  days1to30: money,
+  days31to60: money,
+  days61to90: money,
+  days90plus: money,
+  disputed: money,
+  total: money,
+  currency: z.enum(Currency),
+});
+
+export const agingSchema: z.ZodType<AgingView> = z.object({
+  receivable: z.array(agingRowSchema).nullable(),
+  payable: z.array(agingRowSchema).nullable(),
+});
+
+export const accountSummarySchema: z.ZodType<PartyAccountSummary> = z.object({
+  partyId: z.string(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  currency: z.enum(Currency),
+  businessVolume: money,
+  shipmentCount: count,
+  balance: money,
+  overdue: money,
+  oldestOverdueDays: count,
+  lastPayment: z
+    .object({
+      paidOn: calendarDate,
+      paymentNumber: z.string(),
+      invoiceRef: z.string().nullable(),
+      amount: money,
+    })
+    .nullable(),
+  averagePaymentDays: count.nullable(),
+  weeklyStatement: z.boolean(),
+  statementEmail: z.string().nullable(),
+});
+
+const reportPeriodSchema: z.ZodType<ReportPeriod> = z.object({
+  key: z.string(),
+  label: z.string(),
+  from: calendarDate,
+  to: calendarDate,
+  toDate: z.boolean(),
+});
+
+const monthlyPnlSchema: z.ZodType<MonthlyPnl> = z.object({
+  month: z.string(),
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  // "12.5", "-3.0": a percent with one decimal, kept as text.
+  marginPercent: decimalText,
+});
+
+export const monthlyPnlReportSchema: z.ZodType<MonthlyPnlReport> = z.object({
+  period: reportPeriodSchema,
+  months: z.array(monthlyPnlSchema),
+  total: monthlyPnlSchema,
+});
 
 // POST /shipment: the shipment and the invoices it made.
 export const createdShipmentSchema = z.object({

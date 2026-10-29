@@ -649,6 +649,67 @@ export interface MonthlyPnl {
   marginPercent: string;
 }
 
+export interface CurrencyAmounts {
+  CAD: string;
+  USD: string;
+}
+
+// USD money left out of a CAD total because its invoices have no rate yet.
+export interface ExcludedFromCad {
+  invoiceCount: number;
+  amount: string;
+}
+
+// Shipper and carrier sides of one figure; null where the role may not see it.
+export interface BySide<T> {
+  shipper: T | null;
+  carrier: T | null;
+}
+
+// GET /account/dashboard. A section the role may not see is null, never
+// "0.00": a hidden figure must not read as nothing owed.
+export interface DashboardSummary {
+  receivable: CurrencyAmounts | null;
+  payable: CurrencyAmounts | null;
+  // Of the payable, what is on hold (the bill differs from expected).
+  payableOnHold: CurrencyAmounts | null;
+  // Each USD invoice at its own rate; ones without a rate are left out.
+  receivableInCad: string | null;
+  payableInCad: string | null;
+  receivableExcludedFromCad: ExcludedFromCad | null;
+  payableExcludedFromCad: ExcludedFromCad | null;
+  overdueCount: BySide<number>;
+  // Posted shipper payments dated this calendar month (Toronto).
+  collectedThisMonth: CurrencyAmounts | null;
+  // Live invoices with review flags, on the sides the role may see.
+  needsReview: number;
+  unmatchedPayments: number;
+  disputed: number;
+  averagePaymentCycleDays: BySide<number>;
+}
+
+// GET /account/aging: rows per currency; null where the role may not see it.
+export interface AgingView {
+  receivable: AgingRow[] | null;
+  payable: AgingRow[] | null;
+}
+
+export interface ReportPeriod {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+  // Still running: the figures will grow.
+  toDate: boolean;
+}
+
+// GET /report/pnl/monthly: CAD, before tax.
+export interface MonthlyPnlReport {
+  period: ReportPeriod;
+  months: MonthlyPnl[];
+  total: MonthlyPnl;
+}
+
 // ---------------------------------------------------------------------------
 // Provisional shapes for the screens with no API yet (statements, reminders,
 // allocation, installment plans, disputes, report breakdowns), filled from

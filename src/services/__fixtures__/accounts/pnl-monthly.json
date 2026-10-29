@@ -1,0 +1,91 @@
+{
+  "message": "Success",
+  "data": {
+    "period": {
+      "key": "2026-YTD",
+      "label": "2026 year to date",
+      "from": "2026-01-01",
+      "to": "2026-10-29",
+      "toDate": true
+    },
+    "months": [
+      {
+        "month": "Jan 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "Feb 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "Mar 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "Apr 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "May 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "Jun 2026",
+        "revenue": "0.00",
+        "carrierCost": "0.00",
+        "grossMargin": "0.00",
+        "marginPercent": "0.0"
+      },
+      {
+        "month": "Jul 2026",
+        "revenue": "3200.00",
+        "carrierCost": "2500.00",
+        "grossMargin": "700.00",
+        "marginPercent": "21.9"
+      },
+      {
+        "month": "Aug 2026",
+        "revenue": "1500.00",
+        "carrierCost": "1100.00",
+        "grossMargin": "400.00",
+        "marginPercent": "26.7"
+      },
+      {
+        "month": "Sep 2026",
+        "revenue": "9067.00",
+        "carrierCost": "4780.00",
+        "grossMargin": "4287.00",
+        "marginPercent": "47.3"
+      },
+      {
+        "month": "Oct 2026 (MTD)",
+        "revenue": "10301.00",
+        "carrierCost": "1300.00",
+        "grossMargin": "9001.00",
+        "marginPercent": "87.4"
+      }
+    ],
+    "total": {
+      "month": "2026 year to date",
+      "revenue": "24068.00",
+      "carrierCost": "9680.00",
+      "grossMargin": "14388.00",
+      "marginPercent": "59.8"
+    }
+  }
+}

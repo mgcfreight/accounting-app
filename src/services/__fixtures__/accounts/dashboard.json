@@ -1,0 +1,42 @@
+{
+  "message": "Success",
+  "data": {
+    "receivable": {
+      "CAD": "14604.20",
+      "USD": "5232.00"
+    },
+    "payable": {
+      "CAD": "9781.40",
+      "USD": "0.00"
+    },
+    "payableOnHold": {
+      "CAD": "2011.40",
+      "USD": "0.00"
+    },
+    "receivableInCad": "21772.04",
+    "payableInCad": "9781.40",
+    "receivableExcludedFromCad": {
+      "invoiceCount": 0,
+      "amount": "0.00"
+    },
+    "payableExcludedFromCad": {
+      "invoiceCount": 0,
+      "amount": "0.00"
+    },
+    "overdueCount": {
+      "shipper": 4,
+      "carrier": 0
+    },
+    "collectedThisMonth": {
+      "CAD": "1500.00",
+      "USD": "2000.00"
+    },
+    "needsReview": 0,
+    "unmatchedPayments": 1,
+    "disputed": 0,
+    "averagePaymentCycleDays": {
+      "shipper": 75,
+      "carrier": 70
+    }
+  }
+}

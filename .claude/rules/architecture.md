@@ -20,9 +20,10 @@ Last reviewed: 2026-10-20
 Sign-in (with 2FA and password reset), My Account, Users, Roles &
 Permissions, Sessions, the Audit Report, Settings (company, notifications,
 tax rates, charge types), Shippers and Carriers (with agreements),
-Shipments, Shipper and Carrier Invoices (with versions), and Payments
-(record, allocate, reverse) run on the Accounts API. The dashboard,
-installment plans, Reports, Needs Review and Sync Status still read from
+Shipments, Shipper and Carrier Invoices (with versions), Payments (record,
+allocate, reverse) and the Dashboard run on the Accounts API. Installment
+plans, Statements, Reminders, Reports, Needs Review and Sync Status still
+read from
 `src/lib/mock/`, and their actions (export, new plan) show a "demo only"
 toast.
 
