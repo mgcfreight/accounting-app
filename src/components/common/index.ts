@@ -11,6 +11,7 @@ export { default as ErrorState } from "./error-state";
 export { ClearFiltersButton, default as FilterBar } from "./filter-bar";
 export { default as FormModal } from "./form-modal";
 export { default as InfoStrip } from "./info-strip";
+export { default as LeavePageModal } from "./leave-page-modal";
 export { default as TableSkeleton } from "./loader/table-skeleton";
 export { default as Money } from "./money";
 export { default as PartyAvatar } from "./party-avatar";

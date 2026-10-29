@@ -7,8 +7,10 @@ import {
   BaseCardWrapper,
   BaseInput,
   BaseSelect,
+  LeavePageModal,
 } from "@/components/common";
 import { ArrowRight } from "@/components/icons";
+import { useUnsavedChanges } from "@/hooks";
 import {
   CANADIAN_PROVINCES,
   COUNTRY_PATTERN,
@@ -130,7 +132,11 @@ const toRequest = (values: ShipmentValues): NewShipment => {
 export default function ShipmentForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { control, handleSubmit } = useForm<ShipmentValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { dirtyFields },
+  } = useForm<ShipmentValues>({
     // Hidden fields (carrier charges without a carrier) drop out of the form
     // and its validation.
     shouldUnregister: true,
@@ -158,6 +164,9 @@ export default function ShipmentForm() {
     },
   });
   const hasCarrier = !!useWatch({ control, name: "carrierPartyId" });
+  // Fields the user has edited, not `isDirty`: hidden fields unregister
+  // (shouldUnregister), which leaves the values unlike the defaults untouched.
+  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
 
   const save = useMutation({
     mutationFn: (values: ShipmentValues) => createShipment(toRequest(values)),
@@ -169,6 +178,7 @@ export default function ShipmentForm() {
       );
       void queryClient.invalidateQueries({ queryKey: ["shipments"] });
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      leaving.allowLeave();
       navigate(shipmentHref(shipment));
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -343,6 +353,11 @@ export default function ShipmentForm() {
           isLoading={save.isPending}
         />
       </div>
+      <LeavePageModal
+        isOpen={leaving.blocked}
+        onStay={leaving.stay}
+        onLeave={leaving.leave}
+      />
     </form>
   );
 }
