@@ -354,6 +354,9 @@ export default function InvoiceDetail({
         invoice={data}
         partyName={party.name}
         onClose={() => setExtraAction(null)}
+        onCreated={(newId) =>
+          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`)
+        }
       />
     </div>
   );

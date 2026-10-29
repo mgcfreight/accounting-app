@@ -105,6 +105,21 @@ type Revision = {
 export type CustomerRevision = Revision & { acknowledgeReview?: boolean };
 export type CarrierRevision = Revision & { carrierInvoiceNumber?: string };
 
+// An adjustment (an extra charge) or a credit note (money off) on an
+// invoice. It gets the next letter on the number and is taxed at the
+// original invoice date's rates. A credit note can't take off more than the
+// invoice billed, less its earlier credit notes.
+export type Correction = {
+  parentInvoiceId: string;
+  // 3-255 characters; shown on the new invoice.
+  reason: string;
+  // Before tax, all positive; 1-50.
+  lines: Charge[];
+};
+
+// Carriers: the carrier's credit memo or extra bill number.
+export type CarrierCorrection = Correction & { carrierInvoiceNumber?: string };
+
 // Void for a cancelled load. An optional cancellation fee, before tax, is
 // billed on a new draft invoice with the next letter (230 -> 230a).
 export type VoidInvoice = {
@@ -204,6 +219,16 @@ export const reviseCustomerInvoice = (
     .post("/invoice/customer/revise", revision, { params: { invoiceId } })
     .then((res) => parseBody(customerInvoice, res.data).data);
 
+// On an issued invoice that isn't a credit note; made as a DRAFT, issued
+// like any other.
+export const createCustomerCorrection = (
+  kind: "adjustment" | "credit-note",
+  body: Correction
+) =>
+  apiClient
+    .post(`/invoice/customer/${kind}`, body)
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
 // A draft or issued invoice nothing has been applied to.
 export const voidCustomerInvoice = (invoiceId: string, body: VoidInvoice) =>
   apiClient
@@ -279,6 +304,16 @@ export const reviseCarrierInvoice = (
 ) =>
   apiClient
     .post("/invoice/carrier/revise", revision, { params: { invoiceId } })
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// The carrier's extra charge or credit on a received, on-hold or approved
+// bill; recorded as RECEIVED, to be approved like any bill.
+export const createCarrierCorrection = (
+  kind: "adjustment" | "credit-note",
+  body: CarrierCorrection
+) =>
+  apiClient
+    .post(`/invoice/carrier/${kind}`, body)
     .then((res) => parseBody(carrierInvoice, res.data).data);
 
 // A carrier invoice nothing has been paid on.

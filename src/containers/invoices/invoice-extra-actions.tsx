@@ -23,6 +23,8 @@ import {
 import { compareMoney, isZeroMoney } from "@/lib/money";
 import {
   ApiError,
+  createCarrierCorrection,
+  createCustomerCorrection,
   emailCustomerInvoice,
   errorMessage,
   openDispute,
@@ -33,6 +35,7 @@ import {
   voidCustomerInvoice,
   writeOffInvoice,
 } from "@/services";
+import ChargeLines, { ChargeValues, emptyCharge, toCharges } from "./charge-lines";
 import {
   directionOf,
   invoiceNumberOf,
@@ -42,10 +45,18 @@ import {
 } from "./invoice-view";
 
 // The invoice's "More" actions, each through the API: emailing it to the
-// shipper, its PDF, voiding it for a cancelled load, flagging a dispute,
-// writing a balance off and attaching a document.
+// shipper, its PDF, an adjustment or credit note, voiding it for a
+// cancelled load, flagging a dispute, writing a balance off and attaching a
+// document.
 
-export type ExtraAction = "email" | "void" | "dispute" | "upload" | "write-off";
+export type ExtraAction =
+  | "email"
+  | "void"
+  | "dispute"
+  | "upload"
+  | "write-off"
+  | "adjustment"
+  | "credit-note";
 
 const AMOUNT = /^\d{1,9}\.\d{2}$/;
 
@@ -70,6 +81,21 @@ const isClosed = (invoice: InvoiceView) =>
   invoice.status === CustomerInvoiceStatus.Superseded ||
   invoice.status === CarrierInvoiceStatus.Void ||
   invoice.status === CarrierInvoiceStatus.Superseded;
+
+const CORRECTABLE_CARRIER_STATUSES = [
+  CarrierInvoiceStatus.Received,
+  CarrierInvoiceStatus.OnHold,
+  CarrierInvoiceStatus.Approved,
+];
+
+// An adjustment or credit note goes on an issued shipper invoice, or a
+// received, on-hold or approved carrier bill, that isn't a credit note.
+export const canBeCorrected = (invoice: InvoiceView) =>
+  invoice.kind !== InvoiceKind.CreditNote &&
+  (isCustomerInvoice(invoice)
+    ? invoice.status === CustomerInvoiceStatus.Issued
+    : CORRECTABLE_CARRIER_STATUSES.includes(invoice.status) &&
+      invoice.invoiceDate !== null);
 
 // An issued shipper invoice still owing, not a credit note and not under
 // an open dispute (a disputed amount is written off by resolving it).
@@ -118,6 +144,23 @@ export const extraActionsFor = (
   if (canEdit && isOwed(invoice) && !invoice.disputed) {
     actions.push({ key: "dispute", label: "Flag as disputed", onPress: () => onOpen("dispute") });
   }
+  if (
+    canBeCorrected(invoice) &&
+    can(isCustomer ? Permission.CustomerInvoicesCreate : Permission.CarrierInvoicesCreate)
+  ) {
+    actions.push(
+      {
+        key: "adjustment",
+        label: isCustomer ? "Add adjustment" : "Record carrier's extra charge",
+        onPress: () => onOpen("adjustment"),
+      },
+      {
+        key: "credit-note",
+        label: isCustomer ? "Issue credit note" : "Record carrier's credit",
+        onPress: () => onOpen("credit-note"),
+      }
+    );
+  }
   if (canEdit && !isClosed(invoice)) {
     actions.push({ key: "upload", label: "Upload document", onPress: () => onOpen("upload") });
   }
@@ -150,12 +193,20 @@ type ModalProps = {
 };
 
 // Each form is mounted only while open, so it starts from the invoice as
-// last read.
+// last read. A new invoice (an adjustment or credit note) opens once made
+// (`onCreated`).
 export default function InvoiceExtraActionModal({
   action,
+  onCreated,
   ...props
-}: ModalProps & { action: ExtraAction | null }) {
+}: ModalProps & {
+  action: ExtraAction | null;
+  onCreated?: (invoiceId: string) => void;
+}) {
   switch (action) {
+    case "adjustment":
+    case "credit-note":
+      return <CorrectionModal kind={action} onCreated={onCreated} {...props} />;
     case "email":
       return <EmailInvoiceModal {...props} />;
     case "void":
@@ -553,6 +604,116 @@ function WriteOffModal({ invoice, partyName, onClose }: ModalProps) {
             const length = value.trim().length;
             if (length < 3) return "Say why (at least 3 characters)";
             return length <= 500 || "At most 500 characters";
+          },
+        }}
+      />
+    </FormModal>
+  );
+}
+
+// ----------------------------------------------- adjustment / credit note
+
+type CorrectionValues = {
+  lines: ChargeValues[];
+  reason: string;
+  carrierInvoiceNumber: string;
+};
+
+function CorrectionModal({
+  kind,
+  invoice,
+  partyName,
+  onClose,
+  onCreated,
+}: ModalProps & {
+  kind: "adjustment" | "credit-note";
+  onCreated?: (invoiceId: string) => void;
+}) {
+  const isCustomer = isCustomerInvoice(invoice);
+  const isCredit = kind === "credit-note";
+  const { control, handleSubmit } = useForm<CorrectionValues>({
+    defaultValues: { lines: [emptyCharge], reason: "", carrierInvoiceNumber: "" },
+  });
+
+  const create = useActionMutation(
+    (values: CorrectionValues): Promise<InvoiceView> => {
+      const body = {
+        parentInvoiceId: invoice.id,
+        reason: values.reason.trim(),
+        lines: toCharges(values.lines),
+      };
+      if (isCustomer) return createCustomerCorrection(kind, body);
+      const memo = values.carrierInvoiceNumber.trim();
+      return createCarrierCorrection(kind, {
+        ...body,
+        ...(memo && { carrierInvoiceNumber: memo }),
+      });
+    },
+    (made) => {
+      toast.success(
+        `${invoiceNumberOf(made) ?? (isCredit ? "The credit note" : "The adjustment")} ${
+          isCustomer ? "is saved as a draft: issue it to send it" : "is recorded: approve it to pay it"
+        }.`
+      );
+      onCreated?.(made.id);
+    },
+    onClose,
+    [["invoices"], ["accounts"]]
+  );
+
+  const title = isCustomer
+    ? isCredit
+      ? "Issue Credit Note"
+      : "Add Adjustment"
+    : isCredit
+      ? "Record Carrier's Credit"
+      : "Record Carrier's Extra Charge";
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title={title}
+      confirmText={isCustomer ? "Save Draft" : "Record"}
+      onConfirm={handleSubmit((values) => create.mutate(values))}
+      isConfirming={create.isPending}
+      size="2xl"
+    >
+      <Summary invoice={invoice} partyName={partyName} />
+      <p className="text-xs text-content-5">
+        {isCredit
+          ? "Money off this invoice: enter the charges taken off, as positive amounts before tax. It can't take off more than the invoice billed, less earlier credit notes."
+          : "An extra charge on this invoice, before tax."}{" "}
+        It gets the next letter on the number and is taxed at the original
+        invoice date&apos;s rates.{" "}
+        {isCustomer
+          ? "It is made as a draft; issue it to send it."
+          : "It is recorded as a received bill, to be approved before it is paid."}
+      </p>
+      <ChargeLines
+        control={control}
+        name="lines"
+        priceLabel={`Unit price (${invoice.currency})`}
+      />
+      {!isCustomer && (
+        <BaseInput
+          name="carrierInvoiceNumber"
+          control={control}
+          label={isCredit ? "Carrier's credit memo number" : "Carrier's bill number"}
+          placeholder="Optional"
+          rules={{ maxLength: { value: 64, message: "At most 64 characters" } }}
+        />
+      )}
+      <BaseTextArea
+        name="reason"
+        control={control}
+        label="Reason"
+        placeholder={isCredit ? "Liftgate not used: credited" : "Driver detention at consignee, 2 hours"}
+        description="Shown on the new invoice."
+        rules={{
+          validate: (value: unknown) => {
+            const length = String(value ?? "").trim().length;
+            return (length >= 3 && length <= 255) || "Enter 3-255 characters";
           },
         }}
       />
