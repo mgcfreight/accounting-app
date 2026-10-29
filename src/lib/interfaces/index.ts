@@ -20,6 +20,8 @@ import {
   PaymentStatus,
   PaymentTerms,
   ReminderChannel,
+  ReminderKind,
+  ReminderSkipReason,
   ReminderStatus,
   ReviewKind,
   SessionEndReason,
@@ -847,29 +849,44 @@ export interface StatementRun {
   failures: { partyId: string; reason: string }[];
 }
 
-// ---------------------------------------------------------------------------
-// Provisional shapes for the screens with no API yet (reminders, installment
-// plans, disputes, report breakdowns), filled from lib/mock. Every amount is
-// already calculated, as the API will send it.
-
-// A payment reminder, 7 days before an invoice's due date.
+// GET /reminder/all: a payment reminder, before an invoice's due date or
+// (shippers) after it.
 export interface Reminder {
   id: string;
   direction: InvoiceDirection;
-  invoiceNumber: string;
+  kind: ReminderKind;
+  invoiceId: string;
+  invoiceNumber: string | null;
+  partyId: string;
   partyName: string;
+  // The due date the reminder is about.
   dueDate: string;
+  // The day it goes out (or went).
   remindOn: string;
   currency: Currency;
+  // What the invoice owes now.
   balance: string;
   channel: ReminderChannel;
-  recipient: string;
+  // Who got it, or would get it now; several separated by ", ". Null when
+  // nobody would.
+  recipient: string | null;
   status: ReminderStatus;
+  skipReason: ReminderSkipReason | null;
   sentAt: string | null;
-  // Why a reminder was skipped (paid in full, reminders off, disputed).
+  // Why it was skipped, in words.
   note: string | null;
 }
 
+export interface ReminderCounts {
+  scheduled: number;
+  sent: number;
+  skipped: number;
+}
+
+// ---------------------------------------------------------------------------
+// Provisional shapes for the screens with no API yet (installment plans,
+// disputes, report breakdowns), filled from lib/mock. Every amount is
+// already calculated, as the API will send it.
 
 export interface Installment {
   number: number;

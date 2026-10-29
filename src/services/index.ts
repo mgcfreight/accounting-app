@@ -18,6 +18,7 @@ export * from "./invoices";
 export * from "./parties";
 export * from "./payments";
 export { queryClient } from "./query-client";
+export * from "./reminders";
 export * from "./reports";
 export * from "./roles";
 export * from "./settings";

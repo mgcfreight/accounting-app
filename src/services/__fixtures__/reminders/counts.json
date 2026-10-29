@@ -1,0 +1,8 @@
+{
+  "message": "Success",
+  "data": {
+    "scheduled": 20,
+    "sent": 0,
+    "skipped": 3
+  }
+}

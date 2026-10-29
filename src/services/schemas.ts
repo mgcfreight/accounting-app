@@ -8,6 +8,7 @@ import {
   CustomerInvoiceStatus,
   EmailStatus,
   FxRateSource,
+  InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
   MatchStatus,
@@ -18,6 +19,10 @@ import {
   PaymentStatus,
   PaymentTerms,
   Permission,
+  ReminderChannel,
+  ReminderKind,
+  ReminderSkipReason,
+  ReminderStatus,
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
@@ -59,6 +64,8 @@ import {
   PartyView,
   Payment,
   PermissionCatalog,
+  Reminder,
+  ReminderCounts,
   ReportPeriod,
   Role,
   RoleRef,
@@ -650,6 +657,32 @@ export const accountSummarySchema: z.ZodType<PartyAccountSummary> = z.object({
   averagePaymentDays: count.nullable(),
   weeklyStatement: z.boolean(),
   statementEmail: z.string().nullable(),
+});
+
+export const reminderSchema: z.ZodType<Reminder> = z.object({
+  id: z.string(),
+  direction: z.enum(InvoiceDirection),
+  kind: z.enum(ReminderKind),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  dueDate: calendarDate,
+  remindOn: calendarDate,
+  currency: z.enum(Currency),
+  balance: money,
+  channel: z.enum(ReminderChannel),
+  recipient: z.string().nullable(),
+  status: z.enum(ReminderStatus),
+  skipReason: z.enum(ReminderSkipReason).nullable(),
+  sentAt: timestamp.nullable(),
+  note: z.string().nullable(),
+});
+
+export const reminderCountsSchema: z.ZodType<ReminderCounts> = z.object({
+  scheduled: count,
+  sent: count,
+  skipped: count,
 });
 
 export const statementScheduleSchema: z.ZodType<StatementSchedule> = z.object({

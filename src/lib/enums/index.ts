@@ -296,21 +296,38 @@ export enum EmailStatus {
   Bounced = "BOUNCED",
 }
 
-// Reminders, installments and disputes: no API yet; the screens read
-// lib/mock.
-
 export enum ReminderChannel {
-  // Emailed to the shipper's accounts department.
+  // Emailed to the shipper's contacts.
   CustomerEmail = "CUSTOMER_EMAIL",
   // An alert to MGC's accounts team that a carrier bill falls due.
   TeamAlert = "TEAM_ALERT",
 }
 
+// SKIPPED includes reminders cancelled because the due date passed first.
 export enum ReminderStatus {
   Scheduled = "SCHEDULED",
   Sent = "SENT",
   Skipped = "SKIPPED",
 }
+
+// BEFORE_DUE, or OVERDUE (shippers, 7 and 30 days past due).
+export enum ReminderKind {
+  BeforeDue = "BEFORE_DUE",
+  Overdue = "OVERDUE",
+  InvoiceNotReceived = "INVOICE_NOT_RECEIVED",
+}
+
+export enum ReminderSkipReason {
+  Paid = "PAID",
+  Void = "VOID",
+  NoContact = "NO_CONTACT",
+  // The agreement in force has reminders off.
+  RemindersOff = "REMINDERS_OFF",
+  // Staff skipped it and said why.
+  Manual = "MANUAL",
+}
+
+// Installments and disputes: no API yet; the screens read lib/mock.
 
 export enum AllocationRule {
   InvoiceNumber = "INVOICE_NUMBER",
