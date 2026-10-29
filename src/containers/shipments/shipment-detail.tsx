@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { ReactNode } from "react";
 import {
   BaseCardWrapper,
@@ -24,11 +24,7 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, {
-  apiInvoiceHref,
-  InvoiceView,
-  referencesOf,
-} from "../invoices/invoice-view";
+import InvoiceViewCell, { InvoiceView, referencesOf } from "../invoices/invoice-view";
 import { partyHref } from "../parties/party-list";
 import usePartyNames from "../parties/use-party-names";
 import { place } from "./shipment-list";
@@ -216,7 +212,6 @@ function ShipmentInvoices({
   parties: Map<string, PartyView>;
   heading: string;
 }) {
-  const navigate = useNavigate();
   const params = { page: 1, limit: 20, shipmentId: shipment.id };
   const invoices = useQuery({
     queryKey: ["invoices", direction, "shipment", params],
@@ -239,7 +234,6 @@ function ShipmentInvoices({
           columns={invoiceColumns}
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
-          onRowClick={(row) => navigate(apiInvoiceHref(row))}
           rowKey={(row) => row.id}
           renderCell={(row, key) => (
             <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />

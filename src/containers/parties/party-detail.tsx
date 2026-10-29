@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { ReactNode, useState } from "react";
 import {
   BaseButton,
@@ -30,7 +30,7 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { apiInvoiceHref, InvoiceView } from "../invoices/invoice-view";
+import InvoiceViewCell, { InvoiceView } from "../invoices/invoice-view";
 import { AgreementFormModal } from "./party-modals";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -236,7 +236,6 @@ function AgreementRow({
 }
 
 function PartyInvoices({ party }: { party: PartyView }) {
-  const navigate = useNavigate();
   const isShipper = party.type === PartyType.Shipper;
   const paging = useServerPaging(party.id);
   const params = { page: paging.page, limit: paging.limit };
@@ -270,7 +269,6 @@ function PartyInvoices({ party }: { party: PartyView }) {
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
           refreshing={invoices.isPlaceholderData}
-          onRowClick={(row) => navigate(apiInvoiceHref(row))}
           rowKey={(row) => row.id}
           renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
           meta={paging.tableMeta(invoices.data?.meta)}

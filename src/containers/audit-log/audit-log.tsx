@@ -224,7 +224,6 @@ export default function AuditLog() {
           data={events.isError ? [] : (events.data?.items ?? [])}
           loading={events.isPending}
           refreshing={events.isPlaceholderData}
-          onRowClick={setOpen}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(events.data?.meta)}

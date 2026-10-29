@@ -225,7 +225,6 @@ export default function InvoiceList({
             data={rows}
             loading={invoices.isPending}
             refreshing={invoices.isPlaceholderData}
-            onRowClick={(row) => navigate(apiInvoiceHref(row))}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(invoices.data?.meta)}

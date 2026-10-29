@@ -168,7 +168,6 @@ export default function ShipmentList() {
             data={items}
             loading={shipments.isPending}
             refreshing={shipments.isPlaceholderData}
-            onRowClick={(row) => navigate(shipmentHref(row))}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(shipments.data?.meta)}

@@ -1,10 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
 import { BaseTable, ErrorState } from "@/components/common";
 import { CustomerInvoiceView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { listCustomerInvoices } from "@/services";
-import InvoiceViewCell, { apiInvoiceHref } from "../invoices/invoice-view";
+import InvoiceViewCell from "../invoices/invoice-view";
 
 const columns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
@@ -20,7 +19,6 @@ const params = { page: 1, limit: 5 };
 // The latest shipper invoices, from the Accounts API: the one live panel on
 // the dashboard. The caller shows it only to those who may view them.
 export default function RecentInvoices() {
-  const navigate = useNavigate();
   const invoices = useQuery({
     queryKey: ["invoices", "dashboard", params],
     queryFn: ({ signal }) => listCustomerInvoices(params, signal),
@@ -41,7 +39,6 @@ export default function RecentInvoices() {
       columns={columns}
       data={invoices.data?.items ?? []}
       loading={invoices.isPending}
-      onRowClick={(row) => navigate(apiInvoiceHref(row))}
       rowKey={(row) => row.id}
       renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
       emptyContent="No shipper invoices yet"

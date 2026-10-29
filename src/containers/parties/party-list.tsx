@@ -153,7 +153,6 @@ export default function PartyList({ type }: { type: PartyType }) {
             data={parties.data?.items ?? []}
             loading={parties.isPending}
             refreshing={parties.isPlaceholderData}
-            onRowClick={(row) => navigate(partyHref(row))}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(parties.data?.meta)}
