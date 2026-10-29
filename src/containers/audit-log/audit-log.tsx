@@ -7,6 +7,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   DetailRow,
   FilterBar,
   FormModal,
@@ -97,7 +98,11 @@ export default function AuditLog() {
   const me = useCurrentUser();
   const isAdmin = me.isAdmin;
   const [open, setOpen] = useState<AuditEvent | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" },
   });
   const filters = useWatch({ control }) as Filters;
@@ -210,6 +215,7 @@ export default function AuditLog() {
         <BaseInput name="from" control={control} type="date" aria-label="From date" {...dateInput} />
         <BaseInput name="to" control={control} type="date" aria-label="To date" {...dateInput} />
         {!isAdmin && <p className="text-sm text-content-6">Showing your own activity.</p>}
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       {events.isError && (
         <AlertBanner

@@ -8,7 +8,7 @@ export { BarChart, LineChart } from "./charts";
 export { default as DetailRow } from "./detail-row";
 export { default as ErrorBoundary } from "./error-boundary";
 export { default as ErrorState } from "./error-state";
-export { default as FilterBar } from "./filter-bar";
+export { ClearFiltersButton, default as FilterBar } from "./filter-bar";
 export { default as FormModal } from "./form-modal";
 export { default as InfoStrip } from "./info-strip";
 export { default as TableSkeleton } from "./loader/table-skeleton";

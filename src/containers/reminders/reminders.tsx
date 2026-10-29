@@ -10,6 +10,7 @@ import {
   BaseSelect,
   BaseTable,
   BaseTextArea,
+  ClearFiltersButton,
   FilterBar,
   FormModal,
   Money,
@@ -116,7 +117,11 @@ export default function Reminders() {
       ? [{ key: InvoiceDirection.Payable, label: "Carriers", value: InvoiceDirection.Payable }]
       : []),
   ];
-  const { control } = useForm<Filters>({ defaultValues: { side: ALL } });
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({ defaultValues: { side: ALL } });
   const side = useWatch({ control, name: "side" });
 
   const visible = useMemo(
@@ -266,6 +271,7 @@ export default function Reminders() {
             disallowEmptySelection
           />
         )}
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
         <div className="flex gap-2 sm:ml-auto">
           {can(Permission.ReportsExportCsv) && (
             <BaseButton
