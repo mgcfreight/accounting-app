@@ -33,11 +33,11 @@ src/
 
 **Sign-in, users, sessions, audit, settings, shippers and carriers,
 shipments, shipper and carrier invoices, payments, the dashboard, statements,
-reminders and disputes run on the API; the rest still run on mock data.** The
-session is the API's httpOnly cookies, and the signed-in user comes from
-`GET /auth/me` (`UserProvider`). Installment plans, reports, Needs Review's
+reminders, disputes and reports run on the API; the rest still run on mock
+data.** The session is the API's httpOnly cookies, and the signed-in user
+comes from `GET /auth/me` (`UserProvider`). Installment plans, Needs Review's
 MGC changes and sync status read `lib/mock` and their actions show a "demo
-only" toast.
+only" toast, as does the accountant export.
 The design copies mokal-app's — same layout, components, theme and colours.
 
 Layer rules, static-hosting limits, the UI kit, and money and date rules are

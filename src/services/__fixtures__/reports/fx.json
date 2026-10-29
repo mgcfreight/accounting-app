@@ -1,0 +1,36 @@
+{
+  "message": "Success",
+  "data": {
+    "period": {
+      "key": "2026-YTD",
+      "label": "2026 year to date",
+      "from": "2026-01-01",
+      "to": "2026-10-29",
+      "toDate": true
+    },
+    "rows": [
+      {
+        "type": "SHIPPER",
+        "allocationId": "spa_AxVirllybs",
+        "allocatedOn": "2026-10-28",
+        "partyId": "pty_61pcfGJq23",
+        "partyName": "Demo Great Lakes Supply",
+        "invoiceNumber": "sin_DEMO01_28",
+        "paymentNumber": "SPAY-12",
+        "currency": "USD",
+        "amount": "2000.00",
+        "invoiceRate": "1.370000",
+        "paymentRate": "1.370000",
+        "billedCad": "2740.00",
+        "settledCad": "2740.00",
+        "gainLoss": "0.00"
+      }
+    ],
+    "totals": {
+      "shippers": "0.00",
+      "carriers": "0.00",
+      "net": "0.00"
+    },
+    "leftOutNoRate": 0
+  }
+}

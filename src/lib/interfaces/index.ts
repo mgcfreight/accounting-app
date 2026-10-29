@@ -708,6 +708,151 @@ export interface MonthlyPnlReport {
   total: MonthlyPnl;
 }
 
+// What a CAD figure had to leave out: USD records without a rate.
+export interface LeftOutNoRate {
+  shipperInvoices: number;
+  carrierBills: number;
+  payments: number;
+  writeOffs: number;
+}
+
+// GET /report/summary: a period of the books, CAD at each record's own
+// rate, before tax unless named as tax.
+export interface ReportSummary {
+  period: ReportPeriod;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+  taxCollected: string;
+  inputTaxCredits: string;
+  collected: string;
+  paidOut: string;
+  // Carrier bills not received yet for shipments in the period: not in cost.
+  expectedBills: { count: number; amount: string };
+  // Written off in the period, less reversals, before tax. Not in the margin.
+  badDebts: string;
+  // The GST/HST share of those write-offs, claimed back.
+  badDebtRelief: string;
+  // Realized exchange gain (+) or loss (-) on USD payments.
+  fxGainLoss: string;
+  leftOutNoRate: LeftOutNoRate;
+}
+
+// Profit and loss for one shipper or carrier over a period, CAD. partyId
+// null: shipments with no carrier.
+export interface PartyPnl {
+  partyId: string | null;
+  partyName: string;
+  type: PartyType;
+  shipmentCount: number;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+}
+
+// GET /report/pnl/party.
+export interface PartyPnlReport {
+  period: ReportPeriod;
+  shippers: PartyPnl[];
+  carriers: PartyPnl[];
+}
+
+// GET /report/pnl/shipment: one shipment's profit and loss over a period.
+export interface ShipmentPnl {
+  shipmentId: string;
+  mgcShipmentId: string;
+  loadNumber: string;
+  shipperId: string;
+  shipperName: string;
+  carrierId: string | null;
+  carrierName: string | null;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+}
+
+// One party's open balances by days past due, in one currency.
+export interface PartyAgingRow {
+  partyId: string;
+  partyName: string;
+  type: PartyType;
+  currency: Currency;
+  current: string;
+  days1to30: string;
+  days31to60: string;
+  days61to90: string;
+  days90plus: string;
+  disputed: string;
+  total: string;
+}
+
+// GET /report/aging/party: as of today, not tied to a period.
+export interface PartyAgingReport {
+  asOf: string;
+  receivable: PartyAgingRow[];
+  payable: PartyAgingRow[];
+}
+
+// One line of the HST/GST report: tax charged on shipper invoices against
+// input tax credits on carrier bills and bad-debt relief, per tax.
+export interface TaxSummaryRow {
+  key: string;
+  jurisdiction: string;
+  taxCode: string;
+  ratePercent: string;
+  taxableSales: string;
+  taxCollected: string;
+  taxablePurchases: string;
+  inputTaxCredits: string;
+  badDebtRelief: string;
+  // Collected - input tax credits - bad-debt relief.
+  netTax: string;
+}
+
+// GET /report/tax.
+export interface TaxReport {
+  period: ReportPeriod;
+  rows: TaxSummaryRow[];
+  totals: {
+    taxCollected: string;
+    inputTaxCredits: string;
+    badDebtRelief: string;
+    netTax: string;
+  };
+}
+
+// One payment allocation to a USD invoice and what the rate change did to
+// it in CAD. Gain is +, loss is -.
+export interface FxGainLossRow {
+  type: PartyType;
+  allocationId: string;
+  allocatedOn: string;
+  partyId: string;
+  partyName: string;
+  invoiceNumber: string | null;
+  paymentNumber: string;
+  currency: Currency;
+  amount: string;
+  invoiceRate: string;
+  paymentRate: string;
+  // The amount in CAD at the invoice's rate, and at the payment's.
+  billedCad: string;
+  settledCad: string;
+  gainLoss: string;
+}
+
+// GET /report/fx.
+export interface FxGainLossReport {
+  period: ReportPeriod;
+  rows: FxGainLossRow[];
+  totals: { shippers: string; carriers: string; net: string };
+  // Allocations left out because the invoice or the payment has no rate.
+  leftOutNoRate: number;
+}
+
 // GET /account/summaries: a shipper's or carrier's account at a glance
 // (statements, requirement 2).
 export interface PartyAccountSummary {
@@ -910,9 +1055,9 @@ export interface Dispute {
 }
 
 // ---------------------------------------------------------------------------
-// Provisional shapes for the screens with no API yet (installment plans,
-// report breakdowns), filled from lib/mock. Every amount is
-// already calculated, as the API will send it.
+// Provisional shapes for the screen with no API yet (installment plans),
+// filled from lib/mock. Every amount is already calculated, as the API will
+// send it.
 
 export interface Installment {
   number: number;
@@ -934,47 +1079,4 @@ export interface InstallmentPlan {
   remaining: string;
   agreedOn: string;
   installments: Installment[];
-}
-
-// An invoice the shipper or carrier disputes. While open, its balance sits in
-// the aging report's Disputed column and reminders are paused.
-
-// A month or quarter of the books, CAD at invoice-date rates.
-export interface PeriodSummary {
-  key: string;
-  period: string;
-  revenue: string;
-  carrierCost: string;
-  grossMargin: string;
-  marginPercent: string;
-  taxCollected: string;
-  inputTaxCredits: string;
-  collected: string;
-  paidOut: string;
-}
-
-// Profit and loss for one shipper or carrier over a period, CAD.
-export interface PartyPnl {
-  partyId: string;
-  partyName: string;
-  type: PartyType;
-  shipmentCount: number;
-  revenue: string;
-  carrierCost: string;
-  grossMargin: string;
-  marginPercent: string;
-}
-
-// One line of the HST/GST summary: tax charged on shipper invoices against
-// input tax credits on carrier bills, per tax and province.
-export interface TaxSummaryRow {
-  key: string;
-  jurisdiction: string;
-  taxCode: string;
-  ratePercent: string;
-  taxableSales: string;
-  taxCollected: string;
-  taxablePurchases: string;
-  inputTaxCredits: string;
-  netTax: string;
 }

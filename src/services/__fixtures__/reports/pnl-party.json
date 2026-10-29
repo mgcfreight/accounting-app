@@ -1,0 +1,86 @@
+{
+  "message": "Success",
+  "data": {
+    "period": {
+      "key": "2026-YTD",
+      "label": "2026 year to date",
+      "from": "2026-01-01",
+      "to": "2026-10-29",
+      "toDate": true
+    },
+    "shippers": [
+      {
+        "partyId": "pty_61pcfGJq23",
+        "partyName": "Demo Great Lakes Supply",
+        "type": "SHIPPER",
+        "shipmentCount": 2,
+        "revenue": "8768.00",
+        "carrierCost": "3000.00",
+        "grossMargin": "5768.00",
+        "marginPercent": "65.8"
+      },
+      {
+        "partyId": "pty_zTHfVGL7GD",
+        "partyName": "Demo Maple Leaf Foods",
+        "type": "SHIPPER",
+        "shipmentCount": 3,
+        "revenue": "7200.00",
+        "carrierCost": "2500.00",
+        "grossMargin": "4700.00",
+        "marginPercent": "65.3"
+      },
+      {
+        "partyId": "pty_pYM2Ft3Kyc",
+        "partyName": "Demo Northwind Distribution",
+        "type": "SHIPPER",
+        "shipmentCount": 4,
+        "revenue": "6450.00",
+        "carrierCost": "4180.00",
+        "grossMargin": "2270.00",
+        "marginPercent": "35.2"
+      },
+      {
+        "partyId": "pty_73rWWVZcDU",
+        "partyName": "Demo Prairie Agri",
+        "type": "SHIPPER",
+        "shipmentCount": 1,
+        "revenue": "1650.00",
+        "carrierCost": "0.00",
+        "grossMargin": "1650.00",
+        "marginPercent": "100.0"
+      }
+    ],
+    "carriers": [
+      {
+        "partyId": "pty_C6mPvzYY8F",
+        "partyName": "Demo Day & Ross",
+        "type": "CARRIER",
+        "shipmentCount": 4,
+        "revenue": "11667.00",
+        "carrierCost": "5400.00",
+        "grossMargin": "6267.00",
+        "marginPercent": "53.7"
+      },
+      {
+        "partyId": "pty_xRUEk0Hfuu",
+        "partyName": "Demo Manitoulin Transport",
+        "type": "CARRIER",
+        "shipmentCount": 2,
+        "revenue": "5400.00",
+        "carrierCost": "4280.00",
+        "grossMargin": "1120.00",
+        "marginPercent": "20.7"
+      },
+      {
+        "partyId": null,
+        "partyName": "No carrier",
+        "type": "CARRIER",
+        "shipmentCount": 4,
+        "revenue": "7001.00",
+        "carrierCost": "0.00",
+        "grossMargin": "7001.00",
+        "marginPercent": "100.0"
+      }
+    ]
+  }
+}

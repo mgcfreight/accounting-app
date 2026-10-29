@@ -53,6 +53,8 @@ import {
   DashboardSummary,
   Dispute,
   ExcludedFromCad,
+  FxGainLossReport,
+  FxGainLossRow,
   InvoiceBillTo,
   InvoiceChargeType,
   InvoiceLineView,
@@ -63,6 +65,10 @@ import {
   NoticeSettings,
   Paginated,
   PartyAccountSummary,
+  PartyAgingReport,
+  PartyAgingRow,
+  PartyPnl,
+  PartyPnlReport,
   PartyStatement,
   PartyView,
   Payment,
@@ -70,9 +76,11 @@ import {
   Reminder,
   ReminderCounts,
   ReportPeriod,
+  ReportSummary,
   Role,
   RoleRef,
   SettingsEditor,
+  ShipmentPnl,
   ShipmentView,
   StatementHistoryItem,
   StatementInvoice,
@@ -81,6 +89,8 @@ import {
   StatementSchedule,
   SuggestedAllocation,
   TaxRate,
+  TaxReport,
+  TaxSummaryRow,
   User,
   UserRef,
   UserSession,
@@ -827,6 +837,127 @@ export const monthlyPnlReportSchema: z.ZodType<MonthlyPnlReport> = z.object({
   period: reportPeriodSchema,
   months: z.array(monthlyPnlSchema),
   total: monthlyPnlSchema,
+});
+
+export const reportSummarySchema: z.ZodType<ReportSummary> = z.object({
+  period: reportPeriodSchema,
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+  taxCollected: money,
+  inputTaxCredits: money,
+  collected: money,
+  paidOut: money,
+  expectedBills: z.object({ count, amount: money }),
+  badDebts: money,
+  badDebtRelief: money,
+  fxGainLoss: money,
+  leftOutNoRate: z.object({
+    shipperInvoices: count,
+    carrierBills: count,
+    payments: count,
+    writeOffs: count,
+  }),
+});
+
+const partyPnlSchema: z.ZodType<PartyPnl> = z.object({
+  partyId: z.string().nullable(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  shipmentCount: count,
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+});
+
+export const partyPnlReportSchema: z.ZodType<PartyPnlReport> = z.object({
+  period: reportPeriodSchema,
+  shippers: z.array(partyPnlSchema),
+  carriers: z.array(partyPnlSchema),
+});
+
+export const shipmentPnlSchema: z.ZodType<ShipmentPnl> = z.object({
+  shipmentId: z.string(),
+  mgcShipmentId: z.string(),
+  loadNumber: z.string(),
+  shipperId: z.string(),
+  shipperName: z.string(),
+  carrierId: z.string().nullable(),
+  carrierName: z.string().nullable(),
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+});
+
+const partyAgingRowSchema: z.ZodType<PartyAgingRow> = z.object({
+  partyId: z.string(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  currency: z.enum(Currency),
+  current: money,
+  days1to30: money,
+  days31to60: money,
+  days61to90: money,
+  days90plus: money,
+  disputed: money,
+  total: money,
+});
+
+export const partyAgingReportSchema: z.ZodType<PartyAgingReport> = z.object({
+  asOf: calendarDate,
+  receivable: z.array(partyAgingRowSchema),
+  payable: z.array(partyAgingRowSchema),
+});
+
+const taxSummaryRowSchema: z.ZodType<TaxSummaryRow> = z.object({
+  key: z.string(),
+  jurisdiction: z.string(),
+  taxCode: z.string(),
+  ratePercent: decimalText,
+  taxableSales: money,
+  taxCollected: money,
+  taxablePurchases: money,
+  inputTaxCredits: money,
+  badDebtRelief: money,
+  netTax: money,
+});
+
+export const taxReportSchema: z.ZodType<TaxReport> = z.object({
+  period: reportPeriodSchema,
+  rows: z.array(taxSummaryRowSchema),
+  totals: z.object({
+    taxCollected: money,
+    inputTaxCredits: money,
+    badDebtRelief: money,
+    netTax: money,
+  }),
+});
+
+const fxGainLossRowSchema: z.ZodType<FxGainLossRow> = z.object({
+  type: z.enum(PartyType),
+  allocationId: z.string(),
+  allocatedOn: calendarDate,
+  partyId: z.string(),
+  partyName: z.string(),
+  invoiceNumber: z.string().nullable(),
+  paymentNumber: z.string(),
+  currency: z.enum(Currency),
+  amount: money,
+  invoiceRate: decimalText,
+  paymentRate: decimalText,
+  billedCad: money,
+  settledCad: money,
+  gainLoss: money,
+});
+
+export const fxGainLossReportSchema: z.ZodType<FxGainLossReport> = z.object({
+  period: reportPeriodSchema,
+  rows: z.array(fxGainLossRowSchema),
+  totals: z.object({ shippers: money, carriers: money, net: money }),
+  leftOutNoRate: count,
 });
 
 // POST /shipment: the shipment and the invoices it made.

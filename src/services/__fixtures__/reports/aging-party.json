@@ -1,0 +1,88 @@
+{
+  "message": "Success",
+  "data": {
+    "asOf": "2026-10-29",
+    "receivable": [
+      {
+        "partyId": "pty_zTHfVGL7GD",
+        "partyName": "Demo Maple Leaf Foods",
+        "type": "SHIPPER",
+        "currency": "CAD",
+        "current": "3161.81",
+        "days1to30": "1187.19",
+        "days31to60": "0.00",
+        "days61to90": "3679.20",
+        "days90plus": "0.00",
+        "disputed": "250.00",
+        "total": "8278.20"
+      },
+      {
+        "partyId": "pty_61pcfGJq23",
+        "partyName": "Demo Great Lakes Supply",
+        "type": "SHIPPER",
+        "currency": "USD",
+        "current": "2599.00",
+        "days1to30": "2633.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "5232.00"
+      },
+      {
+        "partyId": "pty_pYM2Ft3Kyc",
+        "partyName": "Demo Northwind Distribution",
+        "type": "SHIPPER",
+        "currency": "CAD",
+        "current": "3107.50",
+        "days1to30": "1486.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "4593.50"
+      },
+      {
+        "partyId": "pty_73rWWVZcDU",
+        "partyName": "Demo Prairie Agri",
+        "type": "SHIPPER",
+        "currency": "CAD",
+        "current": "1582.50",
+        "days1to30": "0.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "1582.50"
+      }
+    ],
+    "payable": [
+      {
+        "partyId": "pty_C6mPvzYY8F",
+        "partyName": "Demo Day & Ross",
+        "type": "CARRIER",
+        "currency": "CAD",
+        "current": "4945.00",
+        "days1to30": "0.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "4945.00"
+      },
+      {
+        "partyId": "pty_xRUEk0Hfuu",
+        "partyName": "Demo Manitoulin Transport",
+        "type": "CARRIER",
+        "currency": "CAD",
+        "current": "4836.40",
+        "days1to30": "0.00",
+        "days31to60": "0.00",
+        "days61to90": "0.00",
+        "days90plus": "0.00",
+        "disputed": "0.00",
+        "total": "4836.40"
+      }
+    ]
+  }
+}
