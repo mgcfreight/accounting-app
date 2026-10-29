@@ -1,0 +1,18 @@
+{
+  "message": "Created successfully",
+  "data": {
+    "id": "srn_yVXmOBoWrK",
+    "kind": "WEEKLY_EMAIL",
+    "trigger": "MANUAL",
+    "ranAt": "2026-10-29T18:55:46.946Z",
+    "finishedAt": "2026-10-29T18:55:47.117Z",
+    "periodFrom": "2026-10-23",
+    "periodTo": "2026-10-29",
+    "partyCount": 2,
+    "sentCount": 0,
+    "queuedCount": 2,
+    "failedCount": 0,
+    "skippedCount": 0,
+    "failures": []
+  }
+}

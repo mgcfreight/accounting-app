@@ -22,4 +22,5 @@ export * from "./reports";
 export * from "./roles";
 export * from "./settings";
 export * from "./shipments";
+export * from "./statements";
 export * from "./users";

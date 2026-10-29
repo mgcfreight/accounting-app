@@ -6,6 +6,7 @@ import {
   CarrierInvoiceStatus,
   Currency,
   CustomerInvoiceStatus,
+  EmailStatus,
   FxRateSource,
   InvoiceKind,
   InvoiceReviewFlag,
@@ -21,6 +22,9 @@ import {
   SessionStatus,
   ShipmentSource,
   SignInStep,
+  StatementEntryType,
+  StatementRunTrigger,
+  StatementTrigger,
   TaxBasis,
   TaxTreatment,
   TwoFactorMethod,
@@ -51,6 +55,7 @@ import {
   NoticeSettings,
   Paginated,
   PartyAccountSummary,
+  PartyStatement,
   PartyView,
   Payment,
   PermissionCatalog,
@@ -59,6 +64,11 @@ import {
   RoleRef,
   SettingsEditor,
   ShipmentView,
+  StatementHistoryItem,
+  StatementInvoice,
+  StatementLine,
+  StatementRun,
+  StatementSchedule,
   SuggestedAllocation,
   TaxRate,
   User,
@@ -640,6 +650,102 @@ export const accountSummarySchema: z.ZodType<PartyAccountSummary> = z.object({
   averagePaymentDays: count.nullable(),
   weeklyStatement: z.boolean(),
   statementEmail: z.string().nullable(),
+});
+
+export const statementScheduleSchema: z.ZodType<StatementSchedule> = z.object({
+  asOf: timestamp,
+  nextWeeklyRun: timestamp,
+  weeklyShipperCount: count,
+  emailEnabled: z.boolean(),
+});
+
+export const statementRunSchema: z.ZodType<StatementRun> = z.object({
+  id: z.string(),
+  trigger: z.enum(StatementRunTrigger),
+  ranAt: timestamp,
+  finishedAt: timestamp.nullable(),
+  periodFrom: calendarDate,
+  periodTo: calendarDate,
+  partyCount: count,
+  sentCount: count,
+  queuedCount: count,
+  failedCount: count,
+  skippedCount: count,
+  failures: z.array(z.object({ partyId: z.string(), reason: z.string() })),
+});
+
+export const statementHistoryItemSchema: z.ZodType<StatementHistoryItem> =
+  z.object({
+    id: z.string(),
+    statementId: z.string(),
+    periodFrom: calendarDate,
+    periodTo: calendarDate,
+    sentAt: timestamp,
+    closingBalance: money,
+    currency: z.enum(Currency),
+    trigger: z.enum(StatementTrigger),
+    emailStatus: z.enum(EmailStatus).nullable(),
+  });
+
+const statementInvoiceSchema: z.ZodType<StatementInvoice> = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  entryType: z.enum(StatementEntryType),
+  invoiceDate: calendarDate,
+  dueDate: calendarDate.nullable(),
+  total: money,
+  balance: money,
+  paymentStatus: z.enum(PaymentStatus).nullable(),
+  overdueDays: count,
+  currency: z.enum(Currency),
+  previousDue: z.boolean(),
+});
+
+const statementLineSchema: z.ZodType<StatementLine> = z.object({
+  entryDate: calendarDate,
+  entryType: z.enum(StatementEntryType),
+  sourceId: z.string(),
+  reference: z.string().nullable(),
+  loadNumber: z.string().nullable(),
+  quoteNumber: z.string().nullable(),
+  dueDate: calendarDate.nullable(),
+  paymentReference: z.string().nullable(),
+  paidAt: calendarDate.nullable(),
+  previousDue: z.boolean(),
+  debit: money,
+  credit: money,
+  runningBalance: money,
+});
+
+export const statementSchema: z.ZodType<PartyStatement> = z.object({
+  number: z.string().nullable(),
+  statementId: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  partyType: z.enum(PartyType),
+  currency: z.enum(Currency),
+  statementDate: calendarDate,
+  periodFrom: calendarDate,
+  periodTo: calendarDate,
+  asOf: timestamp,
+  openingBalance: money,
+  previousDues: money,
+  invoiced: money,
+  paidAndCredited: money,
+  totalPaid: money,
+  totalUnpaid: money,
+  closingBalance: money,
+  overdue: z.object({
+    days1to30: money,
+    days31to60: money,
+    days61to90: money,
+    days90plus: money,
+  }),
+  invoices: z.array(statementInvoiceSchema),
+  lines: z.array(statementLineSchema),
+  trigger: z.enum(StatementTrigger).nullable(),
+  emailStatus: z.enum(EmailStatus).nullable(),
+  sentTo: z.array(z.string()).nullable(),
 });
 
 const reportPeriodSchema: z.ZodType<ReportPeriod> = z.object({

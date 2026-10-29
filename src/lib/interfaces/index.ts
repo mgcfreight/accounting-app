@@ -25,7 +25,10 @@ import {
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
-  StatementRunKind,
+  EmailStatus,
+  StatementEntryType,
+  StatementRunTrigger,
+  StatementTrigger,
   SyncRunStatus,
   Permission,
   TaxBasis,
@@ -633,14 +636,6 @@ export interface AgingRow {
   currency: Currency;
 }
 
-export interface Statement {
-  id: string;
-  periodFrom: string;
-  periodTo: string;
-  sentAt: string;
-  closingBalance: string;
-}
-
 export interface MonthlyPnl {
   month: string;
   revenue: string;
@@ -710,12 +705,8 @@ export interface MonthlyPnlReport {
   total: MonthlyPnl;
 }
 
-// ---------------------------------------------------------------------------
-// Provisional shapes for the screens with no API yet (statements, reminders,
-// allocation, installment plans, disputes, report breakdowns), filled from
-// lib/mock. Every amount is already calculated, as the API will send it.
-
-// A shipper's or carrier's account at a glance (statements, requirement 2).
+// GET /account/summaries: a shipper's or carrier's account at a glance
+// (statements, requirement 2).
 export interface PartyAccountSummary {
   partyId: string;
   partyName: string;
@@ -743,17 +734,123 @@ export interface PartyAccountSummary {
   statementEmail: string | null;
 }
 
-// One run of the statement jobs: the daily refresh of every balance, and the
-// Friday email of shipper statements.
+// GET /statement/history: one of a party's saved statements.
+export interface StatementHistoryItem {
+  // "ST-<n>"
+  id: string;
+  statementId: string;
+  periodFrom: string;
+  periodTo: string;
+  // When the email went; while it has not, when the statement was made.
+  sentAt: string;
+  closingBalance: string;
+  currency: Currency;
+  trigger: StatementTrigger;
+  emailStatus: EmailStatus | null;
+}
+
+// An invoice, adjustment or credit note on a statement, as it stood on the
+// statement's date.
+export interface StatementInvoice {
+  id: string;
+  number: string | null;
+  entryType: StatementEntryType;
+  invoiceDate: string;
+  dueDate: string | null;
+  total: string;
+  balance: string;
+  paymentStatus: PaymentStatus | null;
+  // Days past due at the statement date; 0 when not overdue.
+  overdueDays: number;
+  currency: Currency;
+  // Billed before the period and still owed.
+  previousDue: boolean;
+}
+
+export interface StatementLine {
+  entryDate: string;
+  entryType: StatementEntryType;
+  sourceId: string;
+  reference: string | null;
+  loadNumber: string | null;
+  quoteNumber: string | null;
+  dueDate: string | null;
+  paymentReference: string | null;
+  paidAt: string | null;
+  previousDue: boolean;
+  debit: string;
+  credit: string;
+  runningBalance: string;
+}
+
+// A statement: a saved one (number and statementId set) or the current one,
+// worked out for the screen and not saved (both null). Every figure is the
+// API's.
+export interface PartyStatement {
+  number: string | null;
+  statementId: string | null;
+  partyId: string;
+  partyName: string;
+  partyType: PartyType;
+  currency: Currency;
+  statementDate: string;
+  periodFrom: string;
+  periodTo: string;
+  // When the figures were worked out.
+  asOf: string;
+  openingBalance: string;
+  previousDues: string;
+  invoiced: string;
+  paidAndCredited: string;
+  totalPaid: string;
+  totalUnpaid: string;
+  closingBalance: string;
+  overdue: {
+    days1to30: string;
+    days31to60: string;
+    days61to90: string;
+    days90plus: string;
+  };
+  invoices: StatementInvoice[];
+  lines: StatementLine[];
+  trigger: StatementTrigger | null;
+  emailStatus: EmailStatus | null;
+  sentTo: string[] | null;
+}
+
+// GET /statement/schedule.
+export interface StatementSchedule {
+  // Balances are live: when this answer was made.
+  asOf: string;
+  // The next Friday 08:00 in Toronto.
+  nextWeeklyRun: string;
+  weeklyShipperCount: number;
+  // False: statements are saved but not emailed.
+  emailEnabled: boolean;
+}
+
+// One weekly statement run (GET /statement/runs).
 export interface StatementRun {
   id: string;
-  kind: StatementRunKind;
+  trigger: StatementRunTrigger;
   ranAt: string;
+  finishedAt: string | null;
+  periodFrom: string;
+  periodTo: string;
   partyCount: number;
-  // Weekly email only.
-  sentCount: number | null;
-  failedCount: number | null;
+  sentCount: number;
+  // Saved but not emailed, because email is switched off.
+  queuedCount: number;
+  failedCount: number;
+  // Already had this week's statement.
+  skippedCount: number;
+  failures: { partyId: string; reason: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Provisional shapes for the screens with no API yet (reminders, installment
+// plans, disputes, report breakdowns), filled from lib/mock. Every amount is
+// already calculated, as the API will send it.
 
 // A payment reminder, 7 days before an invoice's due date.
 export interface Reminder {

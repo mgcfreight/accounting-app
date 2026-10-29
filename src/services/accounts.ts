@@ -1,5 +1,5 @@
 import { PartyType } from "@/lib/enums";
-import { apiClient, parseBody } from "./api-client";
+import { apiClient, getFile, parseBody } from "./api-client";
 import {
   accountSummarySchema,
   agingSchema,
@@ -57,3 +57,21 @@ export const listAccountSummaries = (
       (res) =>
         parseBody(envelope(paginated(accountSummarySchema)), res.data).data
     );
+
+// Every account matching the filters, as Excel (reports.export_csv) or PDF
+// (reports.export_pdf): a sheet per side the role may see.
+export const exportAccountSummaries = (
+  params: Omit<AccountSummaryListParams, "page" | "limit">,
+  format: "pdf" | "xlsx",
+  fallbackName: string
+) =>
+  getFile(
+    "/account/summaries/export",
+    {
+      format,
+      type: params.type,
+      searchQuery: params.searchQuery || undefined,
+      isActive: params.isActive,
+    },
+    fallbackName
+  );

@@ -21,11 +21,11 @@ Sign-in (with 2FA and password reset), My Account, Users, Roles &
 Permissions, Sessions, the Audit Report, Settings (company, notifications,
 tax rates, charge types), Shippers and Carriers (with agreements),
 Shipments, Shipper and Carrier Invoices (with versions), Payments (record,
-allocate, reverse) and the Dashboard run on the Accounts API. Installment
-plans, Statements, Reminders, Reports, Needs Review and Sync Status still
-read from
-`src/lib/mock/`, and their actions (export, new plan) show a "demo only"
-toast.
+allocate, reverse), the Dashboard and Statements (with their PDF and Excel
+downloads, via `getFile` and `useFileDownload`) run on the Accounts API.
+Installment plans, Reminders, Reports, Needs Review and Sync Status still
+read from `src/lib/mock/`, and their actions (export, new plan) show a
+"demo only" toast.
 
 The API sends party ids, not names, on shipments and carrier invoices:
 look them up with `usePartyNames` (`containers/parties`), and show the id

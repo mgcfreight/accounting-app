@@ -52,10 +52,15 @@ export const downloadCsv = <T>(table: ExportTable<T>) => {
   const blob = new Blob(["﻿", toCsv(table)], {
     type: "text/csv;charset=utf-8",
   });
+  saveFile(blob, exportFileName(table.title, "csv"));
+};
+
+// Hands a file to the browser to save.
+export const saveFile = (blob: Blob, fileName: string) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = exportFileName(table.title, "csv");
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
 };

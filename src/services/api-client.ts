@@ -77,6 +77,60 @@ export const parseBody = <T extends z.ZodType>(schema: T, body: unknown) => {
   return result.data as z.infer<T>;
 };
 
+// The name in a Content-Disposition header: filename* (UTF-8) first, then
+// the plain one. Null when the header is missing or unreadable.
+const attachmentName = (header: unknown): string | null => {
+  if (typeof header !== "string") return null;
+  const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Fall through to the plain name.
+    }
+  }
+  return header.match(/filename="([^"]+)"/i)?.[1] ?? null;
+};
+
+// A generated file (PDF, Excel) from the API, with the name it was sent
+// under. Cross-origin, the browser hides Content-Disposition unless the API
+// exposes it, so the caller gives the name to use then. A failure arrives
+// as a Blob; its JSON message is read out so the ApiError reads as usual.
+export const getFile = async (
+  url: string,
+  params: Record<string, unknown>,
+  fallbackName: string
+): Promise<{ blob: Blob; fileName: string }> => {
+  try {
+    const res = await apiClient.get<Blob>(url, {
+      params,
+      responseType: "blob",
+      headers: { Accept: "*/*" },
+    });
+    return {
+      blob: res.data,
+      fileName:
+        attachmentName(res.headers["content-disposition"]) ?? fallbackName,
+    };
+  } catch (error) {
+    if (error instanceof ApiError && error.body instanceof Blob) {
+      let body: unknown;
+      try {
+        body = JSON.parse(await error.body.text());
+      } catch {
+        throw error;
+      }
+      throw new ApiError(
+        messageFrom(body) ?? error.message,
+        error.status,
+        body,
+        error
+      );
+    }
+    throw error;
+  }
+};
+
 // Called when the session can't be renewed (signed out elsewhere, disabled,
 // expired), so the UserProvider can clear the user and show the login page.
 type SessionExpiredListener = () => void;

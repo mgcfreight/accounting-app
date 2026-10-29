@@ -265,13 +265,39 @@ export enum SortOrder {
   Desc = "DESC",
 }
 
-// Statements, reminders, allocation, installments and disputes: no API yet;
-// the screens read lib/mock.
-
-export enum StatementRunKind {
-  DailyRefresh = "DAILY_REFRESH",
-  WeeklyEmail = "WEEKLY_EMAIL",
+// What made a statement: the Friday run (WEEKLY), a person ("Send now",
+// "Email statement", "Send latest dues": MANUAL), or the billing-period
+// notices job (SCHEDULED).
+export enum StatementTrigger {
+  Scheduled = "SCHEDULED",
+  Manual = "MANUAL",
+  Weekly = "WEEKLY",
 }
+
+// What started a weekly run: the Friday job, or "Send now".
+export enum StatementRunTrigger {
+  Scheduled = "SCHEDULED",
+  Manual = "MANUAL",
+}
+
+export enum StatementEntryType {
+  Invoice = "INVOICE",
+  Adjustment = "ADJUSTMENT",
+  CreditNote = "CREDIT_NOTE",
+  Payment = "PAYMENT",
+  WriteOff = "WRITE_OFF",
+}
+
+// QUEUED: saved, not emailed (email is switched off).
+export enum EmailStatus {
+  Queued = "QUEUED",
+  Sent = "SENT",
+  Failed = "FAILED",
+  Bounced = "BOUNCED",
+}
+
+// Reminders, installments and disputes: no API yet; the screens read
+// lib/mock.
 
 export enum ReminderChannel {
   // Emailed to the shipper's accounts department.
