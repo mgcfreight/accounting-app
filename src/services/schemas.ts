@@ -6,6 +6,8 @@ import {
   CarrierInvoiceStatus,
   Currency,
   CustomerInvoiceStatus,
+  DisputeOutcome,
+  DisputeStatus,
   EmailStatus,
   FxRateSource,
   InvoiceDirection,
@@ -49,6 +51,7 @@ import {
   CurrencyAmounts,
   CustomerInvoiceView,
   DashboardSummary,
+  Dispute,
   ExcludedFromCad,
   InvoiceBillTo,
   InvoiceChargeType,
@@ -677,6 +680,28 @@ export const reminderSchema: z.ZodType<Reminder> = z.object({
   skipReason: z.enum(ReminderSkipReason).nullable(),
   sentAt: timestamp.nullable(),
   note: z.string().nullable(),
+});
+
+export const disputeSchema: z.ZodType<Dispute> = z.object({
+  id: z.string(),
+  direction: z.enum(InvoiceDirection),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  currency: z.enum(Currency),
+  disputedAmount: money,
+  invoiceBalance: money,
+  reason: z.string(),
+  openedOn: timestamp,
+  openedBy: z.string(),
+  status: z.enum(DisputeStatus),
+  outcome: z.enum(DisputeOutcome).nullable(),
+  resolution: z.string().nullable(),
+  resolvedOn: timestamp.nullable(),
+  resolvedBy: z.string().nullable(),
+  creditNoteId: z.string().nullable(),
+  creditNoteNumber: z.string().nullable(),
 });
 
 export const reminderCountsSchema: z.ZodType<ReminderCounts> = z.object({

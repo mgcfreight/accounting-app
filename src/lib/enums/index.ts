@@ -29,6 +29,8 @@ export enum Permission {
   CustomerInvoicesVoid = "customer_invoices.void",
   CustomerInvoicesExportPdf = "customer_invoices.export_pdf",
   CustomerInvoicesSendEmail = "customer_invoices.send_email",
+  // Write a balance off as bad debt.
+  CustomerInvoicesWriteOff = "customer_invoices.write_off",
 
   CarrierInvoicesView = "carrier_invoices.view",
   // Adjustments and credit notes.
@@ -345,4 +347,12 @@ export enum InstallmentStatus {
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",
+}
+
+// How a dispute ended. Money moves only through a credit note, or a write-off
+// (shippers only).
+export enum DisputeOutcome {
+  CreditNote = "CREDIT_NOTE",
+  PaysInFull = "PAYS_IN_FULL",
+  WriteOff = "WRITE_OFF",
 }

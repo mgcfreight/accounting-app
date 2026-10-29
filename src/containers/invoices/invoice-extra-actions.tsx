@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -20,18 +20,19 @@ import {
   Permission,
 } from "@/lib/enums";
 import { compareMoney, isZeroMoney } from "@/lib/money";
-import { getParty } from "@/services";
+import { ApiError, errorMessage, getParty, openDispute } from "@/services";
 import {
+  directionOf,
   invoiceNumberOf,
   InvoiceView,
   isCustomerInvoice,
   isOwed,
 } from "./invoice-view";
 
-// Invoice actions the Accounts API has no endpoint for yet: emailing the
-// invoice, its PDF, voiding it for a cancelled load, flagging a dispute and
-// attaching a document. Each form is checked as the real one will be, then
-// says it's a demo: nothing is saved, sent or uploaded.
+// The invoice's "More" actions. Flagging a dispute calls the API; emailing
+// the invoice, its PDF, voiding it for a cancelled load and attaching a
+// document are still demos: each form is checked as the real one will be,
+// then nothing is saved, sent or uploaded.
 
 export type ExtraAction = "email" | "void" | "dispute" | "upload";
 
@@ -100,7 +101,7 @@ export const extraActionsFor = (
       onPress: () => demo(`PDF of ${invoiceNumberOf(invoice) ?? "this invoice"}`, "generated"),
     });
   }
-  if (canEdit && isOwed(invoice)) {
+  if (canEdit && isOwed(invoice) && !invoice.disputed) {
     actions.push({ key: "dispute", label: "Flag as disputed", onPress: () => onOpen("dispute") });
   }
   if (canEdit && !isClosed(invoice)) {
@@ -354,9 +355,28 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     defaultValues: { reason: "", amount: invoice.balanceDue },
   });
 
-  const submit = handleSubmit(() => {
-    demo(`Dispute on ${invoiceNumberOf(invoice) ?? "this invoice"}`);
-    onClose();
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    void queryClient.invalidateQueries({ queryKey: ["disputes"] });
+    void queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  };
+  const flag = useMutation({
+    mutationFn: (values: DisputeValues) =>
+      openDispute(directionOf(invoice), {
+        invoiceId: invoice.id,
+        amount: values.amount.trim(),
+        reason: values.reason.trim(),
+      }),
+    onSuccess: () => {
+      toast.success(`${invoiceNumberOf(invoice) ?? "The invoice"} is flagged as disputed.`);
+      refresh();
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      if (error instanceof ApiError && error.status === 409) refresh();
+    },
   });
 
   return (
@@ -365,7 +385,8 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       onOpenChange={(open) => !open && onClose()}
       title="Flag as Disputed"
       confirmText="Flag as Disputed"
-      onConfirm={submit}
+      onConfirm={handleSubmit((values) => flag.mutate(values))}
+      isConfirming={flag.isPending}
       size="xl"
     >
       <Summary invoice={invoice} partyName={partyName} />
@@ -379,8 +400,11 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         label="What is disputed"
         placeholder="Shipper says the liftgate was not used"
         rules={{
-          required: "Say what is disputed",
-          maxLength: { value: 500, message: "At most 500 characters" },
+          validate: (value: string) => {
+            const length = value.trim().length;
+            if (length < 3) return "Say what is disputed (at least 3 characters)";
+            return length <= 500 || "At most 500 characters";
+          },
         }}
       />
       <BaseInput

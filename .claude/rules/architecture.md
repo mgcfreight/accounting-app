@@ -22,10 +22,12 @@ Permissions, Sessions, the Audit Report, Settings (company, notifications,
 tax rates, charge types), Shippers and Carriers (with agreements),
 Shipments, Shipper and Carrier Invoices (with versions), Payments (record,
 allocate, reverse), the Dashboard, Statements (with their PDF and Excel
-downloads, via `getFile` and `useFileDownload`) and Reminders (send now,
-skip) run on the Accounts API. Installment plans, Reports, Needs Review and
-Sync Status still read from `src/lib/mock/`, and their actions (export, new
-plan) show a "demo only" toast.
+downloads, via `getFile` and `useFileDownload`), Reminders (send now,
+skip) and Disputes (Needs Review, and "Flag as disputed" on an invoice) run
+on the Accounts API. Installment plans, Reports, Needs Review's MGC changes
+(they come with the TMS sync) and Sync Status still read from
+`src/lib/mock/`, and their actions (export, new plan) show a "demo only"
+toast.
 
 The API sends party ids, not names, on shipments and carrier invoices:
 look them up with `usePartyNames` (`containers/parties`), and show the id

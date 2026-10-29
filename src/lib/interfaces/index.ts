@@ -5,6 +5,7 @@ import {
   CarrierInvoiceStatus,
   Currency,
   CustomerInvoiceStatus,
+  DisputeOutcome,
   DisputeStatus,
   FxRateSource,
   InstallmentStatus,
@@ -883,9 +884,34 @@ export interface ReminderCounts {
   skipped: number;
 }
 
+// GET /dispute/all: a disputed shipper invoice or carrier bill.
+export interface Dispute {
+  id: string;
+  direction: InvoiceDirection;
+  invoiceId: string;
+  // A carrier bill's is the carrier's reference number.
+  invoiceNumber: string | null;
+  partyId: string;
+  partyName: string;
+  currency: Currency;
+  disputedAmount: string;
+  // What the invoice still owes now.
+  invoiceBalance: string;
+  reason: string;
+  openedOn: string;
+  openedBy: string;
+  status: DisputeStatus;
+  outcome: DisputeOutcome | null;
+  resolution: string | null;
+  resolvedOn: string | null;
+  resolvedBy: string | null;
+  creditNoteId: string | null;
+  creditNoteNumber: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Provisional shapes for the screens with no API yet (installment plans,
-// disputes, report breakdowns), filled from lib/mock. Every amount is
+// report breakdowns), filled from lib/mock. Every amount is
 // already calculated, as the API will send it.
 
 export interface Installment {
@@ -912,20 +938,6 @@ export interface InstallmentPlan {
 
 // An invoice the shipper or carrier disputes. While open, its balance sits in
 // the aging report's Disputed column and reminders are paused.
-export interface Dispute {
-  id: string;
-  direction: InvoiceDirection;
-  invoiceNumber: string;
-  partyName: string;
-  currency: Currency;
-  disputedAmount: string;
-  reason: string;
-  openedOn: string;
-  openedBy: string;
-  status: DisputeStatus;
-  resolution: string | null;
-  resolvedOn: string | null;
-}
 
 // A month or quarter of the books, CAD at invoice-date rates.
 export interface PeriodSummary {

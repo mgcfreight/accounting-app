@@ -1,0 +1,77 @@
+{
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "id": "dsp_2Y9spOkrNC",
+        "direction": "AP",
+        "invoiceId": "cri_Lw8k1BsrJP",
+        "invoiceNumber": "cin_DEMO02_22",
+        "partyId": "pty_xRUEk0Hfuu",
+        "partyName": "Demo Manitoulin Transport",
+        "currency": "CAD",
+        "disputedAmount": "80.00",
+        "invoiceBalance": "2011.40",
+        "reason": "Carrier billed 80.00 over the agreed rate",
+        "openedOn": "2026-10-29T19:30:24.469Z",
+        "openedBy": "Demo Admin",
+        "status": "RESOLVED",
+        "outcome": "PAYS_IN_FULL",
+        "resolution": "Carrier showed the rate confirmation; the extra was agreed",
+        "resolvedOn": "2026-10-29T19:30:24.480Z",
+        "resolvedBy": "Demo Admin",
+        "creditNoteId": null,
+        "creditNoteNumber": null
+      },
+      {
+        "id": "dsp_ES7jVBrvwJ",
+        "direction": "AR",
+        "invoiceId": "csi_1mIXFCCKsY",
+        "invoiceNumber": "sin_DEMO01_30",
+        "partyId": "pty_73rWWVZcDU",
+        "partyName": "Demo Prairie Agri",
+        "currency": "CAD",
+        "disputedAmount": "150.00",
+        "invoiceBalance": "1582.50",
+        "reason": "Detention charged without a signed delay record",
+        "openedOn": "2026-10-29T19:30:24.410Z",
+        "openedBy": "Demo Admin",
+        "status": "RESOLVED",
+        "outcome": "WRITE_OFF",
+        "resolution": "Not worth pursuing; written off as agreed with the controller",
+        "resolvedOn": "2026-10-29T19:30:24.453Z",
+        "resolvedBy": "Demo Admin",
+        "creditNoteId": null,
+        "creditNoteNumber": null
+      },
+      {
+        "id": "dsp_MtHVzKTOzW",
+        "direction": "AR",
+        "invoiceId": "csi_eYRoMJoWCg",
+        "invoiceNumber": "sin_DEMO01_26",
+        "partyId": "pty_zTHfVGL7GD",
+        "partyName": "Demo Maple Leaf Foods",
+        "currency": "CAD",
+        "disputedAmount": "250.00",
+        "invoiceBalance": "1437.19",
+        "reason": "Shipper says the second pallet was not picked up",
+        "openedOn": "2026-10-29T19:30:24.365Z",
+        "openedBy": "Demo Admin",
+        "status": "OPEN",
+        "outcome": null,
+        "resolution": null,
+        "resolvedOn": null,
+        "resolvedBy": null,
+        "creditNoteId": null,
+        "creditNoteNumber": null
+      }
+    ],
+    "meta": {
+      "totalItems": 3,
+      "itemCount": 3,
+      "itemsPerPage": 20,
+      "totalPages": 1,
+      "currentPage": 1
+    }
+  }
+}
