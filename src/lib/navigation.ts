@@ -18,6 +18,9 @@ export interface MenuItem {
   label: string;
   route: string;
   icon?: MenuIconName;
+  // The heading the sidebar shows above a top-level item. Consecutive items
+  // with the same section share one heading.
+  section?: string;
   children?: MenuItem[];
 }
 
@@ -27,6 +30,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { icon: "dashboard", label: "Dashboard", route: "/dashboard/" },
   {
     icon: "invoices",
+    section: "Billing",
     label: "Invoices",
     route: "/shipper-invoices/",
     children: [
@@ -36,14 +40,45 @@ export const MENU_ITEMS: MenuItem[] = [
       { label: "Payment Reminders", route: "/reminders/" },
     ],
   },
-  { icon: "payments", label: "Payments", route: "/payments/" },
-  { icon: "shippers", label: "Shippers", route: "/shippers/" },
-  { icon: "carriers", label: "Carriers", route: "/carriers/" },
-  { icon: "shipments", label: "Shipments", route: "/shipments/" },
-  { icon: "statements", label: "Statements", route: "/statements/" },
-  { icon: "reports", label: "Reports", route: "/reports/" },
+  {
+    icon: "payments",
+    section: "Billing",
+    label: "Payments",
+    route: "/payments/",
+  },
+  {
+    icon: "shippers",
+    section: "Partners",
+    label: "Shippers",
+    route: "/shippers/",
+  },
+  {
+    icon: "carriers",
+    section: "Partners",
+    label: "Carriers",
+    route: "/carriers/",
+  },
+  {
+    icon: "shipments",
+    section: "Partners",
+    label: "Shipments",
+    route: "/shipments/",
+  },
+  {
+    icon: "statements",
+    section: "Reporting",
+    label: "Statements",
+    route: "/statements/",
+  },
+  {
+    icon: "reports",
+    section: "Reporting",
+    label: "Reports",
+    route: "/reports/",
+  },
   {
     icon: "system",
+    section: "Admin",
     label: "System",
     route: "/sync-status/",
     children: [{ label: "Sync Status", route: "/sync-status/" }],
@@ -52,6 +87,7 @@ export const MENU_ITEMS: MenuItem[] = [
   // under Settings (their own events).
   {
     icon: "users",
+    section: "Admin",
     label: "Users",
     route: "/users/",
     children: [
@@ -62,6 +98,7 @@ export const MENU_ITEMS: MenuItem[] = [
   },
   {
     icon: "settings",
+    section: "Admin",
     label: "Settings",
     route: "/settings/",
     children: [
@@ -83,6 +120,8 @@ export const menuForUser = (
   items.flatMap((item) => {
     if (!item.children) return canAccessRoute(item.route, me) ? [item] : [];
     const children = menuForUser(me, item.children);
-    if (children.length === 1) return [{ ...children[0], icon: item.icon }];
+    if (children.length === 1) {
+      return [{ ...children[0], icon: item.icon, section: item.section }];
+    }
     return children.length ? [{ ...item, children }] : [];
   });
