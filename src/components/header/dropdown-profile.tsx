@@ -53,7 +53,11 @@ export default function DropdownProfile({ user }: { user: Me }) {
       <DropdownTrigger>
         <div
           role="button"
-          className="flex items-center cursor-pointer"
+          // HeroUI handles Enter and Space on the trigger but treats it as a
+          // native button and adds no tabIndex, so without one Tab skips it.
+          tabIndex={0}
+          aria-label={`Account menu for ${fullName(user)}`}
+          className="flex items-center cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-base-primary"
           onMouseEnter={() => {
             isHoveringTrigger.current = true;
             openMenu();
