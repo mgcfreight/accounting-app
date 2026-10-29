@@ -14,6 +14,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   FilterBar,
   FormModal,
   PartyAvatar,
@@ -75,7 +76,11 @@ export default function UserList() {
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
   const [pending, setPending] = useState<Pending | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", role: ALL, status: ALL },
   });
   const search = useDebouncedValue(
@@ -292,6 +297,7 @@ export default function UserList() {
           aria-label="Status"
           disallowEmptySelection
         />
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       {users.isError && (
         <AlertBanner

@@ -6,9 +6,11 @@ import {
   BaseButton,
   BaseInput,
   ErrorState,
+  LeavePageModal,
   TableSkeleton,
 } from "@/components/common";
 import { DownArrow } from "@/components/icons";
+import { useUnsavedChanges } from "@/hooks";
 import { NoticeSettings, NoticeTerms } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
 import { errorMessage, getNoticeSettings, saveNoticeSettings } from "@/services";
@@ -45,10 +47,16 @@ export default function NoticeSettingsSection() {
     queryFn: ({ signal }) => getNoticeSettings(signal),
   });
   // `values`: the form follows the saved settings whenever they (re)load.
-  const { control, handleSubmit } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    formState: { dirtyFields },
+  } = useForm<Values>({
     mode: "onTouched",
     values: settings.data && toForm(settings.data),
   });
+  // A save reloads `values`, which resets the form to clean.
+  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
 
   const save = useMutation({
     mutationFn: (values: Values) =>
@@ -144,6 +152,11 @@ export default function NoticeSettingsSection() {
           isLoading={save.isPending}
         />
       </div>
+      <LeavePageModal
+        isOpen={leaving.blocked}
+        onStay={leaving.stay}
+        onLeave={leaving.leave}
+      />
     </form>
   );
 }

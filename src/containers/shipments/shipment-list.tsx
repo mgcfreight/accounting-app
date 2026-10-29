@@ -5,6 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import {
   BaseInput,
   BaseTable,
+  ClearFiltersButton,
   ErrorState,
   FilterBar,
   Money,
@@ -45,7 +46,11 @@ const columns: BaseTableColumn[] = [
 // one makes its customer and carrier invoices.
 export default function ShipmentList() {
   const navigate = useNavigate();
-  const { control } = useForm({ defaultValues: { search: "" } });
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm({ defaultValues: { search: "" } });
   const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
 
   // The header's "New Shipment" (routes.config: shipments.create).
@@ -154,6 +159,7 @@ export default function ShipmentList() {
           placeholder="Exact load #, MGC id, BOL, PO, PRO…"
           endContent={<SearchNormalSm />}
         />
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       <Card>
         {shipments.isError ? (

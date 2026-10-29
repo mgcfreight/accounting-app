@@ -1,8 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseButton, BaseInput, ErrorState, TableSkeleton } from "@/components/common";
+import {
+  BaseButton,
+  BaseInput,
+  ErrorState,
+  LeavePageModal,
+  TableSkeleton,
+} from "@/components/common";
 import { DownArrow } from "@/components/icons";
+import { useUnsavedChanges } from "@/hooks";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import { CompanySettings } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
@@ -47,10 +54,16 @@ export default function CompanyInformation() {
     queryFn: ({ signal }) => getCompanySettings(signal),
   });
   // `values`: the form follows the saved settings whenever they (re)load.
-  const { control, handleSubmit } = useForm<Company>({
+  const {
+    control,
+    handleSubmit,
+    formState: { dirtyFields },
+  } = useForm<Company>({
     mode: "all",
     values: company.data && toForm(company.data),
   });
+  // A save reloads `values`, which resets the form to clean.
+  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
 
   const save = useMutation({
     mutationFn: (values: Company) =>
@@ -144,6 +157,11 @@ export default function CompanyInformation() {
           isLoading={save.isPending}
         />
       </div>
+      <LeavePageModal
+        isOpen={leaving.blocked}
+        onStay={leaving.stay}
+        onLeave={leaving.leave}
+      />
     </form>
   );
 }

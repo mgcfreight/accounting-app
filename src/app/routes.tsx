@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route } from "react-router";
 import { LOGIN_PATH } from "@/lib/constants";
 import { InvoiceDirection, PartyType } from "@/lib/enums";
 import AppLayout from "./app-layout";
@@ -46,69 +46,65 @@ const UserList = lazy(() => import("@/containers/users/user-list"));
 //
 // Detail pages are `<list>/view/?id=…`: one static page per list, so the
 // build's per-route index.html serves every record.
-export default function AppRoutes() {
-  return (
-    <Routes>
-      <Route index element={<Navigate to={LOGIN_PATH} replace />} />
+//
+// Route elements, not a component: app.tsx hands them to the data router.
+const appRoutes = (
+  <>
+    <Route index element={<Navigate to={LOGIN_PATH} replace />} />
 
-      <Route element={<PublicLayout />}>
-        <Route path="login" element={<LoginForm />} />
-        <Route path="forgot-password" element={<ForgotPasswordForm />} />
-        <Route path="reset-password" element={<ResetPasswordForm />} />
-      </Route>
+    <Route element={<PublicLayout />}>
+      <Route path="login" element={<LoginForm />} />
+      <Route path="forgot-password" element={<ForgotPasswordForm />} />
+      <Route path="reset-password" element={<ResetPasswordForm />} />
+    </Route>
 
-      <Route element={<AppLayout />}>
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route
-          path="shipper-invoices"
-          element={<InvoiceList direction={InvoiceDirection.Receivable} />}
-        />
-        <Route
-          path="shipper-invoices/view"
-          element={<InvoiceDetail direction={InvoiceDirection.Receivable} />}
-        />
-        <Route
-          path="carrier-invoices"
-          element={<InvoiceList direction={InvoiceDirection.Payable} />}
-        />
-        <Route
-          path="carrier-invoices/view"
-          element={<InvoiceDetail direction={InvoiceDirection.Payable} />}
-        />
-        <Route path="needs-review" element={<NeedsReview />} />
-        <Route path="reminders" element={<Reminders />} />
-        <Route path="payments" element={<Payments />} />
-        <Route
-          path="shippers"
-          element={<PartyList type={PartyType.Shipper} />}
-        />
-        <Route
-          path="shippers/view"
-          element={<PartyDetail type={PartyType.Shipper} />}
-        />
-        <Route
-          path="carriers"
-          element={<PartyList type={PartyType.Carrier} />}
-        />
-        <Route
-          path="carriers/view"
-          element={<PartyDetail type={PartyType.Carrier} />}
-        />
-        <Route path="shipments" element={<ShipmentList />} />
-        <Route path="shipments/view" element={<ShipmentDetail />} />
-        <Route path="shipments/new" element={<ShipmentForm />} />
-        <Route path="statements" element={<Statements />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="sync-status" element={<SyncStatus />} />
-        <Route path="users" element={<UserList />} />
-        <Route path="users/sessions" element={<SessionReport />} />
-        <Route path="roles" element={<RoleList />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="settings/audit-log" element={<AuditLog />} />
-        <Route path="account" element={<Account />} />
-      </Route>
+    <Route element={<AppLayout />}>
+      <Route path="dashboard" element={<Dashboard />} />
+      <Route
+        path="shipper-invoices"
+        element={<InvoiceList direction={InvoiceDirection.Receivable} />}
+      />
+      <Route
+        path="shipper-invoices/view"
+        element={<InvoiceDetail direction={InvoiceDirection.Receivable} />}
+      />
+      <Route
+        path="carrier-invoices"
+        element={<InvoiceList direction={InvoiceDirection.Payable} />}
+      />
+      <Route
+        path="carrier-invoices/view"
+        element={<InvoiceDetail direction={InvoiceDirection.Payable} />}
+      />
+      <Route path="needs-review" element={<NeedsReview />} />
+      <Route path="reminders" element={<Reminders />} />
+      <Route path="payments" element={<Payments />} />
+      <Route path="shippers" element={<PartyList type={PartyType.Shipper} />} />
+      <Route
+        path="shippers/view"
+        element={<PartyDetail type={PartyType.Shipper} />}
+      />
+      <Route path="carriers" element={<PartyList type={PartyType.Carrier} />} />
+      <Route
+        path="carriers/view"
+        element={<PartyDetail type={PartyType.Carrier} />}
+      />
+      <Route path="shipments" element={<ShipmentList />} />
+      <Route path="shipments/view" element={<ShipmentDetail />} />
+      <Route path="shipments/new" element={<ShipmentForm />} />
+      <Route path="statements" element={<Statements />} />
+      <Route path="reports" element={<Reports />} />
+      <Route path="sync-status" element={<SyncStatus />} />
+      <Route path="users" element={<UserList />} />
+      <Route path="users/sessions" element={<SessionReport />} />
+      <Route path="roles" element={<RoleList />} />
+      <Route path="settings" element={<Settings />} />
+      <Route path="settings/audit-log" element={<AuditLog />} />
+      <Route path="account" element={<Account />} />
+    </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
-}
+    <Route path="*" element={<NotFound />} />
+  </>
+);
+
+export default appRoutes;

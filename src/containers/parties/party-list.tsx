@@ -7,6 +7,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   ErrorState,
   FilterBar,
   PartyAvatar,
@@ -54,7 +55,11 @@ export default function PartyList({ type }: { type: PartyType }) {
   const navigate = useNavigate();
   const isShipper = type === PartyType.Shipper;
   const [adding, setAdding] = useState(false);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", active: "ALL" },
   });
   const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
@@ -139,6 +144,7 @@ export default function PartyList({ type }: { type: PartyType }) {
           aria-label="Active"
           disallowEmptySelection
         />
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       <Card>
         {parties.isError ? (

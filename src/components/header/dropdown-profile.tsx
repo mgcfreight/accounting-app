@@ -53,7 +53,11 @@ export default function DropdownProfile({ user }: { user: Me }) {
       <DropdownTrigger>
         <div
           role="button"
-          className="flex items-center cursor-pointer"
+          // HeroUI handles Enter and Space on the trigger but treats it as a
+          // native button and adds no tabIndex, so without one Tab skips it.
+          tabIndex={0}
+          aria-label={`Account menu for ${fullName(user)}`}
+          className="flex items-center cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-base-primary"
           onMouseEnter={() => {
             isHoveringTrigger.current = true;
             openMenu();
@@ -68,7 +72,7 @@ export default function DropdownProfile({ user }: { user: Me }) {
               {createInitials(fullName(user))}
             </span>
           </div>
-          <div className="hidden sm:block mx-4">
+          <div className="hidden sm:block mr-2">
             <h2 className="text-sm font-bold text-base-primary">{fullName(user)}</h2>
             <p className="text-xs font-semibold">{user.role.name}</p>
           </div>
@@ -97,7 +101,14 @@ export default function DropdownProfile({ user }: { user: Me }) {
         </DropdownItem>
         <DropdownItem
           key="account"
-          startContent={<UserIcon />}
+          startContent={
+            // The icon is drawn white and 20px for the dark sidebar; here it
+            // matches the Settings and Log Out icons: 24px, grey, a 1.5px line
+            // (1.25 on its 20-unit grid).
+            <span className="flex [&_path]:stroke-[#3F3F46]">
+              <UserIcon width={24} height={24} strokeWidth={1.25} />
+            </span>
+          }
           onPress={() => navigate(ACCOUNT_PATH)}
         >
           My Account
