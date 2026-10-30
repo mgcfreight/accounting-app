@@ -29,10 +29,10 @@ import { humanize } from "@/lib/utils";
 import {
   CarrierInvoiceListParams,
   CustomerInvoiceListParams,
-  listCarrierInvoices,
-  listCustomerInvoices,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
+import { DemoInvoicesBanner } from "./demo-invoices-banner";
+import { fetchInvoicePage, isDemoInvoice } from "./demo-invoices";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { availableActions } from "./invoice-row-actions";
 import InvoiceViewCell, {
@@ -143,12 +143,15 @@ export default function InvoiceList({
   const invoices = useQuery({
     queryKey: ["invoices", direction, "list", params],
     queryFn: ({ signal }): Promise<Paginated<InvoiceView>> =>
-      isReceivable
-        ? listCustomerInvoices(params as CustomerInvoiceListParams, signal)
-        : listCarrierInvoices(params as CarrierInvoiceListParams, signal),
+      fetchInvoicePage(
+        direction,
+        params as CustomerInvoiceListParams | CarrierInvoiceListParams,
+        signal
+      ),
     placeholderData: keepPreviousData,
   });
   const rows = invoices.data?.items ?? [];
+  const demo = rows.some(isDemoInvoice);
   const carriers = usePartyNames(carrierIdsOf(rows));
 
   const renderCell = (invoice: InvoiceView, key: string) => {
@@ -167,8 +170,9 @@ export default function InvoiceList({
             onPress: () => navigate(apiInvoiceHref(invoice)),
           },
           // A new version starts from the invoice's lines, which only the
-          // invoice page has: it's offered there.
-          ...availableActions(invoice, can)
+          // invoice page has: it's offered there. A demo invoice offers
+          // nothing that would write to the API.
+          ...(isDemoInvoice(invoice) ? [] : availableActions(invoice, can))
             .filter((action) => action.key !== "revise")
             .map((action) => ({
               ...action,
@@ -216,6 +220,7 @@ export default function InvoiceList({
         />
         <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
+      {demo && <DemoInvoicesBanner list />}
       <Card>
         {/* A failed refetch keeps the last page beside the error; amounts
             that may be out of date are not shown as current. */}

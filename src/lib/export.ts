@@ -60,7 +60,7 @@ export const downloadCsv = <T>(table: ExportTable<T>) => {
   URL.revokeObjectURL(url);
 };
 
-const escapeHtml = (value: string) =>
+export const escapeHtml = (value: string) =>
   value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -96,17 +96,34 @@ th{background:#f3f4f6}
   )
   .join("")}</tbody></table></body></html>`;
 
-// Opens the print view in a new window and the browser's print dialog,
-// where "Save as PDF" makes the file. Returns false when a pop-up blocker
-// stopped the window, so the caller can say so.
-export const printTable = <T>(table: ExportTable<T>): boolean => {
+// Opens an empty window for a print view. Call it in the click itself: a
+// pop-up blocker allows a window opened there, not one opened after a fetch.
+// Returns null when the window was blocked.
+export const openPrintWindow = (): Window | null => {
   const view = window.open("", "_blank");
-  if (!view) return false;
+  if (!view) return null;
   view.opener = null;
+  view.document.write(
+    "<p style=\"font-family:Lato,Arial,sans-serif;margin:24px\">Preparing…</p>"
+  );
+  return view;
+};
+
+// Writes the page into the window and opens the browser's print dialog,
+// where "Save as PDF" makes the file.
+export const printInto = (view: Window, html: string) => {
   view.document.open();
-  view.document.write(toPrintHtml(table));
+  view.document.write(html);
   view.document.close();
   view.focus();
   view.print();
+};
+
+// Opens the print view of a table. Returns false when a pop-up blocker
+// stopped the window, so the caller can say so.
+export const printTable = <T>(table: ExportTable<T>): boolean => {
+  const view = openPrintWindow();
+  if (!view) return false;
+  printInto(view, toPrintHtml(table));
   return true;
 };
