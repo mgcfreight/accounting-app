@@ -24,7 +24,11 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { InvoiceView, referencesOf } from "../invoices/invoice-view";
+import InvoiceViewCell, {
+  InvoiceView,
+  InvoiceViewAction,
+  referencesOf,
+} from "../invoices/invoice-view";
 import { partyHref } from "../parties/party-list";
 import usePartyNames from "../parties/use-party-names";
 import { place } from "./shipment-list";
@@ -37,6 +41,7 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "total", label: "Total", align: "end" },
   { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -235,9 +240,13 @@ function ShipmentInvoices({
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
           rowKey={(row) => row.id}
-          renderCell={(row, key) => (
-            <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />
-          )}
+          renderCell={(row, key) =>
+            key === "actions" ? (
+              <InvoiceViewAction invoice={row} />
+            ) : (
+              <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />
+            )
+          }
           emptyContent="No invoices"
         />
       )}
