@@ -141,7 +141,7 @@ export default function Sidebar({
       <div
         aria-hidden
         className={`hidden xl:block shrink-0 transition-[width] duration-300 ease-out ${
-          pinned ? "w-64" : "w-18"
+          pinned ? "w-56" : "w-18"
         }`}
       />
       <aside
@@ -151,7 +151,7 @@ export default function Sidebar({
         // z-100 covers the drawer's backdrop; from xl up the rail stays below
         // HeroUI's modals and popovers (z-50) but above the page.
         className={`fixed left-0 top-0 h-full z-100 xl:z-40 flex flex-col overflow-hidden bg-linear-to-b from-base-primary to-base-primary-300 transition-[width,visibility,box-shadow] duration-300 ease-out ${
-          expanded ? "w-64" : "w-0 invisible xl:w-18 xl:visible"
+          expanded ? "w-56" : "w-0 invisible xl:w-18 xl:visible"
         } ${expanded && !pinnedRail ? "shadow-2xl shadow-base-primary-900/40" : ""}`}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
