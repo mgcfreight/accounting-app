@@ -92,6 +92,9 @@ export interface Role {
   permissionsEditable: boolean;
   // In catalog order. Every permission for the Admin role.
   permissions: Permission[];
+  // Granted, but newer than this build: not shown, and sent back on save so
+  // the role keeps them (a role's permissions are replaced as a whole set).
+  unknownPermissions: string[];
   userCount: number;
   createdAt: string;
   updatedAt: string;
@@ -233,6 +236,7 @@ export interface Payment {
   id: string;
   number: string;
   direction: PaymentDirection;
+  partyId: string;
   partyName: string;
   method: PaymentMethod;
   source: "MANUAL" | "MGC_STRIPE";
@@ -576,8 +580,11 @@ export interface AgingRow {
   currency: Currency;
 }
 
+// A statement sent to a shipper. The period runs from the 1st of the month to
+// the run date and never crosses a month.
 export interface Statement {
   id: string;
+  kind: StatementRunKind.WeeklyEmail | StatementRunKind.MonthEndEmail;
   periodFrom: string;
   periodTo: string;
   sentAt: string;
@@ -606,6 +613,9 @@ export interface PartyAccountSummary {
   // Invoiced this calendar year, and the number of shipments behind it.
   businessVolume: string;
   shipmentCount: number;
+  // Previous dues: the balance brought forward from last month's month-end
+  // statement, at the start of the current statement period.
+  openingBalance: string;
   balance: string;
   overdue: string;
   // Days past due of the oldest overdue invoice; 0 when nothing is overdue.
@@ -620,19 +630,20 @@ export interface PartyAccountSummary {
   } | null;
   // Average days from invoice date to full payment, over the last 12 months.
   averagePaymentDays: number | null;
-  // Shippers only: emailed a statement every Friday.
+  // Shippers only: emailed a statement every Friday and on the last weekday
+  // of each month (the agreement's weekly statement switch).
   weeklyStatement: boolean;
   statementEmail: string | null;
 }
 
 // One run of the statement jobs: the daily refresh of every balance, and the
-// Friday email of shipper statements.
+// Friday and month-end emails of shipper statements.
 export interface StatementRun {
   id: string;
   kind: StatementRunKind;
   ranAt: string;
   partyCount: number;
-  // Weekly email only.
+  // Statement emails only.
   sentCount: number | null;
   failedCount: number | null;
 }
@@ -703,7 +714,8 @@ export interface Dispute {
   resolvedOn: string | null;
 }
 
-// A month or quarter of the books, CAD at invoice-date rates.
+// A month or quarter of the books, CAD at invoice-date rates. Money collected
+// and paid out are what moved, in each currency, not converted.
 export interface PeriodSummary {
   key: string;
   period: string;
@@ -713,8 +725,8 @@ export interface PeriodSummary {
   marginPercent: string;
   taxCollected: string;
   inputTaxCredits: string;
-  collected: string;
-  paidOut: string;
+  collected: Record<Currency, string>;
+  paidOut: Record<Currency, string>;
 }
 
 // Profit and loss for one shipper or carrier over a period, CAD.
@@ -726,7 +738,8 @@ export interface PartyPnl {
   revenue: string;
   carrierCost: string;
   grossMargin: string;
-  marginPercent: string;
+  // Null when there is no revenue to take a percentage of.
+  marginPercent: string | null;
 }
 
 // One line of the HST/GST summary: tax charged on shipper invoices against

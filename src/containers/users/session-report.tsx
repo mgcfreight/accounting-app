@@ -79,7 +79,7 @@ export default function SessionReport() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAdmin = me.isAdmin;
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const linkedUser = searchParams.get("userId") ?? "";
   const { control, reset } = useForm<Filters>({
     defaultValues: {
@@ -252,7 +252,17 @@ export default function SessionReport() {
         />
         <ClearFiltersButton
           active={filtered}
-          onClear={() => reset({ userId: ALL, status: ALL })}
+          onClear={() => {
+            reset({ userId: ALL, status: ALL });
+            // Or a reload or Back filters to the linked user again.
+            setSearchParams(
+              (params) => {
+                params.delete("userId");
+                return params;
+              },
+              { replace: true }
+            );
+          }}
         />
         {!isAdmin && (
           <p className="text-sm text-content-6">Showing your own sign-ins.</p>

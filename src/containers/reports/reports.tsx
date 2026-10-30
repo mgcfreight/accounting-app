@@ -28,8 +28,8 @@ import {
   mockAging,
   mockMonthlyPnl,
   mockPartyPnl,
+  mockPeriodMonths,
   mockPeriodSummaries,
-  mockQuarterMonths,
   mockReports,
   mockTaxSummary,
 } from "@/lib/mock";
@@ -41,7 +41,10 @@ const periodOptions = [
   { key: "2026-09", label: "September 2026", value: "2026-09" },
   { key: "2026-Q3", label: "Q3 2026", value: "2026-Q3" },
   { key: "2026-YTD", label: "2026 year to date", value: "2026-YTD" },
+  { key: "all", label: "All months on file", value: "all" },
 ];
+
+const ALL_MONTHS = "all";
 
 // The one period the demo's party P&L and tax summary cover.
 const BREAKDOWN_PERIOD = "2026-10";
@@ -57,7 +60,8 @@ const formatPermission = (format: string) =>
   format === "PDF" ? Permission.ReportsExportPdf : Permission.ReportsExportCsv;
 
 const cad = (amount: string) => moneyText(amount, Currency.CAD);
-const percent = (value: string) => `${value}%`;
+// A null margin % had no revenue to take a percentage of.
+const percent = (value: string | null) => (value === null ? "—" : `${value}%`);
 
 const pnlColumns: BaseTableColumn[] = [
   { key: "month", label: "Month" },
@@ -114,13 +118,17 @@ const taxLabel = (row: TaxRow) =>
     ? "Total"
     : `${row.jurisdiction} ${row.taxCode}${row.ratePercent === "0.000" ? "" : ` ${row.ratePercent}%`}`;
 
-// The P&L sheet's rows for a period: a quarter shows its own months and then
-// the quarter's total; any other period shows every month on file.
+// The P&L sheet's rows for a period: its own months, then the period's total
+// when it is not a single month. "All months on file" shows every month and
+// no total; a period without months on file shows nothing.
 const pnlRowsFor = (periodKey: string, summary?: PeriodSummary): MonthlyPnl[] => {
-  const months = mockQuarterMonths[periodKey];
-  if (!months || !summary) return mockMonthlyPnl;
+  if (periodKey === ALL_MONTHS) return mockMonthlyPnl;
+  const months = mockPeriodMonths[periodKey];
+  if (!months || !summary) return [];
+  const rows = mockMonthlyPnl.filter((row) => months.includes(row.month));
+  if (months.length === 1) return rows;
   return [
-    ...mockMonthlyPnl.filter((row) => months.includes(row.month)),
+    ...rows,
     {
       month: summary.period,
       revenue: summary.revenue,
@@ -131,21 +139,36 @@ const pnlRowsFor = (periodKey: string, summary?: PeriodSummary): MonthlyPnl[] =>
   ];
 };
 
-type SummaryField = { key: keyof PeriodSummary; label: string };
+// One line of the period summary: an amount in its currency, or the margin %
+// (currency null). Money collected and paid out get a line per currency,
+// because they are not converted.
+type SummaryField = {
+  key: string;
+  label: string;
+  value: (summary: PeriodSummary) => string;
+  currency: Currency | null;
+};
 
 const summaryFields: SummaryField[] = [
-  { key: "revenue", label: "Revenue" },
-  { key: "carrierCost", label: "Carrier cost" },
-  { key: "grossMargin", label: "Gross margin" },
-  { key: "marginPercent", label: "Margin %" },
-  { key: "taxCollected", label: "GST/HST collected" },
-  { key: "inputTaxCredits", label: "Input tax credits" },
-  { key: "collected", label: "Money collected" },
-  { key: "paidOut", label: "Money paid out" },
+  { key: "revenue", label: "Revenue", value: (s) => s.revenue, currency: Currency.CAD },
+  { key: "carrierCost", label: "Carrier cost", value: (s) => s.carrierCost, currency: Currency.CAD },
+  { key: "grossMargin", label: "Gross margin", value: (s) => s.grossMargin, currency: Currency.CAD },
+  { key: "marginPercent", label: "Margin %", value: (s) => s.marginPercent, currency: null },
+  { key: "taxCollected", label: "Sales tax collected (GST/HST/QST)", value: (s) => s.taxCollected, currency: Currency.CAD },
+  { key: "inputTaxCredits", label: "Input tax credits", value: (s) => s.inputTaxCredits, currency: Currency.CAD },
+  { key: "collectedCad", label: "Money collected (CAD)", value: (s) => s.collected[Currency.CAD], currency: Currency.CAD },
+  { key: "collectedUsd", label: "Money collected (USD)", value: (s) => s.collected[Currency.USD], currency: Currency.USD },
+  { key: "paidOutCad", label: "Money paid out (CAD)", value: (s) => s.paidOut[Currency.CAD], currency: Currency.CAD },
+  { key: "paidOutUsd", label: "Money paid out (USD)", value: (s) => s.paidOut[Currency.USD], currency: Currency.USD },
 ];
 
-const summaryValue = (summary: PeriodSummary, key: keyof PeriodSummary) =>
-  key === "marginPercent" ? percent(summary[key]) : cad(summary[key]);
+const summaryValue = (summary: PeriodSummary, field: SummaryField) =>
+  field.currency
+    ? moneyText(field.value(summary), field.currency)
+    : percent(field.value(summary));
+
+const SUMMARY_NOTE =
+  "CAD at invoice-date rates; money collected and paid out in its own currency";
 
 // Revenue, cost, margin and margin %: shared by the monthly and party P&L.
 const pnlExportColumns = <T extends MonthlyPnl | PartyPnl>(): ExportColumn<T>[] => [
@@ -191,10 +214,10 @@ export default function Reports() {
           exportTable<SummaryField>(
             {
               title: "Monthly / Quarterly Summary",
-              subtitle: demo(summary.period),
+              subtitle: `${summary.period} · ${SUMMARY_NOTE} · demo data`,
               columns: [
                 { label: "Measure", value: (row) => row.label },
-                { label: summary.period, value: (row) => summaryValue(summary, row.key) },
+                { label: summary.period, value: (row) => summaryValue(summary, row) },
               ],
               rows: summaryFields,
             },
@@ -331,17 +354,18 @@ export default function Reports() {
       </div>
 
       {summary && (
-        <BaseCardWrapper heading={`Summary: ${summary.period} (CAD)`}>
+        <BaseCardWrapper heading={`Summary: ${summary.period}`}>
+          <p className="text-xs text-[#8F9494] mb-2">{SUMMARY_NOTE}.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
             {summaryFields.map((field) => (
               <DetailRow
                 key={field.key}
                 label={field.label}
                 value={
-                  field.key === "marginPercent" ? (
-                    percent(summary.marginPercent)
+                  field.currency ? (
+                    <Money amount={field.value(summary)} currency={field.currency} />
                   ) : (
-                    <Money amount={summary[field.key]} currency={Currency.CAD} />
+                    percent(field.value(summary))
                   )
                 }
               />
@@ -368,7 +392,7 @@ export default function Reports() {
         />
       </BaseCardWrapper>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="flex flex-col gap-6">
         <PartyPnlCard
           title="P&L by Shipper"
           side="Shipper"

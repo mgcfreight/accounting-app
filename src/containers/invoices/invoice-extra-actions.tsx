@@ -29,8 +29,8 @@ import {
 } from "./invoice-view";
 
 // Invoice actions the Accounts API has no endpoint for yet: emailing the
-// invoice, its PDF, voiding it for a cancelled load, flagging a dispute and
-// attaching a document. Each form is checked as the real one will be, then
+// invoice, voiding it for a cancelled load, flagging a dispute and
+// attaching a document. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
 // says it's a demo: nothing is saved, sent or uploaded.
 
 export type ExtraAction = "email" | "void" | "dispute" | "upload";
@@ -63,7 +63,7 @@ const isClosed = (invoice: InvoiceView) =>
   invoice.status === CarrierInvoiceStatus.Superseded;
 
 // The "More" menu of an invoice: what its status allows and the role may
-// do. "Download PDF" acts at once; the rest open a form (`onOpen`).
+// do. Each opens a form (`onOpen`).
 export const extraActionsFor = (
   invoice: InvoiceView,
   can: (permission: Permission) => boolean,
@@ -73,10 +73,6 @@ export const extraActionsFor = (
   const canEdit = can(
     isCustomer ? Permission.CustomerInvoicesEdit : Permission.CarrierInvoicesEdit
   );
-  // A draft or an awaited carrier bill has nothing to print yet.
-  const printable = isCustomer
-    ? invoice.status !== CustomerInvoiceStatus.Draft
-    : invoice.status !== CarrierInvoiceStatus.Expected;
   const actions: RowAction[] = [];
 
   if (
@@ -85,20 +81,6 @@ export const extraActionsFor = (
     can(Permission.CustomerInvoicesSendEmail)
   ) {
     actions.push({ key: "email", label: "Email to shipper", onPress: () => onOpen("email") });
-  }
-  if (
-    printable &&
-    can(
-      isCustomer
-        ? Permission.CustomerInvoicesExportPdf
-        : Permission.CarrierInvoicesExportPdf
-    )
-  ) {
-    actions.push({
-      key: "pdf",
-      label: "Download PDF",
-      onPress: () => demo(`PDF of ${invoiceNumberOf(invoice) ?? "this invoice"}`, "generated"),
-    });
   }
   if (canEdit && isOwed(invoice)) {
     actions.push({ key: "dispute", label: "Flag as disputed", onPress: () => onOpen("dispute") });

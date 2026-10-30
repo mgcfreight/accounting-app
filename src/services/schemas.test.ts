@@ -5,6 +5,7 @@ import {
   customerInvoiceSchema,
   meSchema,
   permissionCatalogSchema,
+  roleSchema,
   userSchema,
 } from "./schemas";
 
@@ -69,6 +70,39 @@ describe("userSchema", () => {
       ...user
     } = me;
     expect(userSchema.parse(user).role.name).toBe("Viewer");
+  });
+});
+
+describe("roleSchema", () => {
+  const role = {
+    id: "rol_ARCLERK001",
+    name: "AR Clerk",
+    description: null,
+    isSystem: false,
+    isAdmin: false,
+    permissionsEditable: true,
+    permissions: ["parties.view", "customer_invoices.view"],
+    userCount: 2,
+    createdAt: "2026-10-01T09:30:00.000Z",
+    updatedAt: "2026-10-01T09:30:00.000Z",
+  };
+
+  it("reads known permissions and has no unknown ones", () => {
+    const parsed = roleSchema.parse(role);
+    expect(parsed.permissions).toEqual([
+      Permission.PartiesView,
+      Permission.CustomerInvoicesView,
+    ]);
+    expect(parsed.unknownPermissions).toEqual([]);
+  });
+
+  it("keeps a permission this build doesn't know apart, not dropped", () => {
+    const parsed = roleSchema.parse({
+      ...role,
+      permissions: ["parties.view", "sync.run"],
+    });
+    expect(parsed.permissions).toEqual([Permission.PartiesView]);
+    expect(parsed.unknownPermissions).toEqual(["sync.run"]);
   });
 });
 

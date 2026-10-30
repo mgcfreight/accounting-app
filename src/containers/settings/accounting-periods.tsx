@@ -126,6 +126,7 @@ export default function AccountingPeriods() {
         columns={columns}
         data={periods.isError ? [] : (periods.data?.items ?? [])}
         loading={periods.isPending}
+        refreshing={periods.isPlaceholderData}
         rowKey={(row) => row.id}
         meta={paging.tableMeta(periods.data?.meta)}
         setMeta={paging.setMeta}
@@ -168,6 +169,7 @@ export default function AccountingPeriods() {
                           key: "close",
                           label: "Close",
                           icon: <LuLock />,
+                          labelled: true,
                           onPress: () =>
                             setPending({ action: "close", period: row.period }),
                         },

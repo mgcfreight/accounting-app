@@ -50,12 +50,12 @@ export default function NoticeSettingsSection() {
   const {
     control,
     handleSubmit,
+    reset,
     formState: { dirtyFields },
   } = useForm<Values>({
     mode: "onTouched",
     values: settings.data && toForm(settings.data),
   });
-  // A save reloads `values`, which resets the form to clean.
   const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
 
   const save = useMutation({
@@ -73,6 +73,10 @@ export default function NoticeSettingsSection() {
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(QUERY_KEY, saved);
+      // Reset here, not through `values`: that resets only when the saved
+      // settings differ from the last ones, so an edit the API normalises
+      // back (07 → 7) would leave the form dirty.
+      reset(toForm(saved));
       toast.success("Notice settings saved.");
     },
     onError: (error) => toast.error(errorMessage(error)),

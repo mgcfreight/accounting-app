@@ -5,7 +5,7 @@ import {
   DropdownTrigger,
   Tooltip,
 } from "@heroui/react";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode } from "react";
 import { MoreHoriz } from "../icons";
 
 export type RowAction = {
@@ -13,6 +13,9 @@ export type RowAction = {
   label: string;
   icon?: ReactNode;
   danger?: boolean;
+  // Keeps the label beside the icon on a single-action button. Set it on
+  // actions that change something; danger actions always keep theirs.
+  labelled?: boolean;
   // Shown but not selectable; `hint` says why.
   disabled?: boolean;
   hint?: string;
@@ -20,9 +23,7 @@ export type RowAction = {
 };
 
 // The "…" menu at the end of mokal-app's table rows. A row with one action
-// shows it as a button instead: a menu of one is a click for nothing. With
-// an icon, the button is the icon alone and the label is its name and
-// tooltip; without one, it shows the label.
+// shows it as a button instead: a menu of one is a click for nothing.
 export default function RowActions({ actions }: { actions: RowAction[] }) {
   if (actions.length === 1) {
     return <RowActionButton action={actions[0]} />;
@@ -30,8 +31,11 @@ export default function RowActions({ actions }: { actions: RowAction[] }) {
   return <RowActionsMenu actions={actions} />;
 }
 
+// An icon alone is kept for actions that only look (view, open); on touch
+// there is no tooltip to name it, and an icon can read as the row's status.
+// Danger and labelled actions show the icon and the label.
 function RowActionButton({ action }: { action: RowAction }) {
-  const iconOnly = !!action.icon;
+  const iconOnly = !!action.icon && !action.danger && !action.labelled;
   const tip = iconOnly
     ? [action.label, action.hint].filter(Boolean).join(" — ")
     : action.hint;
@@ -60,63 +64,19 @@ function RowActionButton({ action }: { action: RowAction }) {
   );
 }
 
-// Opens on hover as well as click (click keeps it usable on touch and from
-// the keyboard), as the profile menu does.
+// Opens on click (or Enter/Space) only. Opening on hover took focus from
+// wherever it was and held the menu open against Esc and trigger clicks.
 function RowActionsMenu({ actions }: { actions: RowAction[] }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isHoveringTrigger = useRef(false);
-
-  const cancelClose = () => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  };
-  const open = () => {
-    cancelClose();
-    setIsOpen(true);
-  };
-  // The popover sits a few pixels from the trigger, so closing waits long
-  // enough for the pointer to cross the gap.
-  const scheduleClose = () => {
-    cancelClose();
-    closeTimer.current = setTimeout(() => setIsOpen(false), 150);
-  };
-
-  useEffect(() => cancelClose, []);
-
   return (
     <div className="flex items-center justify-center">
-      <Dropdown
-        isOpen={isOpen}
-        onOpenChange={(next) => {
-          if (!next && isHoveringTrigger.current) return;
-          cancelClose();
-          setIsOpen(next);
-        }}
-      >
+      <Dropdown>
         <DropdownTrigger>
-          <button
-            type="button"
-            aria-label="Row actions"
-            className="p-1"
-            onMouseEnter={() => {
-              isHoveringTrigger.current = true;
-              open();
-            }}
-            onMouseLeave={() => {
-              isHoveringTrigger.current = false;
-              scheduleClose();
-            }}
-          >
+          <button type="button" aria-label="Row actions" className="p-1">
             <MoreHoriz className="cursor-pointer" />
           </button>
         </DropdownTrigger>
         <DropdownMenu
           aria-label="Row actions"
-          onMouseEnter={open}
-          onMouseLeave={scheduleClose}
           disabledKeys={actions
             .filter((action) => action.disabled)
             .map((action) => action.key)}

@@ -25,11 +25,12 @@ export type NewRole = {
 };
 
 // Only what is sent changes. `permissions` replaces the whole set, and signs
-// out every user on the role; `description: null` clears it.
+// out every user on the role; `description: null` clears it. `permissions`
+// includes any the role has that this build doesn't know, so they aren't lost.
 export type RoleChanges = {
   name?: string;
   description?: string | null;
-  permissions?: Permission[];
+  permissions?: string[];
 };
 
 export const getPermissionCatalog = (signal?: AbortSignal) =>

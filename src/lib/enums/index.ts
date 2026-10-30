@@ -247,7 +247,9 @@ export enum SortOrder {
 
 export enum StatementRunKind {
   DailyRefresh = "DAILY_REFRESH",
+  // Shipper statements every Friday, and on the last weekday of each month.
   WeeklyEmail = "WEEKLY_EMAIL",
+  MonthEndEmail = "MONTH_END_EMAIL",
 }
 
 export enum ReminderChannel {

@@ -1,12 +1,14 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   CarrierInvoiceStatusChip,
   CustomerInvoiceStatusChip,
   Money,
   PartyAvatar,
   PaymentStatusChip,
+  RowActions,
   StatusChip,
 } from "@/components/common";
+import { EyeIcon } from "@/components/icons";
 import {
   CarrierInvoiceStatus,
   CustomerInvoiceStatus,
@@ -189,7 +191,8 @@ export function InvoiceBalance({
 }
 
 // An expected carrier invoice's total is 0 until the bill arrives; what it
-// is expected to be is shown instead, marked as such.
+// is expected to be is shown instead, marked as such. expectedTotal is the
+// expected subtotal, before tax, so it says so beside the taxed totals.
 export function InvoiceTotal({ invoice }: { invoice: InvoiceView }) {
   if (
     !isCustomerInvoice(invoice) &&
@@ -197,11 +200,31 @@ export function InvoiceTotal({ invoice }: { invoice: InvoiceView }) {
   ) {
     return (
       <span className="text-gray-500 whitespace-nowrap">
-        Expected <Money amount={invoice.expectedTotal} currency={invoice.currency} />
+        Expected{" "}
+        <Money amount={invoice.expectedTotal} currency={invoice.currency} />{" "}
+        before tax
       </span>
     );
   }
   return <Money amount={invoice.total} currency={invoice.currency} />;
+}
+
+// The eye button that opens an invoice, for the "actions" column of tables
+// that list invoices without acting on them (party and shipment pages).
+export function InvoiceViewAction({ invoice }: { invoice: InvoiceView }) {
+  const navigate = useNavigate();
+  return (
+    <RowActions
+      actions={[
+        {
+          key: "view",
+          label: "View details",
+          icon: <EyeIcon />,
+          onPress: () => navigate(apiInvoiceHref(invoice)),
+        },
+      ]}
+    />
+  );
 }
 
 export default function InvoiceViewCell({
@@ -218,14 +241,24 @@ export default function InvoiceViewCell({
     case "number": {
       const number = invoiceNumberOf(invoice);
       return (
-        <Link
-          to={apiInvoiceHref(invoice)}
-          className={`hover:underline whitespace-nowrap ${
-            number ? "font-bold text-base-primary-300" : "text-gray-500"
-          }`}
-        >
-          {number ?? "No number yet"}
-        </Link>
+        <div className="flex flex-col items-start gap-1">
+          <Link
+            to={apiInvoiceHref(invoice)}
+            className={`hover:underline whitespace-nowrap ${
+              number ? "font-bold text-base-primary-300" : "text-gray-500"
+            }`}
+          >
+            {number ?? "No number yet"}
+          </Link>
+          {/* A revised invoice: its earlier versions are on its page. */}
+          {invoice.revision > 0 && (
+            <StatusChip
+              text={`Version ${invoice.revision + 1}`}
+              tone="secondary"
+              className="px-2 py-0.5"
+            />
+          )}
+        </div>
       );
     }
     case "party": {

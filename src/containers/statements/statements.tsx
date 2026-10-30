@@ -1,14 +1,21 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { HiOutlineCurrencyDollar } from "react-icons/hi2";
-import { LuCalendarClock, LuRefreshCw } from "react-icons/lu";
-import { PiFilePdf, PiFileXls, PiHandCoins } from "react-icons/pi";
+import { LuSend } from "react-icons/lu";
+import {
+  PiArrowsClockwise,
+  PiCalendarDots,
+  PiFilePdf,
+  PiFileXls,
+  PiHandCoins,
+} from "react-icons/pi";
 import { toast } from "sonner";
 import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
   BaseTable,
+  FormModal,
   Money,
   PartyAvatar,
   RowActions,
@@ -25,6 +32,7 @@ import {
   mockAccountSummaries,
   mockDashboard,
   mockStatementRuns,
+  nextMonthEndStatementRun,
   nextWeeklyStatementRun,
 } from "@/lib/mock";
 import { formatMoney } from "@/lib/money";
@@ -34,6 +42,11 @@ import { exportTable, ExportFormat, moneyText } from "../reports/export-table";
 import StatementModal from "./statement-modal";
 
 type View = "carriers" | "shippers";
+
+const viewTitles: Record<View, string> = {
+  carriers: "Carriers (payable)",
+  shippers: "Shippers (receivable)",
+};
 
 // "2026-10-16" -> "Oct 2026". A calendar date, so read in UTC (see
 // formatDate in lib/utils).
@@ -51,7 +64,7 @@ const columnsFor = (view: View): BaseTableColumn[] => [
   { key: "overdue", label: "Overdue", sortable: true, sortType: "money", align: "end" },
   { key: "lastPayment", label: "Last Payment", sortable: true, sortKey: "lastPayment.paidOn", sortType: "date" },
   { key: "averagePaymentDays", label: "Avg. Payment Days", sortable: true, sortType: "number", align: "end" },
-  ...(view === "shippers" ? [{ key: "weekly", label: "Weekly Statement" }] : []),
+  ...(view === "shippers" ? [{ key: "weekly", label: "Statement Emails" }] : []),
   { key: "actions", label: "Actions", align: "center" },
 ];
 
@@ -82,7 +95,7 @@ const exportFor = (
     ...(view === "shippers"
       ? [
           {
-            label: "Weekly statement",
+            label: "Statement emails",
             value: (row: PartyAccountSummary) => (row.weeklyStatement ? "On" : "Off"),
           },
         ]
@@ -92,21 +105,33 @@ const exportFor = (
 });
 
 // Requirement 2: each carrier's and shipper's account, refreshed daily, the
-// overall payable and receivable, and the Friday statement emails. Demo data
-// until the API has statements; the exports are real files of these
-// figures.
+// overall payable and receivable, and the Friday and month-end statement
+// emails. Demo data until the API has statements; the exports are real files
+// of these figures.
 export default function Statements() {
-  const [view, setView] = useState<View>("carriers");
+  const [selected, setView] = useState<View>("carriers");
   const [open, setOpen] = useState<PartyAccountSummary | null>(null);
+  const [confirmSend, setConfirmSend] = useState(false);
   const { can } = useCan();
   const d = mockDashboard;
+
+  // Only the sides the role may view, as on Reminders. Advisory only: the API
+  // decides what each role gets.
+  const canViewShipper = can(Permission.CustomerInvoicesView);
+  const canViewCarrier = can(Permission.CarrierInvoicesView);
+  const views: View[] = [
+    ...(canViewCarrier ? (["carriers"] as const) : []),
+    ...(canViewShipper ? (["shippers"] as const) : []),
+  ];
+  const view = views.includes(selected) ? selected : (views[0] ?? "carriers");
+  const canViewSide = views.includes(view);
 
   // Newest first.
   const lastRefresh = mockStatementRuns.find(
     (run) => run.kind === StatementRunKind.DailyRefresh
   )?.ranAt;
-  const weeklyRuns = mockStatementRuns.filter(
-    (run) => run.kind === StatementRunKind.WeeklyEmail
+  const emailRuns = mockStatementRuns.filter(
+    (run) => run.kind !== StatementRunKind.DailyRefresh
   );
   const weeklyShippers = mockAccountSummaries.filter(
     (row) => row.type === PartyType.Shipper && row.weeklyStatement
@@ -114,12 +139,14 @@ export default function Statements() {
 
   const rows = useMemo(
     () =>
-      mockAccountSummaries.filter((row) =>
-        view === "carriers"
-          ? row.type === PartyType.Carrier
-          : row.type === PartyType.Shipper
-      ),
-    [view]
+      canViewSide
+        ? mockAccountSummaries.filter((row) =>
+            view === "carriers"
+              ? row.type === PartyType.Carrier
+              : row.type === PartyType.Shipper
+          )
+        : [],
+    [view, canViewSide]
   );
   const columns = useMemo(() => columnsFor(view), [view]);
   const table = useClientTable(rows, columns, {
@@ -147,18 +174,20 @@ export default function Statements() {
       caption: `+ ${formatMoney(d.payable.USD, Currency.USD) ?? "—"} · ${formatMoney(d.payableInCad, Currency.CAD) ?? "—"} in all, at invoice-date rates`,
     },
     {
-      icon: <LuRefreshCw className="text-[#BC8EF0]" />,
+      icon: <PiArrowsClockwise className="text-[#BC8EF0]" />,
       iconBgClass: "bg-icon-lightPurple",
-      name: "Balances Refresh Daily at 06:00",
-      value: formatDateTime(lastRefresh) ?? "Not yet",
-      caption: "Last refreshed",
+      name: "Last Balance Refresh",
+      // Date only, so the value fits one line like the amounts beside it;
+      // the time is in the caption.
+      value: formatDate(lastRefresh) ?? "Not yet",
+      caption: "Balances refresh daily at 06:00",
     },
     {
-      icon: <LuCalendarClock className="text-[#F871A0]" />,
+      icon: <PiCalendarDots className="text-[#F871A0]" />,
       iconBgClass: "bg-icon-lightRed",
-      name: "Next Weekly Statements",
-      value: formatDateTime(nextWeeklyStatementRun) ?? "—",
-      caption: `Every Friday at 08:00 to ${weeklyShippers} shippers`,
+      name: "Next Statement Emails",
+      value: formatDate(nextWeeklyStatementRun) ?? "—",
+      caption: `At 08:00 to ${weeklyShippers} shippers · month-end run ${formatDate(nextMonthEndStatementRun) ?? "—"}`,
     },
   ];
 
@@ -238,99 +267,161 @@ export default function Statements() {
         ))}
       </div>
 
-      <div className="flex flex-wrap justify-between items-end gap-3">
-        <Tabs
-          aria-label="Statements view"
-          color="primary"
-          variant="underlined"
-          selectedKey={view}
-          onSelectionChange={(key) => setView(key as View)}
-          classNames={{ base: "max-w-full", cursor: "bg-base-primary" }}
-        >
-          <Tab key="carriers" title="Carriers (payable)" />
-          <Tab key="shippers" title="Shippers (receivable)" />
-        </Tabs>
-        <div className="flex gap-2">
-          {can(Permission.ReportsExportCsv) && (
-            <BaseButton
-              text="Excel"
-              varient="bordered"
-              className="text-base-primary rounded-xl px-3"
-              startContent={<PiFileXls className="text-lg" />}
-              onPress={() => runExport("Excel")}
-            />
-          )}
-          {can(Permission.ReportsExportPdf) && (
-            <BaseButton
-              text="PDF"
-              varient="bordered"
-              className="text-base-primary rounded-xl px-3"
-              startContent={<PiFilePdf className="text-lg" />}
-              onPress={() => runExport("PDF")}
-            />
-          )}
-        </div>
-      </div>
-
-      <Card>
-        <BaseTable<PartyAccountSummary>
-          ariaLabel={view === "carriers" ? "Carrier statements" : "Shipper statements"}
-          columns={columns}
-          data={table.pageRows}
-          rowKey={(row) => row.partyId}
-          renderCell={renderCell}
-          meta={table.meta}
-          setMeta={table.setMeta}
-          sort={table.sort}
-          onSortChange={table.onSortChange}
-          bottomContent={view === "carriers" ? "Carriers" : "Shippers"}
-        />
-      </Card>
-
-      <BaseCardWrapper
-        heading="Weekly Shipper Statements"
-        action={
-          can(Permission.ReportsSendEmail) && (
-            <BaseButton
-              text="Send now"
-              className="rounded-xl px-4"
-              onPress={() =>
-                toast.info(
-                  `Statements to ${weeklyShippers} shippers — demo only, nothing was sent.`
-                )
-              }
-            />
-          )
-        }
-      >
-        <p className="text-sm text-[#343A40] mb-4">
-          Emailed every Friday at 08:00 (Toronto time) to the {weeklyShippers}{" "}
-          shippers with weekly statements on. Next run{" "}
-          <strong>{formatDateTime(nextWeeklyStatementRun)}</strong>.
-        </p>
-        <ul className="flex flex-col gap-2">
-          {weeklyRuns.map((run) => (
-            <li
-              key={run.id}
-              className="flex flex-wrap justify-between items-center gap-2 text-sm border-b border-gray-100 pb-2"
+      {canViewSide ? (
+        <>
+          <div className="flex flex-wrap justify-between items-end gap-3">
+            <Tabs
+              aria-label="Statements view"
+              color="primary"
+              variant="underlined"
+              selectedKey={view}
+              onSelectionChange={(key) => setView(key as View)}
+              classNames={{ base: "max-w-full", cursor: "bg-base-primary" }}
             >
-              <span>
-                {formatDate(run.ranAt)} · {run.partyCount} shippers
-              </span>
-              <div className="flex gap-1">
-                <StatusChip text={`${run.sentCount ?? 0} sent`} tone="success" />
-                {!!run.failedCount && (
-                  <StatusChip text={`${run.failedCount} failed`} tone="danger" />
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </BaseCardWrapper>
+              {views.map((key) => (
+                <Tab key={key} title={viewTitles[key]} />
+              ))}
+            </Tabs>
+            <div className="flex gap-2">
+              {can(Permission.ReportsExportCsv) && (
+                <BaseButton
+                  text="Excel"
+                  varient="bordered"
+                  className="text-base-primary rounded-xl px-3"
+                  startContent={<PiFileXls className="text-lg" />}
+                  onPress={() => runExport("Excel")}
+                />
+              )}
+              {can(Permission.ReportsExportPdf) && (
+                <BaseButton
+                  text="PDF"
+                  varient="bordered"
+                  className="text-base-primary rounded-xl px-3"
+                  startContent={<PiFilePdf className="text-lg" />}
+                  onPress={() => runExport("PDF")}
+                />
+              )}
+            </div>
+          </div>
+
+          <Card>
+            <BaseTable<PartyAccountSummary>
+              ariaLabel={view === "carriers" ? "Carrier statements" : "Shipper statements"}
+              columns={columns}
+              data={table.pageRows}
+              rowKey={(row) => row.partyId}
+              renderCell={renderCell}
+              meta={table.meta}
+              setMeta={table.setMeta}
+              sort={table.sort}
+              onSortChange={table.onSortChange}
+              bottomContent={view === "carriers" ? "Carriers" : "Shippers"}
+            />
+          </Card>
+        </>
+      ) : (
+        <Card className="p-4">
+          <p className="text-sm text-gray-500">
+            Your role can&apos;t view shipper or carrier invoices, so there are
+            no statements to show.
+          </p>
+        </Card>
+      )}
+
+      {/* Only shippers are emailed statements, so the schedule belongs to
+          their tab. */}
+      {canViewSide && view === "shippers" && (
+        <BaseCardWrapper
+          heading="Statement Emails"
+          action={
+            can(Permission.ReportsSendEmail) && (
+              <BaseButton
+                text="Send statements now"
+                className="rounded-xl px-4"
+                startContent={<LuSend />}
+                isDisabled={weeklyShippers === 0}
+                onPress={() => setConfirmSend(true)}
+              />
+            )
+          }
+        >
+          <p className="text-sm text-[#343A40] mb-4">
+            Emailed at 08:00 (Toronto time) every Friday and on the last
+            weekday of each month to the {weeklyShippers} shippers with
+            statement emails on. Each covers the month to date and opens with
+            the previous dues brought forward. Next Friday run{" "}
+            <strong>{formatDateTime(nextWeeklyStatementRun)}</strong>; next
+            month-end run <strong>{formatDateTime(nextMonthEndStatementRun)}</strong>.
+          </p>
+          <ul className="flex flex-col gap-2">
+            {emailRuns.map((run) => (
+              <li
+                key={run.id}
+                className="flex flex-wrap justify-between items-center gap-2 text-sm border-b border-gray-100 pb-2"
+              >
+                <span>
+                  {formatDate(run.ranAt)} ·{" "}
+                  {run.kind === StatementRunKind.MonthEndEmail ? "Month-end" : "Friday"} ·{" "}
+                  {run.partyCount} shippers
+                </span>
+                <div className="flex gap-1">
+                  <StatusChip text={`${run.sentCount ?? 0} sent`} tone="success" />
+                  {!!run.failedCount && (
+                    <StatusChip text={`${run.failedCount} failed`} tone="danger" />
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </BaseCardWrapper>
+      )}
 
       {open && (
         <StatementModal summary={open} asOf={lastRefresh} onClose={() => setOpen(null)} />
       )}
+      {confirmSend && (
+        <SendStatementsModal
+          shipperCount={weeklyShippers}
+          onClose={() => setConfirmSend(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// Runs the statement email outside the schedule: the same month-to-date
+// statement the Friday run sends, to the same shippers. The schedule itself
+// doesn't change.
+function SendStatementsModal({
+  shipperCount,
+  onClose,
+}: {
+  shipperCount: number;
+  onClose: () => void;
+}) {
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Send Statements Now"
+      confirmText="Send Now"
+      onConfirm={() => {
+        toast.info(
+          `Statements to ${shipperCount} shippers — demo only, nothing was sent.`
+        );
+        onClose();
+      }}
+    >
+      <p className="text-sm">
+        Emails each of the {shipperCount} shippers with statement emails on
+        their statement for the month to date, now instead of at the next
+        scheduled run ({formatDateTime(nextWeeklyStatementRun) ?? "—"}).
+      </p>
+      <p className="text-sm text-[#707070]">
+        The Friday and month-end runs still go out as scheduled. To send one
+        shipper&apos;s statement, open it from the table and use Email
+        statement.
+      </p>
+    </FormModal>
   );
 }

@@ -139,6 +139,7 @@ export default function ChargeTypes() {
         columns={columns}
         data={types.isError ? [] : (types.data?.items ?? [])}
         loading={types.isPending}
+        refreshing={types.isPlaceholderData}
         rowKey={(row) => row.code}
         meta={paging.tableMeta(types.data?.meta)}
         setMeta={paging.setMeta}

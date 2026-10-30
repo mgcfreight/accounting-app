@@ -57,12 +57,12 @@ export default function CompanyInformation() {
   const {
     control,
     handleSubmit,
+    reset,
     formState: { dirtyFields },
   } = useForm<Company>({
     mode: "all",
     values: company.data && toForm(company.data),
   });
-  // A save reloads `values`, which resets the form to clean.
   const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
 
   const save = useMutation({
@@ -80,6 +80,10 @@ export default function CompanyInformation() {
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(SETTINGS_QUERY.company, saved);
+      // Reset here, not through `values`: that resets only when the saved
+      // settings differ from the last ones, so an edit the API normalises
+      // back (on → ON) would leave the form dirty.
+      reset(toForm(saved));
       toast.success("Company information saved.");
     },
     onError: (error) => toast.error(errorMessage(error)),

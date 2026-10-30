@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router";
-import { Control, useForm, useWatch } from "react-hook-form";
+import { Control, useForm, UseFormSetValue, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   BaseButton,
@@ -24,6 +25,8 @@ import { torontoLocalToIso, torontoNowLocal } from "@/lib/utils";
 import { createShipment, errorMessage, NewShipment } from "@/services";
 import ChargeLines, { ChargeValues, emptyCharge, toCharges } from "../invoices/charge-lines";
 import { referenceLabels } from "../invoices/invoice-view";
+import usePartyNames from "../parties/use-party-names";
+import { agreementInForce } from "./agreement-in-force";
 import PartyPicker from "./party-picker";
 import { shipmentHref } from "./shipment-list";
 
@@ -135,6 +138,8 @@ export default function ShipmentForm() {
   const {
     control,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { dirtyFields },
   } = useForm<ShipmentValues>({
     // Hidden fields (carrier charges without a carrier) drop out of the form
@@ -163,10 +168,28 @@ export default function ShipmentForm() {
       carrierCharges: [emptyCharge],
     },
   });
-  const hasCarrier = !!useWatch({ control, name: "carrierPartyId" });
-  // Fields the user has edited, not `isDirty`: hidden fields unregister
-  // (shouldUnregister), which leaves the values unlike the defaults untouched.
-  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
+  const [shipperPartyId, carrierPartyId, mgcCreatedAt] = useWatch({
+    control,
+    name: ["shipperPartyId", "carrierPartyId", "mgcCreatedAt"],
+  });
+  const hasCarrier = !!carrierPartyId;
+  // Each side's prices are in the currency of its party's agreement on the
+  // invoice date. Unknown (no party, no agreement then, still loading, or no
+  // parties.view) leaves the label without one rather than guess.
+  const parties = usePartyNames([shipperPartyId, carrierPartyId]);
+  const invoiceDate = mgcCreatedAt.slice(0, 10);
+  const priceLabel = (partyId: string) => {
+    const currency = agreementInForce(parties.get(partyId), invoiceDate)?.currency;
+    return currency ? `Unit price (${currency})` : "Unit price";
+  };
+  // Fields the user has edited, not `isDirty`, and only those still in the
+  // form: hidden fields unregister (shouldUnregister) and leave the values,
+  // and a field-array change diffs every default against them, marking the
+  // hidden ones dirty.
+  const registered = getValues();
+  const leaving = useUnsavedChanges(
+    Object.keys(dirtyFields).some((key) => key in registered)
+  );
 
   const save = useMutation({
     mutationFn: (values: ShipmentValues) => createShipment(toRequest(values)),
@@ -285,8 +308,18 @@ export default function ShipmentForm() {
 
       <BaseCardWrapper heading="Route">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <AddressFields control={control} side="origin" heading="From" />
-          <AddressFields control={control} side="destination" heading="To" />
+          <AddressFields
+            control={control}
+            setValue={setValue}
+            side="origin"
+            heading="From"
+          />
+          <AddressFields
+            control={control}
+            setValue={setValue}
+            side="destination"
+            heading="To"
+          />
           <BaseInput
             name="pickupDate"
             control={control}
@@ -326,7 +359,11 @@ export default function ShipmentForm() {
           What the shipper is charged, before tax, in the currency of their
           agreement.
         </p>
-        <ChargeLines control={control} name="customerCharges" />
+        <ChargeLines
+          control={control}
+          name="customerCharges"
+          priceLabel={priceLabel(shipperPartyId)}
+        />
       </BaseCardWrapper>
 
       {hasCarrier && (
@@ -335,7 +372,11 @@ export default function ShipmentForm() {
             What the carrier is expected to bill, before tax. Their actual bill
             is compared with this when it arrives.
           </p>
-          <ChargeLines control={control} name="carrierCharges" />
+          <ChargeLines
+            control={control}
+            name="carrierCharges"
+            priceLabel={priceLabel(carrierPartyId)}
+          />
         </BaseCardWrapper>
       )}
 
@@ -366,15 +407,20 @@ export default function ShipmentForm() {
 // needs its province: the destination's can pick the tax rate.
 function AddressFields({
   control,
+  setValue,
   side,
   heading,
 }: {
   control: Control<ShipmentValues>;
+  setValue: UseFormSetValue<ShipmentValues>;
   side: "origin" | "destination";
   heading: string;
 }) {
   const country = useWatch({ control, name: `${side}Country` }).trim();
   const isCanadian = country === "CA";
+  // The province select and the state box share one value: a state typed
+  // for another country would stay hidden behind a blank select and be sent.
+  useEffect(() => setValue(`${side}Province`, ""), [isCanadian, side, setValue]);
 
   return (
     <div className="flex flex-col gap-3">

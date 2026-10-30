@@ -30,9 +30,9 @@ import {
 import { downloadCsv, ExportTable, printTable } from "@/lib/export";
 import { Reminder } from "@/lib/interfaces";
 import { mockReminders, REMINDER_DAYS_BEFORE_DUE } from "@/lib/mock";
-import { formatMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { moneyText } from "../reports/export-table";
 
 type View = "all" | ReminderStatus;
 type Filters = { side: string };
@@ -85,7 +85,7 @@ const exportTable = (rows: Reminder[], subtitle: string): ExportTable<Reminder> 
     { label: "Side", value: sideLabel },
     { label: "Due date", value: (r) => formatDate(r.dueDate) ?? "" },
     { label: "Remind on", value: (r) => formatDate(r.remindOn) ?? "" },
-    { label: "Balance", value: (r) => formatMoney(r.balance, r.currency) ?? "" },
+    { label: "Balance", value: (r) => moneyText(r.balance, r.currency) },
     { label: "Channel", value: (r) => channelLabels[r.channel] },
     { label: "Recipient", value: (r) => r.recipient },
     { label: "Status", value: (r) => reminderStatus[r.status].label },

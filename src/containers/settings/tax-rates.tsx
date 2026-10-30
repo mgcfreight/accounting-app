@@ -12,12 +12,14 @@ import {
   RowActions,
   StatusChip,
 } from "@/components/common";
+import { ChipTone } from "@/components/common/status-chip";
 import { Add, EditSm } from "@/components/icons";
 import { useServerPaging } from "@/hooks";
 import { TaxRate } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, torontoToday } from "@/lib/utils";
 import { createTaxRate, errorMessage, listTaxRates } from "@/services";
+import { TaxRateStatus, taxRateStatus } from "./tax-rate-status";
 
 const columns: BaseTableColumn[] = [
   { key: "code", label: "Code" },
@@ -26,9 +28,16 @@ const columns: BaseTableColumn[] = [
   { key: "ratePercent", label: "Rate" },
   { key: "effectiveFrom", label: "From" },
   { key: "effectiveTo", label: "To" },
+  { key: "status", label: "Status" },
   { key: "isRecoverable", label: "ITC" },
   { key: "actions", label: "Actions", align: "center" },
 ];
+
+const statusChip: Record<TaxRateStatus, { label: string; tone: ChipTone }> = {
+  current: { label: "Current", tone: "success" },
+  scheduled: { label: "Scheduled", tone: "warning" },
+  ended: { label: "Ended", tone: "neutral" },
+};
 
 type NewRate = {
   code: string;
@@ -97,6 +106,9 @@ export default function TaxRates() {
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  const today = torontoToday();
+  // The code's open row: the one the API ends when a new rate is added. It is
+  // the latest rate for the code, but may not have started yet.
   const existing = rates.data?.items.find(
     (rate) => rate.code === code.trim().toUpperCase() && !rate.effectiveTo
   );
@@ -122,6 +134,7 @@ export default function TaxRates() {
         columns={columns}
         data={rates.isError ? [] : (rates.data?.items ?? [])}
         loading={rates.isPending}
+        refreshing={rates.isPlaceholderData}
         rowKey={(row) => row.id}
         meta={paging.tableMeta(rates.data?.meta)}
         setMeta={paging.setMeta}
@@ -137,10 +150,16 @@ export default function TaxRates() {
             case "effectiveFrom":
               return formatDate(row.effectiveFrom);
             case "effectiveTo":
-              return row.effectiveTo ? formatDate(row.effectiveTo) : <StatusChip text="Current" tone="success" />;
+              return row.effectiveTo ? formatDate(row.effectiveTo) : "—";
+            case "status": {
+              const chip = statusChip[taxRateStatus(row, today)];
+              return <StatusChip text={chip.label} tone={chip.tone} />;
+            }
             case "isRecoverable":
               return row.isRecoverable ? "Yes" : "No";
             case "actions":
+              // Only on the open row: a new rate always ends that one, even
+              // when it is scheduled and an earlier row is in force.
               return row.effectiveTo ? null : (
                 <RowActions
                   actions={[{ key: "new-rate", label: "New rate from a date", icon: <EditSm />, onPress: () => open(row) }]}
@@ -217,7 +236,7 @@ export default function TaxRates() {
           </BaseSwitch>
           {existing && (
             <p className="text-xs text-content-6">
-              The current {existing.code} rate ({existing.ratePercent}% from {formatDate(existing.effectiveFrom)}) will end the
+              The {taxRateStatus(existing, today) === "scheduled" ? "scheduled" : "current"} {existing.code} rate ({existing.ratePercent}% from {formatDate(existing.effectiveFrom)}) will end the
               day before this one starts. The new start date must be after {formatDate(existing.effectiveFrom)}.
             </p>
           )}

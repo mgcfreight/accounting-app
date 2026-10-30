@@ -1,7 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm, useWatch } from "react-hook-form";
+import { useEffect } from "react";
+import { Control, Path, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseInput, BaseSelect, BaseTextArea, FormModal } from "@/components/common";
+import {
+  BaseInput,
+  BaseSelect,
+  BaseSwitch,
+  BaseTextArea,
+  FormModal,
+} from "@/components/common";
 import {
   billingTriggerOptions,
   CANADIAN_PROVINCES,
@@ -20,7 +27,8 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "@/lib/enums";
-import { PartyView } from "@/lib/interfaces";
+import { AgreementView, PartyView } from "@/lib/interfaces";
+import { REMINDER_DAYS_BEFORE_DUE } from "@/lib/mock/accounts";
 import {
   createAgreement,
   createParty,
@@ -72,7 +80,7 @@ export function PartyFormModal({
 }) {
   const queryClient = useQueryClient();
   const what = type === PartyType.Shipper ? "Shipper" : "Carrier";
-  const { control, handleSubmit } = useForm<PartyValues>({
+  const { control, handleSubmit, setValue } = useForm<PartyValues>({
     defaultValues: {
       mgcId: "",
       name: "",
@@ -88,6 +96,9 @@ export function PartyFormModal({
     },
   });
   const isCanadian = useWatch({ control, name: "country" }).trim() === "CA";
+  // The province select and the state box share one value: a state typed
+  // for another country would stay hidden behind a blank select and be sent.
+  useEffect(() => setValue("province", ""), [isCanadian, setValue]);
 
   const save = useMutation({
     mutationFn: (values: PartyValues) => {
@@ -223,7 +234,134 @@ export function PartyFormModal({
   );
 }
 
-type AgreementValues = {
+// The on/off settings on an agreement. The API's create-agreement request
+// doesn't take them yet and nothing can change them afterwards, so the
+// switches below are a demo: they work, but saving them keeps nothing.
+type AgreementSwitches = Pick<
+  AgreementView,
+  "remindersEnabled" | "billingNoticeEnabled" | "weeklyStatementEnabled" | "autoSendInvoices"
+>;
+
+// What the API sets on a new agreement.
+const switchDefaults: AgreementSwitches = {
+  remindersEnabled: true,
+  billingNoticeEnabled: true,
+  weeklyStatementEnabled: false,
+  autoSendInvoices: false,
+};
+
+const pickSwitches = (agreement: AgreementView | undefined): AgreementSwitches =>
+  agreement
+    ? {
+        remindersEnabled: agreement.remindersEnabled,
+        billingNoticeEnabled: agreement.billingNoticeEnabled,
+        weeklyStatementEnabled: agreement.weeklyStatementEnabled,
+        autoSendInvoices: agreement.autoSendInvoices,
+      }
+    : switchDefaults;
+
+const sameSwitches = (a: AgreementSwitches, b: AgreementSwitches) =>
+  (Object.keys(switchDefaults) as (keyof AgreementSwitches)[]).every(
+    (key) => a[key] === b[key]
+  );
+
+// Each switch with a line saying what it does, so staff who've never met
+// them know what turning one on means. Billing notices, statements and
+// auto-send are for shippers only.
+const switchFields = (
+  isShipper: boolean
+): { key: keyof AgreementSwitches; label: string; help: string }[] => [
+  {
+    key: "remindersEnabled",
+    label: "Payment reminders",
+    help: isShipper
+      ? `Email the shipper's accounts department ${REMINDER_DAYS_BEFORE_DUE} days before an invoice is due.`
+      : `Alert MGC's accounts team ${REMINDER_DAYS_BEFORE_DUE} days before a carrier bill is due.`,
+  },
+  ...(isShipper
+    ? [
+        {
+          key: "billingNoticeEnabled" as const,
+          label: "Billing period notice",
+          help: "Tell the shipper before a billing period closes, so they can check what's on it.",
+        },
+        {
+          key: "weeklyStatementEnabled" as const,
+          label: "Weekly statement",
+          help: "Email the shipper their open invoices every Friday and on the last weekday of the month.",
+        },
+        {
+          key: "autoSendInvoices" as const,
+          label: "Auto-send invoices",
+          help: "Email each invoice as soon as it's issued, without a person sending it. Whether this is allowed is still undecided (issue #1).",
+        },
+      ]
+    : []),
+];
+
+function AgreementSwitchFields<T extends AgreementSwitches>({
+  control,
+  isShipper,
+}: {
+  control: Control<T>;
+  isShipper: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {switchFields(isShipper).map((field) => (
+        <BaseSwitch key={field.key} name={field.key as Path<T>} control={control}>
+          <span className="flex flex-col">
+            <span>{field.label}</span>
+            <span className="text-xs text-content-5">{field.help}</span>
+          </span>
+        </BaseSwitch>
+      ))}
+    </div>
+  );
+}
+
+const DemoNote = () => (
+  <p className="text-xs text-content-5">
+    Demo only: these settings aren&apos;t saved yet.
+  </p>
+);
+
+// Turns an agreement's notifications and automation on or off. A demo until
+// the API can change them.
+export function AgreementSettingsModal({
+  agreement,
+  isShipper,
+  onClose,
+}: {
+  agreement: AgreementView;
+  isShipper: boolean;
+  onClose: () => void;
+}) {
+  const { control, handleSubmit } = useForm<AgreementSwitches>({
+    defaultValues: pickSwitches(agreement),
+  });
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Notifications & Automation"
+      confirmText="Save Settings"
+      onConfirm={handleSubmit((values) => {
+        if (!sameSwitches(values, pickSwitches(agreement))) {
+          toast.info("Agreement settings — demo only, nothing was saved.");
+        }
+        onClose();
+      })}
+      size="lg"
+    >
+      <DemoNote />
+      <AgreementSwitchFields control={control} isShipper={isShipper} />
+    </FormModal>
+  );
+}
+
+type AgreementValues = AgreementSwitches & {
   effectiveFrom: string;
   currency: string;
   paymentTerms: string;
@@ -248,8 +386,12 @@ export function AgreementFormModal({
 }) {
   const queryClient = useQueryClient();
   const isCarrier = party.type === PartyType.Carrier;
+  // The new terms replace the open-ended agreement, so its settings carry
+  // over unless changed.
+  const replacing = party.agreements?.find((a) => a.effectiveTo === null);
   const { control, handleSubmit } = useForm<AgreementValues>({
     defaultValues: {
+      ...pickSwitches(replacing),
       effectiveFrom: "",
       currency: party.agreements?.[0]?.currency ?? party.defaultCurrency,
       paymentTerms: PaymentTerms.Net30,
@@ -283,8 +425,12 @@ export function AgreementFormModal({
       };
       return createAgreement(body);
     },
-    onSuccess: () => {
+    onSuccess: (_, values) => {
       toast.success("Agreement added.");
+      // The API set its own defaults; say so if other settings were chosen.
+      if (!sameSwitches(values, switchDefaults)) {
+        toast.info("Notification settings — demo only, nothing was saved.");
+      }
       void queryClient.invalidateQueries({ queryKey: ["parties"] });
       onClose();
     },
@@ -364,10 +510,15 @@ export function AgreementFormModal({
           }
           placeholder="Optional"
           rules={{
-            validate: (value: string) =>
-              value.trim() === "" ||
-              (DAYS_PATTERN.test(value.trim()) && Number(value.trim()) <= 60) ||
-              "A whole number from 0 to 60",
+            // The form also holds the on/off switches, hence the wider type.
+            validate: (value: string | boolean) => {
+              const days = String(value).trim();
+              return (
+                days === "" ||
+                (DAYS_PATTERN.test(days) && Number(days) <= 60) ||
+                "A whole number from 0 to 60"
+              );
+            },
           }}
         />
       </div>
@@ -377,6 +528,15 @@ export function AgreementFormModal({
         label="Notes"
         rules={{ maxLength: maxLength(2000) }}
       />
+      <div className="flex flex-col gap-3 border-t border-content-3 pt-4">
+        <div>
+          <p className="text-sm font-semibold text-base-primary-900">
+            Notifications &amp; automation
+          </p>
+          <DemoNote />
+        </div>
+        <AgreementSwitchFields control={control} isShipper={!isCarrier} />
+      </div>
     </FormModal>
   );
 }
