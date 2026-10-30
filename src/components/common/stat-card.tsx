@@ -19,13 +19,16 @@ export default function StatCard({
   return (
     <Card className={`bg-white ${className}`}>
       <CardBody className="flex flex-col justify-between gap-3 px-4 py-3">
-        <div className="flex">
+        {/* A fixed tile pinned to the top: the same size and position
+            whether the text beside it runs to two lines or four, so cards
+            in a row match. */}
+        <div className="flex items-start">
           <div
-            className={`min-w-14 rounded-2xl p-2 flex items-center justify-center text-3xl ${card.iconBgClass}`}
+            className={`size-16 shrink-0 rounded-2xl flex items-center justify-center text-3xl ${card.iconBgClass}`}
           >
             {card.icon}
           </div>
-          <div className="ml-4">
+          <div className="ml-4 min-w-0">
             <p className="text-sm font-semibold text-[#8F9494]">{card.name}</p>
             <h4 className="mt-1 text-lg font-bold">{card.value}</h4>
             {card.caption && (

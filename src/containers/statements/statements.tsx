@@ -1,14 +1,21 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { HiOutlineCurrencyDollar } from "react-icons/hi2";
-import { LuCalendarClock, LuRefreshCw } from "react-icons/lu";
-import { PiFilePdf, PiFileXls, PiHandCoins } from "react-icons/pi";
+import { LuSend } from "react-icons/lu";
+import {
+  PiArrowsClockwise,
+  PiCalendarDots,
+  PiFilePdf,
+  PiFileXls,
+  PiHandCoins,
+} from "react-icons/pi";
 import { toast } from "sonner";
 import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
   BaseTable,
+  FormModal,
   Money,
   PartyAvatar,
   RowActions,
@@ -104,6 +111,7 @@ const exportFor = (
 export default function Statements() {
   const [selected, setView] = useState<View>("carriers");
   const [open, setOpen] = useState<PartyAccountSummary | null>(null);
+  const [confirmSend, setConfirmSend] = useState(false);
   const { can } = useCan();
   const d = mockDashboard;
 
@@ -166,18 +174,20 @@ export default function Statements() {
       caption: `+ ${formatMoney(d.payable.USD, Currency.USD) ?? "—"} · ${formatMoney(d.payableInCad, Currency.CAD) ?? "—"} in all, at invoice-date rates`,
     },
     {
-      icon: <LuRefreshCw className="text-[#BC8EF0]" />,
+      icon: <PiArrowsClockwise className="text-[#BC8EF0]" />,
       iconBgClass: "bg-icon-lightPurple",
-      name: "Balances Refresh Daily at 06:00",
-      value: formatDateTime(lastRefresh) ?? "Not yet",
-      caption: "Last refreshed",
+      name: "Last Balance Refresh",
+      // Date only, so the value fits one line like the amounts beside it;
+      // the time is in the caption.
+      value: formatDate(lastRefresh) ?? "Not yet",
+      caption: "Balances refresh daily at 06:00",
     },
     {
-      icon: <LuCalendarClock className="text-[#F871A0]" />,
+      icon: <PiCalendarDots className="text-[#F871A0]" />,
       iconBgClass: "bg-icon-lightRed",
-      name: "Next Statements",
-      value: formatDateTime(nextWeeklyStatementRun) ?? "—",
-      caption: `Fridays and month-end (next ${formatDateTime(nextMonthEndStatementRun) ?? "—"}) to ${weeklyShippers} shippers`,
+      name: "Next Statement Emails",
+      value: formatDate(nextWeeklyStatementRun) ?? "—",
+      caption: `At 08:00 to ${weeklyShippers} shippers · month-end run ${formatDate(nextMonthEndStatementRun) ?? "—"}`,
     },
   ];
 
@@ -318,19 +328,19 @@ export default function Statements() {
         </Card>
       )}
 
-      {canViewShipper && (
+      {/* Only shippers are emailed statements, so the schedule belongs to
+          their tab. */}
+      {canViewSide && view === "shippers" && (
         <BaseCardWrapper
-          heading="Shipper Statements"
+          heading="Statement Emails"
           action={
             can(Permission.ReportsSendEmail) && (
               <BaseButton
-                text="Send now"
+                text="Send statements now"
                 className="rounded-xl px-4"
-                onPress={() =>
-                  toast.info(
-                    `Statements to ${weeklyShippers} shippers — demo only, nothing was sent.`
-                  )
-                }
+                startContent={<LuSend />}
+                isDisabled={weeklyShippers === 0}
+                onPress={() => setConfirmSend(true)}
               />
             )
           }
@@ -369,6 +379,49 @@ export default function Statements() {
       {open && (
         <StatementModal summary={open} asOf={lastRefresh} onClose={() => setOpen(null)} />
       )}
+      {confirmSend && (
+        <SendStatementsModal
+          shipperCount={weeklyShippers}
+          onClose={() => setConfirmSend(false)}
+        />
+      )}
     </div>
+  );
+}
+
+// Runs the statement email outside the schedule: the same month-to-date
+// statement the Friday run sends, to the same shippers. The schedule itself
+// doesn't change.
+function SendStatementsModal({
+  shipperCount,
+  onClose,
+}: {
+  shipperCount: number;
+  onClose: () => void;
+}) {
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Send Statements Now"
+      confirmText="Send Now"
+      onConfirm={() => {
+        toast.info(
+          `Statements to ${shipperCount} shippers — demo only, nothing was sent.`
+        );
+        onClose();
+      }}
+    >
+      <p className="text-sm">
+        Emails each of the {shipperCount} shippers with statement emails on
+        their statement for the month to date, now instead of at the next
+        scheduled run ({formatDateTime(nextWeeklyStatementRun) ?? "—"}).
+      </p>
+      <p className="text-sm text-[#707070]">
+        The Friday and month-end runs still go out as scheduled. To send one
+        shipper&apos;s statement, open it from the table and use Email
+        statement.
+      </p>
+    </FormModal>
   );
 }
