@@ -6,7 +6,9 @@ import { Currency } from "./enums";
 // from USD, and this app shows both side by side.
 //
 // Arithmetic on money does not belong in the frontend. Totals, tax and
-// balances come already calculated.
+// balances come already calculated. The one exception is sumMoney, which
+// checks a form's amounts before they are sent; never display its result as
+// an official total.
 
 const AMOUNT_PATTERN = /^(-)?(\d+)\.(\d{2})$/;
 
@@ -47,4 +49,19 @@ export const compareMoney = (a: string, b: string): number => {
           ? 1
           : 0;
   return negA ? -magnitude : magnitude;
+};
+
+// Adds amounts exactly, in whole cents (BigInt, never floats). Returns null if
+// any amount is malformed, so the caller cannot mistake a bad input for 0.00.
+export const sumMoney = (amounts: string[]): string | null => {
+  let total = BigInt(0);
+  for (const amount of amounts) {
+    const match = amount.match(AMOUNT_PATTERN);
+    if (!match) return null;
+    const cents = BigInt(`${match[2]}${match[3]}`);
+    total += match[1] ? -cents : cents;
+  }
+  const negative = total < BigInt(0);
+  const digits = (negative ? -total : total).toString().padStart(3, "0");
+  return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
 };

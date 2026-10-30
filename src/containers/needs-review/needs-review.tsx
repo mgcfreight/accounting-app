@@ -175,7 +175,7 @@ export default function NeedsReview() {
         if (dispute.status !== DisputeStatus.Open || !canEdit) return null;
         return (
           <RowActions
-            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, onPress: () => setResolving(dispute) }]}
+            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, labelled: true, onPress: () => setResolving(dispute) }]}
           />
         );
       }

@@ -11,6 +11,12 @@ const isRetryable = (error: unknown) =>
 // a payment or an invoice change that may have reached the server could apply
 // it twice.
 //
+// Mutations run even when the browser reports offline (`networkMode:
+// "always"`), so an offline save fails at once rather than pausing. A paused
+// save stays pending — locking FormModal, which can't be closed while saving —
+// and fires on its own when the connection returns, possibly long after the
+// user has given up on it.
+//
 // When a refetch fails, TanStack keeps the last data beside the error. A
 // screen showing amounts must check `isError` and not present those figures
 // as current.
@@ -19,6 +25,9 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 30_000,
       retry: (failureCount, error) => failureCount < 2 && isRetryable(error),
+    },
+    mutations: {
+      networkMode: "always",
     },
   },
 });

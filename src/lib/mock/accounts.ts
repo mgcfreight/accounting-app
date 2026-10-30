@@ -33,12 +33,20 @@ const summary = (
   >
 ): PartyAccountSummary => ({ partyId, partyName, type, currency, ...figures });
 
+// The current statement period: the month to date. A statement never
+// crosses a month.
+export const statementPeriodFrom = "2026-10-01";
+
 // The dashboard's average payment cycle (24 days for shippers, 31 for
-// carriers) is the mean of the averages below.
+// carriers) is the mean of the averages below. Opening balances are the
+// open invoices dated before statementPeriodFrom, before October's payments;
+// opening + the period's invoices − its allocated payments = balance.
+// Payments not allocated yet (P-2047, P-2044) don't change the balance.
 export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("USR_41AQ", "Northwind Distribution", PartyType.Shipper, Currency.CAD, {
     businessVolume: "38450.00",
     shipmentCount: 14,
+    openingBalance: "2816.89",
     balance: "2816.89",
     overdue: "2816.89",
     oldestOverdueDays: 5,
@@ -51,6 +59,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("USR_52BR", "Maple Leaf Foods Co.", PartyType.Shipper, Currency.CAD, {
     businessVolume: "61230.40",
     shipmentCount: 22,
+    openingBalance: "0.00",
     balance: "2600.83",
     overdue: "0.00",
     oldestOverdueDays: 0,
@@ -62,6 +71,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("USR_63CS", "Pacific Rim Traders", PartyType.Shipper, Currency.CAD, {
     businessVolume: "24890.00",
     shipmentCount: 9,
+    openingBalance: "3255.00",
     balance: "0.00",
     overdue: "0.00",
     oldestOverdueDays: 0,
@@ -73,6 +83,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("USR_74DT", "Great Lakes Supply", PartyType.Shipper, Currency.USD, {
     businessVolume: "16720.00",
     shipmentCount: 6,
+    openingBalance: "1475.00",
     balance: "1475.00",
     overdue: "1475.00",
     oldestOverdueDays: 22,
@@ -86,6 +97,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
     // One shipment, its invoice still a draft.
     businessVolume: "1220.00",
     shipmentCount: 1,
+    openingBalance: "0.00",
     balance: "0.00",
     overdue: "0.00",
     oldestOverdueDays: 0,
@@ -97,6 +109,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("USR_96FV", "Prairie Agri Inc.", PartyType.Shipper, Currency.CAD, {
     businessVolume: "29870.00",
     shipmentCount: 11,
+    openingBalance: "2320.50",
     balance: "2320.50",
     overdue: "2320.50",
     oldestOverdueDays: 66,
@@ -108,6 +121,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("CAR_01", "Day & Ross", PartyType.Carrier, Currency.CAD, {
     businessVolume: "72340.50",
     shipmentCount: 31,
+    openingBalance: "2356.99",
     balance: "3460.75",
     overdue: "2356.99",
     oldestOverdueDays: 5,
@@ -119,6 +133,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("CAR_02", "TST-CF Express", PartyType.Carrier, Currency.CAD, {
     businessVolume: "41260.00",
     shipmentCount: 18,
+    openingBalance: "0.00",
     balance: "0.00",
     overdue: "0.00",
     oldestOverdueDays: 0,
@@ -130,6 +145,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("CAR_03", "Manitoulin Transport", PartyType.Carrier, Currency.CAD, {
     businessVolume: "30115.00",
     shipmentCount: 12,
+    openingBalance: "2709.00",
     balance: "0.00",
     overdue: "0.00",
     oldestOverdueDays: 0,
@@ -141,6 +157,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("CAR_04", "XPO Logistics", PartyType.Carrier, Currency.USD, {
     businessVolume: "9840.00",
     shipmentCount: 5,
+    openingBalance: "1180.00",
     balance: "1180.00",
     overdue: "1180.00",
     oldestOverdueDays: 22,
@@ -152,6 +169,7 @@ export const mockAccountSummaries: PartyAccountSummary[] = [
   summary("CAR_05", "Kriska Transportation", PartyType.Carrier, Currency.CAD, {
     businessVolume: "18755.00",
     shipmentCount: 8,
+    openingBalance: "984.75",
     balance: "984.75",
     overdue: "984.75",
     oldestOverdueDays: 66,
@@ -166,8 +184,9 @@ export const findAccountSummary = (partyId: string) =>
   mockAccountSummaries.find((row) => row.partyId === partyId);
 
 // Balances refresh every day at 06:00 Toronto time; shipper statements go
-// out every Friday at 08:00 to shippers with weekly statements on. The
-// 2026-10-02 email to Northwind bounced, so its statement history skips it.
+// out at 08:00 every Friday and on the last weekday of each month, to
+// shippers with weekly statements on. The 2026-10-02 email to Northwind
+// bounced, so its statement history skips it.
 export const mockStatementRuns: StatementRun[] = [
   { id: "SR-118", kind: StatementRunKind.DailyRefresh, ranAt: "2026-10-19T10:00:00Z", partyCount: 11, sentCount: null, failedCount: null },
   { id: "SR-117", kind: StatementRunKind.DailyRefresh, ranAt: "2026-10-18T10:00:00Z", partyCount: 11, sentCount: null, failedCount: null },
@@ -176,10 +195,15 @@ export const mockStatementRuns: StatementRun[] = [
   { id: "SR-114", kind: StatementRunKind.DailyRefresh, ranAt: "2026-10-16T10:00:00Z", partyCount: 11, sentCount: null, failedCount: null },
   { id: "SR-108", kind: StatementRunKind.WeeklyEmail, ranAt: "2026-10-09T12:00:00Z", partyCount: 3, sentCount: 3, failedCount: 0 },
   { id: "SR-101", kind: StatementRunKind.WeeklyEmail, ranAt: "2026-10-02T12:00:00Z", partyCount: 3, sentCount: 2, failedCount: 1 },
+  { id: "SR-099", kind: StatementRunKind.MonthEndEmail, ranAt: "2026-09-30T12:00:00Z", partyCount: 3, sentCount: 3, failedCount: 0 },
 ];
 
 // The next Friday statement run after the demo's today.
 export const nextWeeklyStatementRun = "2026-10-23T12:00:00Z";
+
+// The next month-end run: 2026-10-31 is a Saturday, so the last weekday is
+// Friday the 30th.
+export const nextMonthEndStatementRun = "2026-10-30T12:00:00Z";
 
 const TEAM = "MGC accounts team";
 

@@ -266,18 +266,30 @@ export const chargeTypeSchema: z.ZodType<ChargeType> = z.object({
   isActive: z.boolean(),
 });
 
-export const roleSchema: z.ZodType<Role> = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
-  isSystem: z.boolean(),
-  isAdmin: z.boolean(),
-  permissionsEditable: z.boolean(),
-  permissions: permissionsSchema,
-  userCount: z.number().int().nonnegative(),
-  createdAt: timestamp,
-  updatedAt: timestamp,
-});
+// Unlike a user's, a role's unknown permissions are kept apart, not dropped:
+// saving the role replaces its whole set, so they must go back with it.
+export const roleSchema: z.ZodType<Role> = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    isSystem: z.boolean(),
+    isAdmin: z.boolean(),
+    permissionsEditable: z.boolean(),
+    permissions: z.array(z.string()),
+    userCount: z.number().int().nonnegative(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .transform(({ permissions, ...role }) => ({
+    ...role,
+    permissions: permissions.filter((value): value is Permission =>
+      KNOWN_PERMISSIONS.has(value)
+    ),
+    unknownPermissions: permissions.filter(
+      (value) => !KNOWN_PERMISSIONS.has(value)
+    ),
+  }));
 
 // A catalog entry for a permission this build doesn't know is dropped: it
 // couldn't gate anything here, and the API would still accept it unsent.

@@ -48,6 +48,10 @@ const UserList = lazy(() => import("@/containers/users/user-list"));
 // build's per-route index.html serves every record.
 //
 // Route elements, not a component: app.tsx hands them to the data router.
+//
+// Lists shared by two routes are keyed, so switching between them mounts a
+// fresh list: otherwise React keeps the instance, and its filters, sort and
+// previous rows carry over to the other direction or party type.
 const appRoutes = (
   <>
     <Route index element={<Navigate to={LOGIN_PATH} replace />} />
@@ -62,7 +66,12 @@ const appRoutes = (
       <Route path="dashboard" element={<Dashboard />} />
       <Route
         path="shipper-invoices"
-        element={<InvoiceList direction={InvoiceDirection.Receivable} />}
+        element={
+          <InvoiceList
+            key={InvoiceDirection.Receivable}
+            direction={InvoiceDirection.Receivable}
+          />
+        }
       />
       <Route
         path="shipper-invoices/view"
@@ -70,7 +79,12 @@ const appRoutes = (
       />
       <Route
         path="carrier-invoices"
-        element={<InvoiceList direction={InvoiceDirection.Payable} />}
+        element={
+          <InvoiceList
+            key={InvoiceDirection.Payable}
+            direction={InvoiceDirection.Payable}
+          />
+        }
       />
       <Route
         path="carrier-invoices/view"
@@ -79,12 +93,18 @@ const appRoutes = (
       <Route path="needs-review" element={<NeedsReview />} />
       <Route path="reminders" element={<Reminders />} />
       <Route path="payments" element={<Payments />} />
-      <Route path="shippers" element={<PartyList type={PartyType.Shipper} />} />
+      <Route
+        path="shippers"
+        element={<PartyList key={PartyType.Shipper} type={PartyType.Shipper} />}
+      />
       <Route
         path="shippers/view"
         element={<PartyDetail type={PartyType.Shipper} />}
       />
-      <Route path="carriers" element={<PartyList type={PartyType.Carrier} />} />
+      <Route
+        path="carriers"
+        element={<PartyList key={PartyType.Carrier} type={PartyType.Carrier} />}
+      />
       <Route
         path="carriers/view"
         element={<PartyDetail type={PartyType.Carrier} />}

@@ -189,7 +189,8 @@ export function InvoiceBalance({
 }
 
 // An expected carrier invoice's total is 0 until the bill arrives; what it
-// is expected to be is shown instead, marked as such.
+// is expected to be is shown instead, marked as such. expectedTotal is the
+// expected subtotal, before tax, so it says so beside the taxed totals.
 export function InvoiceTotal({ invoice }: { invoice: InvoiceView }) {
   if (
     !isCustomerInvoice(invoice) &&
@@ -197,7 +198,9 @@ export function InvoiceTotal({ invoice }: { invoice: InvoiceView }) {
   ) {
     return (
       <span className="text-gray-500 whitespace-nowrap">
-        Expected <Money amount={invoice.expectedTotal} currency={invoice.currency} />
+        Expected{" "}
+        <Money amount={invoice.expectedTotal} currency={invoice.currency} />{" "}
+        before tax
       </span>
     );
   }

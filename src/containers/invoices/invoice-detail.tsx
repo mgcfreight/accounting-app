@@ -24,9 +24,10 @@ import {
   CarrierInvoiceStatus,
   InvoiceDirection,
   InvoiceReviewFlag,
+  Permission,
 } from "@/lib/enums";
 import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
-import { addDays, formatDate, formatDateTime, humanize } from "@/lib/utils";
+import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
@@ -34,6 +35,8 @@ import {
   getCarrierInvoiceVersions,
   getCustomerInvoice,
   getCustomerInvoiceVersions,
+  getNoticeSettings,
+  getParty,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
@@ -61,9 +64,7 @@ import {
   partyOf,
   referencesOf,
 } from "./invoice-view";
-
-// Reminders go out this many days before the due date (the requirement).
-const REMINDER_DAYS_BEFORE_DUE = 7;
+import { paymentReminder } from "./payment-reminder";
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -107,6 +108,22 @@ export default function InvoiceDetail({
     enabled: !!id,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
+  // What sets an owed invoice's payment reminder: its party's agreement (the
+  // same query and key as the party page; needs parties.view) and Settings.
+  const remindable =
+    !!invoice.data && isOwed(invoice.data) && !!invoice.data.dueDate;
+  const partyId = invoice.data ? partyOf(invoice.data).id : null;
+  const reminderParty = useQuery({
+    queryKey: ["parties", "detail", partyId],
+    queryFn: ({ signal }) => getParty(partyId!, signal),
+    staleTime: 5 * 60_000,
+    enabled: remindable && can(Permission.PartiesView),
+  });
+  const noticeSettings = useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
+    enabled: remindable,
+  });
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
@@ -138,10 +155,19 @@ export default function InvoiceDetail({
   const loadCancelled =
     data.reviewFlags.includes(InvoiceReviewFlag.TmsCancelled) &&
     canBeVoided(data);
-  const remindOn =
-    isOwed(data) && data.dueDate
-      ? addDays(data.dueDate, -REMINDER_DAYS_BEFORE_DUE)
+  const agreement = reminderParty.data?.agreements?.find(
+    (item) => item.id === data.agreementId
+  );
+  const reminder =
+    agreement && noticeSettings.data
+      ? paymentReminder(data, agreement, noticeSettings.data, torontoToday())
       : null;
+  // Say so rather than drop the line: a missing line reads as "no reminder".
+  const reminderUnknown =
+    remindable &&
+    (reminderParty.isError ||
+      noticeSettings.isError ||
+      (!!reminderParty.data && !agreement));
   const replacedBy = isSuperseded(data)
     ? versions.data?.find((version) => version.parentInvoiceId === data.id)
     : undefined;
@@ -238,10 +264,27 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
-            {remindOn && (
+            {reminderUnknown && (
               <Field label="Payment reminder">
-                {formatDate(remindOn)} ({REMINDER_DAYS_BEFORE_DUE} days before
-                due
+                <span className="text-base-danger">
+                  Couldn&apos;t check this invoice&apos;s reminder settings.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      void reminderParty.refetch();
+                      void noticeSettings.refetch();
+                    }}
+                  >
+                    Try again
+                  </button>
+                </span>
+              </Field>
+            )}
+            {reminder && (
+              <Field label="Payment reminder">
+                {formatDate(reminder.remindOn)} ({reminder.daysBefore}{" "}
+                {reminder.daysBefore === 1 ? "day" : "days"} before due
                 {isReceivable
                   ? ", emailed to the shipper's accounts department"
                   : ", an alert to the accounts team"}

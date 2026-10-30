@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { BaseInput, BaseSelect, BaseTextArea, FormModal } from "@/components/common";
@@ -72,7 +73,7 @@ export function PartyFormModal({
 }) {
   const queryClient = useQueryClient();
   const what = type === PartyType.Shipper ? "Shipper" : "Carrier";
-  const { control, handleSubmit } = useForm<PartyValues>({
+  const { control, handleSubmit, setValue } = useForm<PartyValues>({
     defaultValues: {
       mgcId: "",
       name: "",
@@ -88,6 +89,9 @@ export function PartyFormModal({
     },
   });
   const isCanadian = useWatch({ control, name: "country" }).trim() === "CA";
+  // The province select and the state box share one value: a state typed
+  // for another country would stay hidden behind a blank select and be sent.
+  useEffect(() => setValue("province", ""), [isCanadian, setValue]);
 
   const save = useMutation({
     mutationFn: (values: PartyValues) => {

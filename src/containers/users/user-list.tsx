@@ -204,18 +204,20 @@ export default function UserList() {
                     `/users/sessions/?userId=${encodeURIComponent(row.id)}`
                   ),
               },
-              {
-                key: "password",
-                label: "Set password",
-                onPress: () => {
-                  passwordForm.reset({ password: "" });
-                  setPending({ kind: "password", user: row });
-                },
-              },
               // The API refuses these on your own account; don't offer them.
+              // Your own password changes in My Account, which asks for the
+              // current one.
               ...(isMe
                 ? []
                 : [
+                    {
+                      key: "password",
+                      label: "Set password",
+                      onPress: () => {
+                        passwordForm.reset({ password: "" });
+                        setPending({ kind: "password", user: row });
+                      },
+                    },
                     {
                       key: "reset-2fa",
                       label: "Reset 2FA",

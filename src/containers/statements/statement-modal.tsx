@@ -10,13 +10,21 @@ import {
   Money,
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
-import { InvoiceStatus, PartyType, Permission } from "@/lib/enums";
+import {
+  Currency,
+  InvoiceStatus,
+  PartyType,
+  Permission,
+  StatementRunKind,
+} from "@/lib/enums";
 import { ExportTable } from "@/lib/export";
-import { Invoice, PartyAccountSummary } from "@/lib/interfaces";
+import { Invoice, PartyAccountSummary, Payment } from "@/lib/interfaces";
 import {
   findStatements,
   mockCarrierInvoices,
+  mockPayments,
   mockShipperInvoices,
+  statementPeriodFrom,
 } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -31,6 +39,13 @@ const columns: BaseTableColumn[] = [
   { key: "status", label: "Status" },
 ];
 
+const paymentColumns: BaseTableColumn[] = [
+  { key: "number", label: "Payment #" },
+  { key: "paidOn", label: "Paid On" },
+  { key: "amount", label: "Amount", align: "end" },
+  { key: "appliedTo", label: "Applied To" },
+];
+
 // What a statement lists: invoices that were billed. Drafts weren't sent,
 // void ones owe nothing, and a replaced version's balance moved to its new
 // version.
@@ -40,10 +55,25 @@ const NOT_ON_STATEMENT = [
   InvoiceStatus.Superseded,
 ];
 
+// The period runs from the 1st of the month; anything older is in the
+// opening balance (previous dues). Dates are ISO calendar dates, so they
+// compare as strings.
 const statementInvoices = (summary: PartyAccountSummary) =>
   (summary.type === PartyType.Shipper ? mockShipperInvoices : mockCarrierInvoices)
     .filter((invoice) => invoice.partyId === summary.partyId)
-    .filter((invoice) => !NOT_ON_STATEMENT.includes(invoice.status));
+    .filter((invoice) => !NOT_ON_STATEMENT.includes(invoice.status))
+    .filter((invoice) => invoice.invoiceDate >= statementPeriodFrom);
+
+const statementPayments = (summary: PartyAccountSummary) =>
+  mockPayments
+    .filter((payment) => payment.partyId === summary.partyId)
+    .filter((payment) => payment.paidOn >= statementPeriodFrom);
+
+// A payment counts against the balance once it is allocated to invoices.
+const appliedToText = (payment: Payment) =>
+  payment.allocations.length
+    ? payment.allocations.map((allocation) => allocation.invoiceNumber).join(", ")
+    : "Not allocated yet, so not in the balance";
 
 const flagsText = (invoice: Invoice) =>
   [
@@ -53,8 +83,43 @@ const flagsText = (invoice: Invoice) =>
     .filter(Boolean)
     .join(", ");
 
-// One party's statement: its billed invoices and the closing balance, as of
-// the last daily refresh (`asOf`). Demo data until the API has statements.
+// One line of the exported statement: an invoice billed or a payment made
+// in the period.
+type StatementLine = {
+  id: string;
+  date: string;
+  reference: string;
+  detail: string;
+  amount: string;
+  balance: string | null;
+  currency: Currency;
+};
+
+const invoiceLine = (invoice: Invoice): StatementLine => ({
+  id: invoice.id,
+  date: invoice.invoiceDate,
+  reference: invoice.number,
+  detail: [`Invoice, due ${formatDate(invoice.dueDate) ?? ""}`, flagsText(invoice)]
+    .filter(Boolean)
+    .join(", "),
+  amount: invoice.total,
+  balance: invoice.balance,
+  currency: invoice.currency,
+});
+
+const paymentLine = (payment: Payment): StatementLine => ({
+  id: payment.id,
+  date: payment.paidOn,
+  reference: payment.number,
+  detail: `Payment, applied to: ${appliedToText(payment)}`,
+  amount: payment.amount,
+  balance: null,
+  currency: payment.currency,
+});
+
+// One party's statement for the month to date, as of the last daily refresh
+// (`asOf`): previous dues brought forward, the invoices and payments in the
+// period, and the closing balance. Demo data until the API has statements.
 export default function StatementModal({
   summary,
   asOf,
@@ -66,22 +131,29 @@ export default function StatementModal({
 }) {
   const { can } = useCan();
   const invoices = statementInvoices(summary);
+  const payments = statementPayments(summary);
   const history = findStatements(summary.partyId);
   const isShipper = summary.type === PartyType.Shipper;
+  const opening = moneyText(summary.openingBalance, summary.currency);
   const closing = moneyText(summary.balance, summary.currency);
+  const periodText = `${formatDate(statementPeriodFrom) ?? ""} to ${formatDateTime(asOf) ?? "the last refresh"}`;
 
-  const table: ExportTable<Invoice> = {
+  const table: ExportTable<StatementLine> = {
     title: `Statement - ${summary.partyName}`,
-    subtitle: `As of ${formatDateTime(asOf) ?? "the last refresh"} · closing balance ${closing} · demo data`,
+    subtitle: `${periodText} · previous dues ${opening} · closing balance ${closing} · demo data`,
     columns: [
-      { label: "Invoice #", value: (row) => row.number },
-      { label: "Invoice date", value: (row) => formatDate(row.invoiceDate) ?? "" },
-      { label: "Due date", value: (row) => formatDate(row.dueDate) ?? "" },
-      { label: "Total", value: (row) => moneyText(row.total, row.currency) },
-      { label: "Balance", value: (row) => moneyText(row.balance, row.currency) },
-      { label: "Flags", value: flagsText },
+      { label: "Date", value: (row) => formatDate(row.date) ?? "" },
+      { label: "Reference", value: (row) => row.reference },
+      { label: "Detail", value: (row) => row.detail },
+      { label: "Amount", value: (row) => moneyText(row.amount, row.currency) },
+      {
+        label: "Invoice balance",
+        value: (row) => (row.balance === null ? "" : moneyText(row.balance, row.currency)),
+      },
     ],
-    rows: invoices,
+    rows: [...invoices.map(invoiceLine), ...payments.map(paymentLine)].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    ),
   };
 
   return (
@@ -92,9 +164,7 @@ export default function StatementModal({
       size="5xl"
     >
       <div className="flex flex-wrap justify-between items-center gap-3">
-        <p className="text-sm text-[#707070]">
-          As of {formatDateTime(asOf) ?? "the last refresh"} · demo data
-        </p>
+        <p className="text-sm text-[#707070]">{periodText} · demo data</p>
         <div className="flex flex-wrap gap-2">
           {can(Permission.ReportsExportPdf) && (
             <BaseButton
@@ -128,12 +198,17 @@ export default function StatementModal({
         </div>
       </div>
 
+      <DetailRow
+        label="Previous dues (opening balance)"
+        value={<Money amount={summary.openingBalance} currency={summary.currency} className="font-semibold" />}
+      />
+
       <BaseTable<Invoice>
-        ariaLabel={`Statement for ${summary.partyName}`}
+        ariaLabel={`Invoices on the statement for ${summary.partyName}`}
         columns={columns}
         data={invoices}
         rowKey={(row) => row.id}
-        emptyContent="No billed invoices"
+        emptyContent="No invoices billed this period"
         renderCell={(row, key) => {
           switch (key) {
             case "number":
@@ -159,6 +234,33 @@ export default function StatementModal({
         }}
       />
 
+      {payments.length > 0 && (
+        <BaseTable<Payment>
+          ariaLabel={`Payments on the statement for ${summary.partyName}`}
+          columns={paymentColumns}
+          data={payments}
+          rowKey={(row) => row.id}
+          renderCell={(row, key) => {
+            switch (key) {
+              case "number":
+                return <span className="font-bold">{row.number}</span>;
+              case "paidOn":
+                return <span className="whitespace-nowrap">{formatDate(row.paidOn)}</span>;
+              case "amount":
+                return <Money amount={row.amount} currency={row.currency} />;
+              case "appliedTo":
+                return row.allocations.length ? (
+                  appliedToText(row)
+                ) : (
+                  <span className="text-gray-500">{appliedToText(row)}</span>
+                );
+              default:
+                return null;
+            }
+          }}
+        />
+      )}
+
       <div className="flex flex-col gap-2 border-t-2 border-base-default pt-4">
         <DetailRow
           label="Closing balance"
@@ -177,8 +279,9 @@ export default function StatementModal({
             {history.map((statement) => (
               <li key={statement.id} className="flex flex-wrap justify-between gap-2">
                 <span>
-                  {statement.id} · {formatDate(statement.periodFrom)} –{" "}
-                  {formatDate(statement.periodTo)} · sent{" "}
+                  {statement.id} ·{" "}
+                  {statement.kind === StatementRunKind.MonthEndEmail ? "Month-end" : "Friday"} ·{" "}
+                  {formatDate(statement.periodFrom)} – {formatDate(statement.periodTo)} · sent{" "}
                   {formatDateTime(statement.sentAt)}
                 </span>
                 <Money amount={statement.closingBalance} currency={summary.currency} />

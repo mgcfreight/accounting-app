@@ -20,7 +20,7 @@ import {
   mockDisputes,
   mockShipperInvoices,
 } from "@/lib/mock";
-import { compareMoney, isZeroMoney } from "@/lib/money";
+import { compareMoney, formatMoney, isZeroMoney, sumMoney } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
 
 // Allocating a payment to invoices (design §8.5): the auto-match suggestion,
@@ -50,13 +50,15 @@ const isOpenDispute = (invoiceNumber: string) =>
   );
 
 // The party's invoices that still owe something, in the payment's currency.
+// Matched by party id: names aren't unique, and carrier invoices from the API
+// carry only the carrier's id.
 const openInvoicesFor = (payment: Payment): Invoice[] =>
   (payment.direction === PaymentDirection.In
     ? mockShipperInvoices
     : mockCarrierInvoices
   ).filter(
     (invoice) =>
-      invoice.partyName === payment.partyName &&
+      invoice.partyId === payment.partyId &&
       invoice.currency === payment.currency &&
       ![InvoiceStatus.Draft, InvoiceStatus.Void, InvoiceStatus.Superseded].includes(
         invoice.status
@@ -127,9 +129,9 @@ function PaymentSummary({ payment }: { payment: Payment }) {
 type Amounts = Record<string, string>;
 
 // An unmatched payment: apply what auto-matching suggests, or split it by
-// hand over the party's open invoices. Each amount is checked against the
-// invoice's balance and the payment's unapplied amount here; the API checks
-// that the amounts add up to no more than the payment.
+// hand over the party's open invoices. Each amount is checked against its
+// invoice's balance, and together they must add up to no more than the
+// payment's unapplied amount. The API checks both again.
 export function AllocateModal({
   payment,
   onClose,
@@ -149,9 +151,18 @@ export function AllocateModal({
   };
 
   const submit = handleSubmit((values) => {
-    if (!Object.values(values).some((value) => value.trim())) {
+    const entered = invoices.filter((invoice) => values[invoice.id]?.trim());
+    if (entered.length === 0) {
       const [first] = invoices;
       if (first) setError(first.id, { message: "Enter an amount for at least one invoice" });
+      return;
+    }
+    // Each field passed on its own; the total must fit the payment too. A
+    // null total (a malformed amount) blocks rather than passing.
+    const total = sumMoney(entered.map((invoice) => values[invoice.id].trim()));
+    if (total === null || compareMoney(total, payment.unapplied) > 0) {
+      const message = `Together more than the payment's unapplied ${formatMoney(payment.unapplied, payment.currency)}`;
+      entered.forEach((invoice) => setError(invoice.id, { message }));
       return;
     }
     toast.info("Payment allocated — demo only, nothing was saved.");
@@ -234,9 +245,9 @@ export function AllocateModal({
               </div>
             ))}
             <p className="text-xs text-content-5">
-              Less than an invoice&apos;s balance leaves it part paid. The API
-              checks the amounts add up to no more than the payment; anything
-              left stays as unapplied credit.
+              Less than an invoice&apos;s balance leaves it part paid. The
+              amounts must add up to no more than the payment&apos;s unapplied
+              amount; anything left stays as unapplied credit.
             </p>
           </>
         )}
