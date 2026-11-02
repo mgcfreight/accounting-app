@@ -7,6 +7,7 @@ import {
   BaseButton,
   BaseCardWrapper,
   BaseInput,
+  BasePasswordInput,
   DetailRow,
   FormModal,
   RecoveryCodes,
@@ -220,10 +221,9 @@ export default function TwoFactorSettings() {
                 recovery code
                 {canEmail ? ", or a code we email you" : ""}.
               </p>
-              <BaseInput
+              <BasePasswordInput
                 name="password"
                 control={control}
-                type="password"
                 autoComplete="current-password"
                 label="Password"
                 rules={{ required: "Enter your password" }}

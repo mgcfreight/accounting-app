@@ -1,7 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseButton, BaseCardWrapper, BaseInput } from "@/components/common";
+import {
+  BaseButton,
+  BaseCardWrapper,
+  BasePasswordInput,
+} from "@/components/common";
 import { PASSWORD_RULE, PASSWORD_RULE_TEXT } from "@/lib/constants";
 import { changePassword, errorMessage } from "@/services";
 
@@ -32,18 +36,16 @@ export default function ChangePassword() {
         className="flex flex-col gap-4 max-w-md"
         onSubmit={handleSubmit((values) => change.mutate(values))}
       >
-        <BaseInput
+        <BasePasswordInput
           name="currentPassword"
           control={control}
-          type="password"
           autoComplete="current-password"
           label="Current password"
           rules={{ required: "Enter your current password" }}
         />
-        <BaseInput
+        <BasePasswordInput
           name="newPassword"
           control={control}
-          type="password"
           autoComplete="new-password"
           label="New password"
           description={PASSWORD_RULE_TEXT}
@@ -53,10 +55,9 @@ export default function ChangePassword() {
               PASSWORD_RULE.test(value) || PASSWORD_RULE_TEXT,
           }}
         />
-        <BaseInput
+        <BasePasswordInput
           name="confirm"
           control={control}
-          type="password"
           autoComplete="new-password"
           label="Confirm new password"
           rules={{
