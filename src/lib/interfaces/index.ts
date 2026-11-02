@@ -395,6 +395,31 @@ export interface TaxRate {
   createdAt: string;
 }
 
+// GET /exchange-rate/all: one day's Bank of Canada rate to CAD. A weekend
+// or holiday holds the latest earlier business day (observedOn). The rate
+// is text, e.g. "1.3912"; never parse it into a number.
+export interface ExchangeRate {
+  date: string;
+  currency: string;
+  rateToCad: string;
+  observedOn: string;
+  source: string;
+  fetchedAt: string;
+}
+
+// POST /exchange-rate/fetch: days stored, and records given a rate, by table.
+export interface ExchangeRateRefresh {
+  from: string;
+  to: string;
+  stored: number;
+  filled: {
+    customer_invoices: number;
+    carrier_invoices: number;
+    customer_payments: number;
+    carrier_payments: number;
+  };
+}
+
 export interface ChargeType {
   code: string;
   name: string;

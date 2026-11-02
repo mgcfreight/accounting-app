@@ -5,6 +5,7 @@ import {
   carrierInvoiceSchema,
   contactSchema,
   customerInvoiceSchema,
+  exchangeRateSchema,
   meSchema,
   permissionCatalogSchema,
   syncEventSchema,
@@ -349,6 +350,31 @@ describe("billingPeriodDetailSchema", () => {
   it("refuses a total that isn't a 2-decimal string", () => {
     expect(
       billingPeriodDetailSchema.safeParse({ ...billingPeriod, total: 2610 }).success
+    ).toBe(false);
+  });
+});
+
+// GET /exchange-rate/all, one Saturday row; the values are a stored row
+// from a local Accounts API database.
+const saturdayRate = {
+  date: "2026-10-31",
+  currency: "USD",
+  rateToCad: "1.396000",
+  observedOn: "2026-10-30",
+  source: "BANK_OF_CANADA",
+  fetchedAt: "2026-10-31T21:30:02.000Z",
+};
+
+describe("exchangeRateSchema", () => {
+  it("keeps the rate as text, exactly as sent", () => {
+    const parsed = exchangeRateSchema.parse(saturdayRate);
+    expect(parsed.rateToCad).toBe("1.396000");
+    expect(parsed.observedOn).toBe("2026-10-30");
+  });
+
+  it("refuses a rate sent as a number", () => {
+    expect(
+      exchangeRateSchema.safeParse({ ...saturdayRate, rateToCad: 1.3912 }).success
     ).toBe(false);
   });
 });

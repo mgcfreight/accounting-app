@@ -3,6 +3,7 @@ import { useState } from "react";
 import AccountingPeriods from "./accounting-periods";
 import ChargeTypes from "./charge-types";
 import CompanyInformation from "./company-information";
+import ExchangeRates from "./exchange-rates";
 import NoticeSettingsSection from "./notice-settings";
 import TaxRates from "./tax-rates";
 
@@ -10,6 +11,7 @@ import TaxRates from "./tax-rates";
 const sections = [
   { key: "company", title: "Company Information", Body: CompanyInformation },
   { key: "tax", title: "Tax Rates", Body: TaxRates },
+  { key: "fx", title: "Exchange Rates", Body: ExchangeRates },
   { key: "charges", title: "Charge Types", Body: ChargeTypes },
   { key: "notices", title: "Notices & Alerts", Body: NoticeSettingsSection },
   { key: "periods", title: "Accounting Periods", Body: AccountingPeriods },

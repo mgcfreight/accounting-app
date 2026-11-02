@@ -16,6 +16,7 @@ export * from "./activity";
 export * from "./auth";
 export * from "./billing-periods";
 export * from "./disputes";
+export * from "./exchange-rates";
 export * from "./invoice-documents";
 export * from "./invoices";
 export * from "./parties";

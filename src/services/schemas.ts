@@ -63,6 +63,8 @@ import {
   DashboardSummary,
   Dispute,
   ExcludedFromCad,
+  ExchangeRate,
+  ExchangeRateRefresh,
   FxGainLossReport,
   FxGainLossRow,
   InvoiceBillTo,
@@ -322,6 +324,31 @@ export const taxRateSchema: z.ZodType<TaxRate> = z.object({
   effectiveTo: calendarDate.nullable(),
   isRecoverable: z.boolean(),
   createdAt: timestamp,
+});
+
+export const exchangeRateSchema: z.ZodType<ExchangeRate> = z.object({
+  date: calendarDate,
+  currency: z.string(),
+  // A positive rate as text; shown as stored.
+  rateToCad: z.string().regex(/^\d+(\.\d+)?$/),
+  observedOn: calendarDate,
+  source: z.string(),
+  fetchedAt: timestamp,
+});
+
+// `count` is declared further down, after this schema is built.
+const filledCount = z.number().int().nonnegative();
+
+export const exchangeRateRefreshSchema: z.ZodType<ExchangeRateRefresh> = z.object({
+  from: calendarDate,
+  to: calendarDate,
+  stored: filledCount,
+  filled: z.object({
+    customer_invoices: filledCount,
+    carrier_invoices: filledCount,
+    customer_payments: filledCount,
+    carrier_payments: filledCount,
+  }),
 });
 
 export const chargeTypeSchema: z.ZodType<ChargeType> = z.object({
