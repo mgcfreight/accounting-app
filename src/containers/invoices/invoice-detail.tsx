@@ -33,8 +33,10 @@ import {
   downloadInvoicePdf,
   errorMessage,
   getCarrierInvoice,
+  getCarrierInvoiceByNumber,
   getCarrierInvoiceVersions,
   getCustomerInvoice,
+  getCustomerInvoiceByNumber,
   getCustomerInvoiceVersions,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
@@ -59,6 +61,7 @@ import {
   InvoiceTotal,
   InvoiceView,
   isCustomerInvoice,
+  isInvoiceNumber,
   isOwed,
   isSuperseded,
   partyOf,
@@ -89,22 +92,32 @@ export default function InvoiceDetail({
   const isReceivable = direction === InvoiceDirection.Receivable;
   const listHref = invoiceListHref(direction);
 
+  // `id` is the internal id, or the invoice number when a link carries only
+  // that; everything after the load uses the invoice's own id.
+  const byNumber = !!id && isInvoiceNumber(id);
   const invoice = useQuery({
     queryKey: ["invoices", direction, "detail", id],
-    queryFn: ({ signal }): Promise<InvoiceView> =>
-      isReceivable
-        ? getCustomerInvoice(id!, signal)
-        : getCarrierInvoice(id!, signal),
+    queryFn: ({ signal }): Promise<InvoiceView> => {
+      if (isReceivable) {
+        return byNumber
+          ? getCustomerInvoiceByNumber(id!, signal)
+          : getCustomerInvoice(id!, signal);
+      }
+      return byNumber
+        ? getCarrierInvoiceByNumber(id!, signal)
+        : getCarrierInvoice(id!, signal);
+    },
     enabled: !!id,
   });
   // Every version of this invoice's number, oldest first.
+  const invoiceId = invoice.data?.id;
   const versions = useQuery({
-    queryKey: ["invoices", direction, "versions", id],
+    queryKey: ["invoices", direction, "versions", invoiceId],
     queryFn: ({ signal }): Promise<InvoiceView[]> =>
       isReceivable
-        ? getCustomerInvoiceVersions(id!, signal)
-        : getCarrierInvoiceVersions(id!, signal),
-    enabled: !!id,
+        ? getCustomerInvoiceVersions(invoiceId!, signal)
+        : getCarrierInvoiceVersions(invoiceId!, signal),
+    enabled: !!invoiceId,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
   const pdf = useFileDownload((target: InvoiceView) =>
@@ -120,7 +133,7 @@ export default function InvoiceDetail({
   }
   if (invoice.isPending) return <TableSkeleton />;
   if (invoice.isError) {
-    // 400: not an invoice id. 404: no such invoice.
+    // 400: not an invoice id or number. 404: no such invoice.
     const notFound =
       invoice.error instanceof ApiError &&
       (invoice.error.status === 404 || invoice.error.status === 400);
