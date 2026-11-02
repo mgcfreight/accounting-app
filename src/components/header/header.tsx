@@ -1,14 +1,16 @@
 import { useEffect } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
+import { Link, useLocation } from "react-router";
 import { Me } from "@/lib/interfaces";
 import { getRouteConfig, headerButtonFor } from "@/lib/routes.config";
 import BaseButton from "../common/base-button";
 import { ArrowLeft, CreateNewButtonIcon, HamburgerIcon } from "../icons";
 import { useTriggerHeaderAction } from "../providers/header-action-provider";
+import { useHeaderDetailValue } from "../providers/header-detail-provider";
 import DropdownProfile from "./dropdown-profile";
 
-// mokal-app's Header: the page title from routes.config, a back arrow on
-// detail pages, an optional "create new" button, and the profile menu.
+// mokal-app's Header: the page title from routes.config (plus what a detail
+// page adds, see useHeaderDetail), a back arrow on detail pages, an optional
+// "create new" button, and the profile menu.
 export default function Header({
   onOpenSidebar,
   user,
@@ -17,13 +19,11 @@ export default function Header({
   user: Me;
 }) {
   const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
   const triggerAction = useTriggerHeaderAction();
+  const detail = useHeaderDetailValue();
   const route = getRouteConfig(pathname);
   const button = headerButtonFor(pathname, user);
-  const id = searchParams.get("id");
-  const title =
-    route?.includeIdInHeader && id ? `${route.header} #${id}` : route?.header;
+  const title = route && detail ? `${route.header} ${detail}` : route?.header;
 
   // Name the browser tab after the page, so several open tabs can be told
   // apart.

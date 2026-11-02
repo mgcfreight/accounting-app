@@ -13,6 +13,7 @@ import {
   TableSkeleton,
 } from "@/components/common";
 import { ArrowRight, Send } from "@/components/icons";
+import { useHeaderDetail } from "@/components/providers/header-detail-provider";
 import { useCan } from "@/components/providers/user-provider";
 import {
   billingTriggerLabels,
@@ -117,6 +118,9 @@ export default function InvoiceDetail({
     queryFn: ({ signal }) => getNoticeSettings(signal),
     enabled: remindable,
   });
+  // The header shows the invoice number, not the record id in the URL.
+  const headerNumber = invoice.data ? invoiceNumberOf(invoice.data) : null;
+  useHeaderDetail(headerNumber ? `#${headerNumber}` : null);
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;

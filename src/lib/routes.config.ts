@@ -24,8 +24,6 @@ export type HeaderButton = {
 export type RouteConfig = {
   header: string;
   previousRoute?: string;
-  // Append "#<id>" from the ?id= query param to the title.
-  includeIdInHeader?: boolean;
   createNewButton?: HeaderButton;
   // Who may open the route. A child route without its own takes its
   // parent's; a top-level route without one is refused. Presentation only —
@@ -45,7 +43,6 @@ export const routeConfig: Record<string, RouteConfig> = {
     childRoutes: {
       view: {
         header: "Invoice",
-        includeIdInHeader: true,
         previousRoute: "/shipper-invoices/",
       },
     },
@@ -56,7 +53,6 @@ export const routeConfig: Record<string, RouteConfig> = {
     childRoutes: {
       view: {
         header: "Carrier Invoice",
-        includeIdInHeader: true,
         previousRoute: "/carrier-invoices/",
       },
     },
