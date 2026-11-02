@@ -103,7 +103,7 @@ export default function DropdownProfile({ user }: { user: Me }) {
           key="account"
           startContent={
             // The icon is drawn white and 20px for the dark sidebar; here it
-            // matches the Settings and Log Out icons: 24px, grey, a 1.5px line
+            // matches the Settings and Sign Out icons: 24px, grey, a 1.5px line
             // (1.25 on its 20-unit grid).
             <span className="flex [&_path]:stroke-[#3F3F46]">
               <UserIcon width={24} height={24} strokeWidth={1.25} />
@@ -130,7 +130,7 @@ export default function DropdownProfile({ user }: { user: Me }) {
             navigate(LOGIN_PATH);
           }}
         >
-          Log Out
+          Sign Out
         </DropdownItem>
       </DropdownMenu>
     </Dropdown>

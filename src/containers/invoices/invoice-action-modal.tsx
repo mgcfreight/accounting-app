@@ -101,7 +101,8 @@ export default function InvoiceActionModal({
   }
 }
 
-// Saves through `action`, then refetches invoices and closes.
+// Saves through `action`, then refetches invoices and their History card
+// (audit events), and closes.
 const useInvoiceMutation = <T, R = unknown>(
   action: (values: T) => Promise<R>,
   successMessage: string,
@@ -114,6 +115,7 @@ const useInvoiceMutation = <T, R = unknown>(
     onSuccess: (result) => {
       toast.success(successMessage);
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit"] });
       onClose();
       onDone?.(result);
     },

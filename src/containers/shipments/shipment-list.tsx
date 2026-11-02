@@ -36,8 +36,8 @@ const columns: BaseTableColumn[] = [
   { key: "carrier", label: "Carrier" },
   { key: "lane", label: "Lane" },
   { key: "pickupDate", label: "Pickup" },
-  { key: "sell", label: "Sell" },
-  { key: "buy", label: "Buy" },
+  { key: "sell", label: "Sell", align: "end" },
+  { key: "buy", label: "Buy", align: "end" },
   { key: "source", label: "Source" },
   { key: "actions", label: "Actions", align: "center" },
 ];
@@ -157,6 +157,7 @@ export default function ShipmentList() {
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
           placeholder="Exact load #, MGC id, BOL, PO, PRO…"
+          aria-label="Search shipments"
           endContent={<SearchNormalSm />}
         />
         <ClearFiltersButton active={isDirty} onClear={() => reset()} />

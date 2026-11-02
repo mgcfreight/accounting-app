@@ -44,6 +44,9 @@ const sections = [
 // Settings are Admin only (design §9): the roles are in lib/routes.config.ts
 // and RouteGuard keeps other roles out; the API enforces it. Users have their
 // own page (/users/), and the audit report is at /settings/audit-log/.
+// Closed sections stay mounted, so opening another section doesn't throw away
+// unsaved edits in this one; `inert` keeps a closed section out of the tab
+// order.
 export default function Settings() {
   const [opened, setOpened] = useState<string>("company");
 
@@ -51,6 +54,7 @@ export default function Settings() {
     <Accordion
       variant="splitted"
       className="gap-4 px-0"
+      keepContentMounted
       defaultSelectedKeys={["company"]}
       onSelectionChange={(keys) => {
         const [key] = Array.from(keys as Set<string>);
@@ -80,7 +84,9 @@ export default function Settings() {
             } text-lg`,
           }}
         >
-          <Body />
+          <div inert={opened !== key}>
+            <Body />
+          </div>
         </AccordionItem>
       ))}
     </Accordion>

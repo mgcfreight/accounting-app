@@ -345,6 +345,7 @@ export default function UserList() {
           onOpenChange={(open) => !open && setPending(null)}
           title={`${confirmText[pending.kind]}: ${fullName(pending.user)}`}
           confirmText={confirmText[pending.kind]}
+          confirmColor={pending.kind === "disable" ? "danger" : "primary"}
           isConfirming={act.isPending}
           onConfirm={
             pending.kind === "password"

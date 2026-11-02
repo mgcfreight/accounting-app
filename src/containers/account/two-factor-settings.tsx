@@ -192,6 +192,7 @@ export default function TwoFactorSettings() {
           onOpenChange={(open) => !open && close()}
           title={titles[flow]}
           confirmText={flow === "disable" ? "Turn Off" : "Confirm"}
+          confirmColor={flow === "disable" ? "danger" : "primary"}
           isConfirming={confirm.isPending}
           onConfirm={handleSubmit((values) => confirm.mutate(values))}
         >
@@ -234,6 +235,7 @@ export default function TwoFactorSettings() {
             control={control}
             label="Code"
             autoComplete="one-time-code"
+            inputMode={flow === "disable" ? "text" : "numeric"}
             rules={{
               required: "Enter the code",
               validate: (value) => {
@@ -269,6 +271,7 @@ export default function TwoFactorSettings() {
           title="Your Recovery Codes"
           confirmText="I've Saved Them"
           onConfirm={() => setNewCodes(null)}
+          requireConfirm
         >
           <RecoveryCodes codes={newCodes} />
         </FormModal>

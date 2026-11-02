@@ -198,6 +198,7 @@ export default function InvoiceList({
               ? "Invoice # (start of it) or exact BOL, PO, PRO…"
               : "Reference #, carrier bill # or exact BOL, PO, PRO…"
           }
+          aria-label="Search invoices"
           endContent={<SearchNormalSm />}
         />
         <BaseSelect

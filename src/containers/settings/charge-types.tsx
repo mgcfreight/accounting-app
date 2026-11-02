@@ -53,6 +53,7 @@ export default function ChargeTypes() {
   const [editing, setEditing] = useState<ChargeType | null | undefined>(
     undefined
   );
+  const [deactivating, setDeactivating] = useState<ChargeType | null>(null);
   const paging = useServerPaging("", 20);
   const types = useQuery({
     queryKey: ["charge-types", { page: paging.page, limit: paging.limit }],
@@ -105,8 +106,10 @@ export default function ChargeTypes() {
   const toggle = useMutation({
     mutationFn: (type: ChargeType) =>
       updateChargeType(type.code, { isActive: !type.isActive }),
-    onSuccess: (type) =>
-      refresh(`${type.code} ${type.isActive ? "activated" : "deactivated"}.`),
+    onSuccess: (type) => {
+      refresh(`${type.code} ${type.isActive ? "activated" : "deactivated"}.`);
+      setDeactivating(null);
+    },
     onError: (error) => toast.error(errorMessage(error)),
   });
 
@@ -183,7 +186,10 @@ export default function ChargeTypes() {
                       key: "toggle",
                       label: row.isActive ? "Deactivate" : "Activate",
                       danger: row.isActive,
-                      onPress: () => toggle.mutate(row),
+                      // Deactivating asks first, as other state changes in
+                      // Settings do; activating is harmless.
+                      onPress: () =>
+                        row.isActive ? setDeactivating(row) : toggle.mutate(row),
                     },
                   ]}
                 />
@@ -243,6 +249,23 @@ export default function ChargeTypes() {
           <BaseSwitch name="defaultTaxable" control={control}>
             Taxable by default (each invoice line keeps its own setting)
           </BaseSwitch>
+        </FormModal>
+      )}
+      {deactivating && (
+        <FormModal
+          isOpen
+          onOpenChange={(isOpen) => !isOpen && setDeactivating(null)}
+          title={`Deactivate ${deactivating.code}?`}
+          confirmText="Deactivate"
+          confirmColor="danger"
+          isConfirming={toggle.isPending}
+          onConfirm={() => toggle.mutate(deactivating)}
+        >
+          <p className="text-sm">
+            {deactivating.name} won&apos;t be offered for new invoice lines.
+            Lines that already use it aren&apos;t changed, and you can activate
+            it again later.
+          </p>
         </FormModal>
       )}
     </div>

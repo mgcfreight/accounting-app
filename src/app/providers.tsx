@@ -13,7 +13,13 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <HeroUIProvider navigate={navigate} useHref={useHref}>
-        <Toaster position="top-right" richColors />
+        {/* A close button, and long enough to read a failed save's reason. */}
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          toastOptions={{ duration: 6000 }}
+        />
         <UserProvider>{children}</UserProvider>
       </HeroUIProvider>
     </QueryClientProvider>

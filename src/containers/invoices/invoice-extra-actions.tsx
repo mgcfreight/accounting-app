@@ -288,6 +288,7 @@ function VoidInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       onOpenChange={(open) => !open && onClose()}
       title="Void Invoice"
       confirmText="Void Invoice"
+      confirmColor="danger"
       onConfirm={submit}
       size="xl"
     >
@@ -295,6 +296,7 @@ function VoidInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       <p className="text-xs text-content-5">
         For a cancelled load. The invoice is kept, marked void, and owes
         nothing. A cancellation fee is billed on a new invoice of its own.
+        Voiding isn&apos;t built yet: this checks the form only.
       </p>
       <BaseTextArea
         name="reason"
@@ -355,7 +357,8 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       <Summary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
         While disputed, the amount shows in the aging report&apos;s Disputed
-        column and payment reminders for this invoice pause.
+        column and payment reminders for this invoice pause. Disputes
+        aren&apos;t built yet: this checks the form only.
       </p>
       <BaseTextArea
         name="reason"
@@ -459,8 +462,8 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
     >
       <Summary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
-        Documents from the TMS (BOL, labels, invoice PDFs) already show in the
-        Documents card. Add one the TMS doesn&apos;t have, such as a signed POD.
+        Add a document the TMS doesn&apos;t have, such as a signed POD.
+        Uploading isn&apos;t built yet: this checks the file only.
       </p>
       <BaseSelect
         name="kind"

@@ -167,6 +167,7 @@ export default function RoleList() {
           onOpenChange={(open) => !open && setDeleting(null)}
           title={`Delete ${deleting.name}?`}
           confirmText="Delete"
+          confirmColor="danger"
           isConfirming={remove.isPending}
           onConfirm={() => remove.mutate(deleting)}
         >

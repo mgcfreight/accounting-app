@@ -240,6 +240,7 @@ export function AllocateModal({
                   control={control}
                   aria-label={`Amount for ${invoice.number}`}
                   placeholder="0.00"
+                  inputMode="decimal"
                   rules={{ validate: validate(invoice) }}
                 />
               </div>

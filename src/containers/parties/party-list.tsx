@@ -133,6 +133,7 @@ export default function PartyList({ type }: { type: PartyType }) {
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
           placeholder={`Search ${isShipper ? "shippers" : "carriers"} by name or MGC id`}
+          aria-label={`Search ${isShipper ? "shippers" : "carriers"}`}
           endContent={<SearchNormalSm />}
         />
         <BaseSelect

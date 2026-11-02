@@ -18,6 +18,8 @@ export default function FormModal({
   confirmText,
   onConfirm,
   isConfirming = false,
+  confirmColor = "primary",
+  requireConfirm = false,
   size = "md",
 }: {
   isOpen: boolean;
@@ -30,11 +32,18 @@ export default function FormModal({
   // same thing.
   onConfirm?: () => void;
   isConfirming?: boolean;
+  // "danger" for a confirm that removes, ends or voids something, so it
+  // doesn't look like an ordinary Save.
+  confirmColor?: "primary" | "danger";
+  // Only the confirm button closes it: no Cancel, Esc or close button. For
+  // something shown once that the user must act on, like recovery codes.
+  requireConfirm?: boolean;
   size?: "sm" | "md" | "lg" | "xl" | "2xl" | "5xl";
 }) {
   // While saving, the modal stays open — Cancel, Esc, the close button and a
   // click outside are all ignored — so the outcome is seen and the form can't
   // be reopened and sent twice.
+  const locked = isConfirming || requireConfirm;
   const handleOpenChange = (open: boolean) => {
     if (!open && isConfirming) return;
     onOpenChange(open);
@@ -53,14 +62,16 @@ export default function FormModal({
   return (
     // `inside`: on a short phone a long form scrolls within the body, keeping
     // the title and buttons on screen rather than pushing the top off it.
+    // A form ignores a click outside, so a stray click doesn't throw away
+    // what was typed; Cancel, Esc and the close button still close it.
     <Modal
       isOpen={isOpen}
       size={size}
       scrollBehavior="inside"
       onOpenChange={handleOpenChange}
-      isDismissable={!isConfirming}
-      isKeyboardDismissDisabled={isConfirming}
-      hideCloseButton={isConfirming}
+      isDismissable={!locked && !onConfirm}
+      isKeyboardDismissDisabled={locked}
+      hideCloseButton={locked}
     >
       <ModalContent>
         {(onClose) => {
@@ -75,16 +86,19 @@ export default function FormModal({
               <ModalFooter>
                 {onConfirm ? (
                   <div className="flex gap-3">
-                    <BaseButton
-                      text="Cancel"
-                      varient="bordered"
-                      className="text-base-primary px-6"
-                      isDisabled={isConfirming}
-                      onPress={onClose}
-                    />
+                    {!requireConfirm && (
+                      <BaseButton
+                        text="Cancel"
+                        varient="bordered"
+                        className="text-base-primary px-6"
+                        isDisabled={isConfirming}
+                        onPress={onClose}
+                      />
+                    )}
                     <BaseButton
                       type="submit"
                       text={confirmText ?? "Save"}
+                      color={confirmColor}
                       className="px-6"
                       isLoading={isConfirming}
                     />

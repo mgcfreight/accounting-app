@@ -255,6 +255,7 @@ export default function Payments() {
               className="max-w-sm"
               classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
               placeholder="Search by payment #, party or reference"
+              aria-label="Search payments"
               endContent={<SearchNormalSm />}
             />
             <BaseSelect
