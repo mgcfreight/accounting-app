@@ -1,4 +1,5 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router";
 import { useCurrentUser } from "../providers/user-provider";
 import { HeaderActionProvider } from "../providers/header-action-provider";
 import { HeaderDetailProvider } from "../providers/header-detail-provider";
@@ -10,6 +11,20 @@ import Header from "../header/header";
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(true);
+  const { pathname } = useLocation();
+  const id = useSearchParams()[0].get("id");
+  const columnRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+
+  // The page scrolls inside <main>, not the window, and this layout stays
+  // mounted between pages, so a new page would open as far down as the last
+  // one was scrolled. Each page (or another ?id) starts at the top, before it
+  // paints. A list's filters and page are in the query string too, but
+  // changing those doesn't move the view.
+  useLayoutEffect(() => {
+    columnRef.current?.scrollTo(0, 0);
+    mainRef.current?.scrollTo(0, 0);
+  }, [pathname, id]);
 
   return (
     <HeaderActionProvider>
@@ -31,9 +46,15 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               onClick={() => setCollapsed(true)}
             />
           )}
-          <div className="overflow-auto h-full flex flex-col w-full min-w-0 pt-5">
+          <div
+            ref={columnRef}
+            className="overflow-auto h-full flex flex-col w-full min-w-0 pt-5"
+          >
             <Header user={user} onOpenSidebar={() => setCollapsed(false)} />
-            <main className="bg-[#FAFEFF] flex-1 xl:rounded-bl-lg overflow-auto">
+            <main
+              ref={mainRef}
+              className="bg-[#FAFEFF] flex-1 xl:rounded-bl-lg overflow-auto"
+            >
               <div className="relative p-4 sm:p-6 w-full min-h-full">{children}</div>
             </main>
           </div>

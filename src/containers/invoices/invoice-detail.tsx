@@ -361,8 +361,12 @@ export default function InvoiceDetail({
         invoice={data}
         partyName={party.name}
         onClose={() => setAction(null)}
+        // The new version takes the replaced one's place in history, so Back
+        // returns to where the user came from, not to the replaced version.
         onRevised={(newId) =>
-          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`)
+          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`, {
+            replace: true,
+          })
         }
       />
       <InvoiceExtraActionModal

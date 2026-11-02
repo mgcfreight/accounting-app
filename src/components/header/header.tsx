@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link, useLocation } from "react-router";
+import { MouseEvent, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 import { Me } from "@/lib/interfaces";
 import { getRouteConfig, headerButtonFor } from "@/lib/routes.config";
 import BaseButton from "../common/base-button";
@@ -19,6 +19,7 @@ export default function Header({
   user: Me;
 }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const triggerAction = useTriggerHeaderAction();
   const detail = useHeaderDetailValue();
   const route = getRouteConfig(pathname);
@@ -30,6 +31,25 @@ export default function Header({
   useEffect(() => {
     document.title = title ? `${title} · MGC Accounts` : "MGC Accounts";
   }, [title]);
+
+  // The back arrow returns to the page the user came from (a shipment, a
+  // shipper, another invoice), like the browser's Back. React Router numbers
+  // this tab's history entries in `idx`, from 0, and a redirect replaces its
+  // entry rather than adding one, so `idx` 0 means nothing in the app to go
+  // back to — opened from a bookmark, a new tab or after signing in. Then,
+  // and on a ctrl- or middle-click, the link opens `previousRoute`, the list.
+  const goBack = (event: MouseEvent<HTMLAnchorElement>) => {
+    const modified =
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey;
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (modified || idx < 1) return;
+    event.preventDefault();
+    void navigate(-1);
+  };
 
   return (
     <header className="flex bg-[#FAFEFF] xl:rounded-tl-lg">
@@ -47,7 +67,7 @@ export default function Header({
               title instead of pushing the profile menu off the edge. */}
           <h2 className="text-base-primary ml-3 sm:ml-4 font-semibold text-lg sm:text-2xl flex flex-wrap gap-x-4 gap-y-2 items-center min-w-0">
             {route?.previousRoute && (
-              <Link to={route.previousRoute} aria-label="Back">
+              <Link to={route.previousRoute} aria-label="Back" onClick={goBack}>
                 <ArrowLeft />
               </Link>
             )}
