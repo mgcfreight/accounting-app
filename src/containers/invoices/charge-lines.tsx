@@ -41,6 +41,19 @@ export const chargesFrom = (lines: InvoiceLineView[]): ChargeValues[] =>
         unitPrice: line.unitPrice,
       }));
 
+// The same rows for a form without a quantity field: each line as quantity 1
+// at the line amount the API calculated, so no hidden multiplier sits behind
+// the price field and the total is unchanged until a price is edited.
+export const amountChargesFrom = (lines: InvoiceLineView[]): ChargeValues[] =>
+  lines.length === 0
+    ? [emptyCharge]
+    : lines.map((line) => ({
+        chargeTypeCode: line.chargeTypeCode,
+        description: line.description,
+        quantity: "1",
+        unitPrice: line.amount,
+      }));
+
 // What the API takes; a blank description falls back to the charge type's
 // name.
 export const toCharges = (lines: ChargeValues[]): Charge[] =>
@@ -53,15 +66,18 @@ export const toCharges = (lines: ChargeValues[]): Charge[] =>
 
 // The charge lines of a form (a carrier bill, a shipment's customer or
 // carrier charges): charge type, description, quantity and unit price, 1-50
-// of them. Amounts and tax are calculated by the API.
+// of them. Amounts and tax are calculated by the API. Without the quantity
+// field every line is quantity 1, so start its rows from amountChargesFrom.
 export default function ChargeLines<T extends FieldValues>({
   control,
   name,
   priceLabel = "Unit price",
+  showQuantity = true,
 }: {
   control: Control<T>;
   name: ArrayPath<T>;
   priceLabel?: string;
+  showQuantity?: boolean;
 }) {
   // Under ["charge-types"], so a change in Settings refreshes these too.
   const chargeTypes = useQuery({
@@ -111,25 +127,27 @@ export default function ChargeLines<T extends FieldValues>({
             control={control}
             label="Description"
             placeholder="Optional"
-            className="sm:col-span-4"
+            className={showQuantity ? "sm:col-span-4" : "sm:col-span-5"}
             rules={{ maxLength: { value: 255, message: "At most 255 characters" } }}
           />
-          <BaseInput
-            name={path(index, "quantity")}
-            control={control}
-            label="Qty"
-            className="sm:col-span-2"
-            rules={{
-              required: "Required",
-              pattern: { value: QUANTITY_PATTERN, message: "Above 0, ≤3 decimals" },
-            }}
-          />
+          {showQuantity && (
+            <BaseInput
+              name={path(index, "quantity")}
+              control={control}
+              label="Qty"
+              className="sm:col-span-2"
+              rules={{
+                required: "Required",
+                pattern: { value: QUANTITY_PATTERN, message: "Above 0, ≤3 decimals" },
+              }}
+            />
+          )}
           <BaseInput
             name={path(index, "unitPrice")}
             control={control}
             label={priceLabel}
             placeholder="0.00"
-            className="sm:col-span-2"
+            className={showQuantity ? "sm:col-span-2" : "sm:col-span-3"}
             rules={{
               required: "Required",
               pattern: { value: UNIT_PRICE_PATTERN, message: "Up to 4 decimals" },

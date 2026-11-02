@@ -36,6 +36,7 @@ import {
 } from "@/services";
 import ChargeLines, {
   ChargeValues,
+  amountChargesFrom,
   chargesFrom,
   emptyCharge,
   toCharges,
@@ -546,7 +547,9 @@ function ReviseInvoiceModal({
   const isCustomer = isCustomerInvoice(invoice);
   const { control, handleSubmit } = useForm<ReviseValues>({
     defaultValues: {
-      lines: chargesFrom(invoice.lines ?? []),
+      lines: isCustomer
+        ? chargesFrom(invoice.lines ?? [])
+        : amountChargesFrom(invoice.lines ?? []),
       reason: "",
       notes: invoice.notes ?? "",
       carrierInvoiceNumber: "",
@@ -619,7 +622,12 @@ function ReviseInvoiceModal({
       <ChargeLines
         control={control}
         name="lines"
-        priceLabel={`Unit price (${invoice.currency})`}
+        priceLabel={
+          isCustomer
+            ? `Unit price (${invoice.currency})`
+            : `Amount (${invoice.currency})`
+        }
+        showQuantity={isCustomer}
       />
       {!isCustomer && (
         <BaseInput
