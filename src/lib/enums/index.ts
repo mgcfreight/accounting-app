@@ -291,6 +291,14 @@ export enum StatementRunTrigger {
   Manual = "MANUAL",
 }
 
+// A shipper's billing period: OPEN while it runs, NOTIFIED once its notice
+// went out, CLOSED after it ends.
+export enum BillingPeriodStatus {
+  Open = "OPEN",
+  Notified = "NOTIFIED",
+  Closed = "CLOSED",
+}
+
 export enum StatementEntryType {
   Invoice = "INVOICE",
   Adjustment = "ADJUSTMENT",

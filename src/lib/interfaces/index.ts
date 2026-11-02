@@ -1,6 +1,7 @@
 import {
   AdjustmentMode,
   AllocationRule,
+  BillingPeriodStatus,
   BillingTrigger,
   CarrierInvoiceStatus,
   Currency,
@@ -1073,6 +1074,55 @@ export interface StatementSchedule {
   weeklyShipperCount: number;
   // False: statements are saved but not emailed.
   emailEnabled: boolean;
+}
+
+// GET /billing-period/all: a shipper's billing period. Amounts are tax
+// included: its issued invoices, less credit notes.
+export interface BillingPeriod {
+  id: string;
+  partyId: string;
+  partyName: string | null;
+  paymentTerms: PaymentTerms;
+  currency: Currency;
+  periodStart: string;
+  periodEnd: string;
+  noticeDate: string;
+  status: BillingPeriodStatus;
+  notifiedAt: string | null;
+  // The billing-period report sent for it.
+  statementId: string | null;
+  invoiceCount: number;
+  total: string;
+  balanceDue: string;
+}
+
+export interface BillingPeriodInvoice {
+  id: string;
+  invoiceNumber: string | null;
+  kind: InvoiceKind;
+  status: CustomerInvoiceStatus;
+  invoiceDate: string;
+  dueDate: string | null;
+  total: string;
+  balanceDue: string;
+  paymentStatus: PaymentStatus;
+}
+
+// GET /billing-period: one period with its invoices.
+export interface BillingPeriodDetail extends BillingPeriod {
+  invoices: BillingPeriodInvoice[];
+}
+
+// POST /billing-period/run: what the job did.
+export interface BillingPeriodRun {
+  assigned: number;
+  opened: number;
+  // Back-dated invoices that fit no period, left for a person.
+  unplaced: number;
+  notified: number;
+  // Notices that could not go out (e.g. no statement contact).
+  failed: number;
+  closed: number;
 }
 
 // One weekly statement run (GET /statement/runs).

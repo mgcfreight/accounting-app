@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AdjustmentMode,
   AllocationRule,
+  BillingPeriodStatus,
   BillingTrigger,
   CarrierInvoiceStatus,
   Currency,
@@ -48,6 +49,10 @@ import {
   Allocation,
   AllocationSuggestion,
   AuditEvent,
+  BillingPeriod,
+  BillingPeriodDetail,
+  BillingPeriodInvoice,
+  BillingPeriodRun,
   BySide,
   CarrierInvoiceView,
   ChargeType,
@@ -811,6 +816,52 @@ export const statementRunSchema: z.ZodType<StatementRun> = z.object({
   failedCount: count,
   skippedCount: count,
   failures: z.array(z.object({ partyId: z.string(), reason: z.string() })),
+});
+
+const billingPeriodFields = {
+  id: z.string(),
+  partyId: z.string(),
+  partyName: z.string().nullable(),
+  paymentTerms: z.enum(PaymentTerms),
+  currency: z.enum(Currency),
+  periodStart: calendarDate,
+  periodEnd: calendarDate,
+  noticeDate: calendarDate,
+  status: z.enum(BillingPeriodStatus),
+  notifiedAt: timestamp.nullable(),
+  statementId: z.string().nullable(),
+  invoiceCount: count,
+  total: money,
+  balanceDue: money,
+};
+
+export const billingPeriodSchema: z.ZodType<BillingPeriod> =
+  z.object(billingPeriodFields);
+
+const billingPeriodInvoiceSchema: z.ZodType<BillingPeriodInvoice> = z.object({
+  id: z.string(),
+  invoiceNumber: z.string().nullable(),
+  kind: z.enum(InvoiceKind),
+  status: z.enum(CustomerInvoiceStatus),
+  invoiceDate: calendarDate,
+  dueDate: calendarDate.nullable(),
+  total: money,
+  balanceDue: money,
+  paymentStatus: z.enum(PaymentStatus),
+});
+
+export const billingPeriodDetailSchema: z.ZodType<BillingPeriodDetail> = z.object({
+  ...billingPeriodFields,
+  invoices: z.array(billingPeriodInvoiceSchema),
+});
+
+export const billingPeriodRunSchema: z.ZodType<BillingPeriodRun> = z.object({
+  assigned: count,
+  opened: count,
+  unplaced: count,
+  notified: count,
+  failed: count,
+  closed: count,
 });
 
 export const statementHistoryItemSchema: z.ZodType<StatementHistoryItem> =

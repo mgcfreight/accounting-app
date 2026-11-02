@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Permission, SystemRoleId } from "@/lib/enums";
 import {
+  billingPeriodDetailSchema,
   carrierInvoiceSchema,
   contactSchema,
   customerInvoiceSchema,
@@ -293,6 +294,62 @@ describe("contactSchema", () => {
   it("refuses a contact missing what it receives", () => {
     const { receivesStatements: _statements, ...partial } = contact;
     expect(contactSchema.safeParse(partial).success).toBe(false);
+  });
+});
+
+// GET /billing-period, as the API's BillingPeriodDetailView sends it.
+const billingPeriod = {
+  id: "bpd_3kT8wQ1zN5",
+  partyId: "pty_4fK9qZ0aB1",
+  partyName: "Northwind Distribution",
+  paymentTerms: "NET_30",
+  currency: "CAD",
+  periodStart: "2026-10-01",
+  periodEnd: "2026-10-31",
+  noticeDate: "2026-10-24",
+  status: "NOTIFIED",
+  notifiedAt: "2026-10-24T12:00:03.000Z",
+  statementId: "stm_9pL2xV6cR0",
+  invoiceCount: 2,
+  total: "2610.00",
+  balanceDue: "1130.00",
+  invoices: [
+    {
+      id: "cin_8cR1tY4uI7",
+      invoiceNumber: "sin_EGP9wr_230",
+      kind: "STANDARD",
+      status: "ISSUED",
+      invoiceDate: "2026-10-03",
+      dueDate: "2026-11-02",
+      total: "1480.00",
+      balanceDue: "0.00",
+      paymentStatus: "PAID",
+    },
+    {
+      id: "cin_2vB7nM5kJ3",
+      invoiceNumber: null,
+      kind: "STANDARD",
+      status: "ISSUED",
+      invoiceDate: "2026-10-14",
+      dueDate: null,
+      total: "1130.00",
+      balanceDue: "1130.00",
+      paymentStatus: "UNPAID",
+    },
+  ],
+};
+
+describe("billingPeriodDetailSchema", () => {
+  it("reads a period with its invoices", () => {
+    const parsed = billingPeriodDetailSchema.parse(billingPeriod);
+    expect(parsed.balanceDue).toBe("1130.00");
+    expect(parsed.invoices[1].invoiceNumber).toBeNull();
+  });
+
+  it("refuses a total that isn't a 2-decimal string", () => {
+    expect(
+      billingPeriodDetailSchema.safeParse({ ...billingPeriod, total: 2610 }).success
+    ).toBe(false);
   });
 });
 

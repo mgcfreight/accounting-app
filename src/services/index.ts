@@ -14,6 +14,7 @@ export {
 export * from "./accounts";
 export * from "./activity";
 export * from "./auth";
+export * from "./billing-periods";
 export * from "./disputes";
 export * from "./invoice-documents";
 export * from "./invoices";

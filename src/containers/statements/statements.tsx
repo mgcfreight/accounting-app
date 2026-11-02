@@ -44,9 +44,11 @@ import {
   listStatementRuns,
   sendWeeklyStatements,
 } from "@/services";
+import BillingPeriods from "./billing-periods";
 import StatementModal from "./statement-modal";
 
-type View = "carriers" | "shippers";
+type View = "carriers" | "shippers" | "billing";
+type AccountsView = Exclude<View, "billing">;
 type ListFormat = "pdf" | "xlsx";
 
 // "2026-10-16" -> "Oct 2026". A calendar date, so read in UTC (see
@@ -59,7 +61,7 @@ const formatMonth = (date: string) =>
   });
 
 // The API lists accounts by name and has no other order, so nothing sorts.
-const columnsFor = (view: View): BaseTableColumn[] => [
+const columnsFor = (view: AccountsView): BaseTableColumn[] => [
   { key: "party", label: view === "carriers" ? "Carrier" : "Shipper" },
   { key: "volume", label: "Business Volume", align: "end" },
   { key: "balance", label: "Remaining Balance", align: "end" },
@@ -95,6 +97,8 @@ export default function Statements() {
   const [chosenView, setView] = useState<View>("carriers");
   const view: View =
     chosenView === "carriers" && !canCarriers ? "shippers" : chosenView;
+  // The account lists below; the Billing Periods tab has its own.
+  const accountsView: AccountsView = view === "billing" ? "shippers" : view;
   const [open, setOpen] = useState<PartyAccountSummary | null>(null);
   const [confirmingSend, setConfirmingSend] = useState(false);
   const { control } = useForm<{ search: string }>({
@@ -118,14 +122,15 @@ export default function Statements() {
     enabled: canShippers,
   });
 
-  const type = view === "carriers" ? PartyType.Carrier : PartyType.Shipper;
+  const type = accountsView === "carriers" ? PartyType.Carrier : PartyType.Shipper;
   const searchQuery = search.slice(0, 100);
-  const paging = useServerPaging(JSON.stringify([view, searchQuery]));
+  const paging = useServerPaging(JSON.stringify([accountsView, searchQuery]));
   const params = { page: paging.page, limit: paging.limit, type, searchQuery };
   const summaries = useQuery({
     queryKey: ["accounts", "summaries", params],
     queryFn: ({ signal }) => listAccountSummaries(params, signal),
     placeholderData: keepPreviousData,
+    enabled: view !== "billing",
   });
 
   const queryClient = useQueryClient();
@@ -147,7 +152,8 @@ export default function Statements() {
     },
   });
 
-  const listName = view === "carriers" ? "carrier-statements" : "shipper-statements";
+  const listName =
+    accountsView === "carriers" ? "carrier-statements" : "shipper-statements";
   const exportList = useFileDownload((format: ListFormat) =>
     exportAccountSummaries({ type, searchQuery }, format, `${listName}.${format}`)
   );
@@ -278,8 +284,9 @@ export default function Statements() {
         >
           {canCarriers && <Tab key="carriers" title="Carriers (payable)" />}
           {canShippers && <Tab key="shippers" title="Shippers (receivable)" />}
+          {canShippers && <Tab key="billing" title="Billing Periods" />}
         </Tabs>
-        <div className="flex gap-2">
+        <div className={view === "billing" ? "hidden" : "flex gap-2"}>
           {can(Permission.ReportsExportCsv) && (
             <BaseButton
               text="Excel"
@@ -303,39 +310,49 @@ export default function Statements() {
         </div>
       </div>
 
-      <FilterBar>
-        <BaseInput
-          name="search"
-          control={control}
-          className="max-w-sm"
-          classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
-          placeholder={view === "carriers" ? "Search carriers by name" : "Search shippers by name"}
-          endContent={<SearchNormalSm />}
-        />
-      </FilterBar>
+      {view === "billing" ? (
+        <BillingPeriods />
+      ) : (
+        <>
+          <FilterBar>
+            <BaseInput
+              name="search"
+              control={control}
+              className="max-w-sm"
+              classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
+              placeholder={
+                accountsView === "carriers" ? "Search carriers by name" : "Search shippers by name"
+              }
+              endContent={<SearchNormalSm />}
+            />
+          </FilterBar>
 
-      <Card>
-        {summaries.isError ? (
-          <ErrorState
-            message="We couldn't load the accounts. Please try again."
-            onAction={() => void summaries.refetch()}
-          />
-        ) : (
-          <BaseTable<PartyAccountSummary>
-            ariaLabel={view === "carriers" ? "Carrier statements" : "Shipper statements"}
-            columns={columnsFor(view)}
-            data={summaries.data?.items ?? []}
-            loading={summaries.isPending}
-            refreshing={summaries.isPlaceholderData}
-            rowKey={(row) => row.partyId}
-            renderCell={renderCell}
-            meta={paging.tableMeta(summaries.data?.meta)}
-            setMeta={paging.setMeta}
-            bottomContent={view === "carriers" ? "Carriers" : "Shippers"}
-            emptyContent={searchQuery ? "No accounts match this search" : "No accounts yet"}
-          />
-        )}
-      </Card>
+          <Card>
+            {summaries.isError ? (
+              <ErrorState
+                message="We couldn't load the accounts. Please try again."
+                onAction={() => void summaries.refetch()}
+              />
+            ) : (
+              <BaseTable<PartyAccountSummary>
+                ariaLabel={
+                  accountsView === "carriers" ? "Carrier statements" : "Shipper statements"
+                }
+                columns={columnsFor(accountsView)}
+                data={summaries.data?.items ?? []}
+                loading={summaries.isPending}
+                refreshing={summaries.isPlaceholderData}
+                rowKey={(row) => row.partyId}
+                renderCell={renderCell}
+                meta={paging.tableMeta(summaries.data?.meta)}
+                setMeta={paging.setMeta}
+                bottomContent={accountsView === "carriers" ? "Carriers" : "Shippers"}
+                emptyContent={searchQuery ? "No accounts match this search" : "No accounts yet"}
+              />
+            )}
+          </Card>
+        </>
+      )}
 
       {canShippers && (
         <BaseCardWrapper
