@@ -1,9 +1,12 @@
+import { Checkbox, CheckboxGroup } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   AlertBanner,
+  BaseButton,
+  BaseCardWrapper,
   BaseInput,
   BaseSelect,
   BaseSwitch,
@@ -14,6 +17,7 @@ import {
   Money,
 } from "@/components/common";
 import { RowAction } from "@/components/common/row-actions";
+import { DocumentUpload, Pdf, Send } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import {
@@ -21,6 +25,8 @@ import {
   CustomerInvoiceStatus,
   Permission,
 } from "@/lib/enums";
+import { Attachment } from "@/lib/interfaces";
+import { demoCarrierDocuments } from "@/lib/mock";
 import { compareMoney, isZeroMoney } from "@/lib/money";
 import { getParty } from "@/services";
 import {
@@ -31,11 +37,16 @@ import {
 } from "./invoice-view";
 
 // Invoice actions the Accounts API has no endpoint for yet: emailing the
-// invoice, voiding it for a cancelled load, flagging a dispute and
-// attaching a document. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
+// invoice, voiding it for a cancelled load, flagging a dispute, attaching a
+// document and emailing documents to the carrier. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
 // says it's a demo: nothing is saved, sent or uploaded.
 
-export type ExtraAction = "email" | "void" | "dispute" | "upload";
+export type ExtraAction =
+  | "email"
+  | "email-carrier"
+  | "void"
+  | "dispute"
+  | "upload";
 
 const AMOUNT = /^\d{1,9}\.\d{2}$/;
 
@@ -90,6 +101,15 @@ export const extraActionsFor = (
   if (canEdit && !isClosed(invoice)) {
     actions.push({ key: "upload", label: "Upload document", onPress: () => onOpen("upload") });
   }
+  // No permission of its own for emailing a carrier yet: it goes with
+  // editing the carrier invoice.
+  if (!isCustomer && canEdit && !isClosed(invoice)) {
+    actions.push({
+      key: "email-carrier",
+      label: "Email documents to carrier",
+      onPress: () => onOpen("email-carrier"),
+    });
+  }
   if (
     canBeVoided(invoice) &&
     can(isCustomer ? Permission.CustomerInvoicesVoid : Permission.CarrierInvoicesVoid)
@@ -119,6 +139,8 @@ export default function InvoiceExtraActionModal({
   switch (action) {
     case "email":
       return <EmailInvoiceModal {...props} />;
+    case "email-carrier":
+      return <EmailCarrierModal {...props} />;
     case "void":
       return <VoidInvoiceModal {...props} />;
     case "dispute":
@@ -259,6 +281,167 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
           Attach the BOL and POD
         </BaseSwitch>
       </div>
+    </FormModal>
+  );
+}
+
+// --------------------------------------------------------- carrier email
+
+type CarrierEmailValues = {
+  to: string;
+  subject: string;
+  message: string;
+};
+
+// The documents on a carrier invoice, sent to the carrier: each one ticked
+// by default and left out by unticking it.
+function EmailCarrierModal({ invoice, partyName, onClose }: ModalProps) {
+  const { can } = useCan();
+  const documents = invoiceDocuments;
+  const [chosen, setChosen] = useState<string[]>(() =>
+    documents.map((item) => item.id)
+  );
+  const [missing, setMissing] = useState<string | null>(null);
+  // The carrier's email as the TMS holds it, for those who may read parties.
+  const carrierId =
+    !isCustomerInvoice(invoice) && can(Permission.PartiesView)
+      ? invoice.carrierId
+      : null;
+  const party = useQuery({
+    queryKey: ["parties", "detail", carrierId],
+    queryFn: ({ signal }) => getParty(carrierId!, signal),
+    enabled: !!carrierId,
+  });
+  const reference =
+    (!isCustomerInvoice(invoice) && invoice.carrierInvoiceNumber) ||
+    invoiceNumberOf(invoice) ||
+    "your load";
+  const { control, handleSubmit, getValues, setValue } =
+    useForm<CarrierEmailValues>({
+      defaultValues: {
+        to: "",
+        subject: `Documents for ${reference} from MGC Freight`,
+        message: `Please find attached the documents for ${reference}.`,
+      },
+    });
+
+  // Fills "To" once the address arrives, unless something was typed first.
+  const suggested = party.data?.businessEmail ?? party.data?.email ?? null;
+  useEffect(() => {
+    if (suggested && !getValues("to")) setValue("to", suggested);
+  }, [suggested, getValues, setValue]);
+
+  const submit = handleSubmit((values) => {
+    if (documents.length === 0) {
+      setMissing("There are no documents on this invoice to send.");
+      return;
+    }
+    if (chosen.length === 0) {
+      setMissing("Choose at least one document to send.");
+      return;
+    }
+    demo(
+      `Email of ${chosen.length} ${chosen.length === 1 ? "document" : "documents"} to ${addresses(values.to).join(", ")}`,
+      "sent"
+    );
+    onClose();
+  });
+
+  const allChosen = chosen.length === documents.length;
+  const choose = (value: string[]) => {
+    setChosen(value);
+    setMissing(null);
+  };
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Email Documents to Carrier"
+      confirmText={
+        chosen.length > 0
+          ? `Send ${chosen.length} ${chosen.length === 1 ? "document" : "documents"}`
+          : "Send"
+      }
+      onConfirm={submit}
+      size="2xl"
+    >
+      <Summary invoice={invoice} partyName={partyName} />
+      <BaseInput
+        name="to"
+        control={control}
+        label="To"
+        placeholder="billing@carrier.com"
+        description={
+          party.isPending && carrierId
+            ? "Looking up the carrier's email…"
+            : "The carrier's email. Separate several addresses with commas."
+        }
+        rules={{ validate: emailList(true) }}
+      />
+      {documents.length === 0 ? (
+        <p className="text-sm text-content-5">
+          No documents on this invoice yet. Upload a POD first.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-base-primary">
+              Documents to send ({chosen.length} of {documents.length})
+            </span>
+            <button
+              type="button"
+              className="text-xs text-base-primary underline"
+              onClick={() => choose(allChosen ? [] : documents.map((item) => item.id))}
+            >
+              {allChosen ? "Clear all" : "Select all"}
+            </button>
+          </div>
+          <CheckboxGroup
+            aria-label="Documents to send"
+            size="sm"
+            value={chosen}
+            onValueChange={choose}
+            classNames={{ wrapper: "gap-2" }}
+          >
+            {documents.map((item) => (
+              <Checkbox
+                key={item.id}
+                value={item.id}
+                classNames={{
+                  base: "m-0 w-full max-w-full rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
+                  label: "min-w-0 w-full",
+                }}
+              >
+                <DocumentLine document={item} />
+              </Checkbox>
+            ))}
+          </CheckboxGroup>
+        </div>
+      )}
+      {missing && (
+        <p role="alert" className="text-xs text-base-danger">
+          {missing}
+        </p>
+      )}
+      <BaseInput
+        name="subject"
+        control={control}
+        label="Subject"
+        rules={{
+          required: "Enter a subject",
+          maxLength: { value: 200, message: "At most 200 characters" },
+        }}
+      />
+      <BaseTextArea
+        name="message"
+        control={control}
+        label="Message"
+        rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
+      />
+      <p className="text-xs text-content-5">
+        Demo only: the documents are samples and nothing is sent yet.
+      </p>
     </FormModal>
   );
 }
@@ -407,6 +590,107 @@ const documentKinds = [
   { key: "OTHER", label: "Other", value: "OTHER" },
 ];
 
+// A carrier invoice takes only a POD or another document.
+const carrierDocumentKinds = documentKinds.filter(
+  (kind) => kind.key === "POD" || kind.key === "OTHER"
+);
+
+const documentKindLabel = (kind: string) =>
+  documentKinds.find((item) => item.key === kind)?.label ?? kind;
+
+// The documents attached to an invoice. The API doesn't list them yet and
+// Upload Document stores nothing, so sample ones stand in until it does.
+const invoiceDocuments = demoCarrierDocuments;
+
+// The documents on a carrier invoice, with uploading and emailing them to
+// the carrier for those allowed to.
+// A document's icon, name and kind, as one line of a list.
+function DocumentLine({ document }: { document: Attachment }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      {/\.pdf$/i.test(document.fileName) ? (
+        <Pdf className="h-8 w-8 shrink-0" aria-hidden />
+      ) : (
+        <DocumentUpload className="h-8 w-8 shrink-0" aria-hidden />
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-sm text-content-6" title={document.fileName}>
+          {document.fileName}
+        </p>
+        <p className="text-xs text-content-5">{documentKindLabel(document.kind)}</p>
+      </div>
+    </div>
+  );
+}
+
+export function DocumentsCard({
+  onUpload,
+  onEmail,
+}: {
+  onUpload?: () => void;
+  onEmail?: () => void;
+}) {
+  const documents = invoiceDocuments;
+  return (
+    <BaseCardWrapper
+      heading={
+        documents.length > 0
+          ? `Supporting Documents (${documents.length})`
+          : "Supporting Documents"
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {documents.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <DocumentUpload className="h-8 w-8" aria-hidden />
+            <p className="text-sm text-content-6">No documents yet</p>
+            <p className="text-xs text-content-5">
+              Upload the signed POD to keep it with this bill and send it to
+              the carrier.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {documents.map((item) => (
+              <li
+                key={item.id}
+                className="rounded-medium border border-base-default p-3"
+              >
+                <DocumentLine document={item} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {(onUpload || onEmail) && (
+          <div className="flex flex-wrap gap-2">
+            {onEmail && documents.length > 0 && (
+              <BaseButton
+                text="Email to carrier"
+                startContent={<Send />}
+                className="px-4"
+                onPress={onEmail}
+              />
+            )}
+            {onUpload && (
+              <BaseButton
+                text="Upload document"
+                varient="bordered"
+                className="text-base-primary px-4"
+                onPress={onUpload}
+              />
+            )}
+          </div>
+        )}
+        {documents.length > 0 && (
+          <p className="text-xs text-content-5">
+            Demo data: sample documents, not files from this invoice.
+          </p>
+        )}
+      </div>
+    </BaseCardWrapper>
+  );
+}
+
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const ACCEPTED_EXTENSIONS = /\.(pdf|png|jpe?g)$/i;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -469,7 +753,9 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
         name="kind"
         control={control}
         label="Document"
-        options={documentKinds}
+        options={
+          isCustomerInvoice(invoice) ? documentKinds : carrierDocumentKinds
+        }
         disallowEmptySelection
       />
       <FileDropZone

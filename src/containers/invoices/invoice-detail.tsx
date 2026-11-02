@@ -37,6 +37,7 @@ import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import InvoiceExtraActionModal, {
   canBeVoided,
   CancelledLoadBanner,
+  DocumentsCard,
   ExtraAction,
   extraActionsFor,
 } from "./invoice-extra-actions";
@@ -149,6 +150,11 @@ export default function InvoiceDetail({
   const actions = demo ? [] : availableActions(data, can);
   const extraActions = demo ? [] : extraActionsFor(data, can, setExtraAction);
   const canVoid = extraActions.some((item) => item.key === "void");
+  // The Documents card offers what the "More" menu does, no more.
+  const openIfOffered = (key: ExtraAction) =>
+    extraActions.some((item) => item.key === key)
+      ? () => setExtraAction(key)
+      : undefined;
   const references = referencesOf(data);
   // The TMS cancelled the load: until the invoice is void, point to voiding.
   const loadCancelled =
@@ -346,6 +352,13 @@ export default function InvoiceDetail({
       </div>
 
       <ChargesCard invoice={data} />
+
+      {!demo && !isCustomerInvoice(data) && (
+        <DocumentsCard
+          onUpload={openIfOffered("upload")}
+          onEmail={openIfOffered("email-carrier")}
+        />
+      )}
 
       {!demo && <InvoiceHistory invoice={data} />}
 
