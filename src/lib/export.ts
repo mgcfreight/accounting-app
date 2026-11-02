@@ -37,11 +37,12 @@ export const toCsv = <T>({ columns, rows }: ExportTable<T>): string =>
     ),
   ].join("\r\n");
 
-// "P&L by Shipper" -> "pnl-by-shipper".
+// "P&L by Shipper" -> "pnl-by-shipper"; "Profit & Loss" -> "profit-and-loss".
 export const exportFileName = (title: string, extension: string) =>
   `${
     title
       .toLowerCase()
+      .replace(/\s+&\s+/g, " and ")
       .replace(/&/g, "n")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "export"

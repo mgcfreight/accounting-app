@@ -54,6 +54,9 @@ describe("exportFileName", () => {
     expect(exportFileName("P&L by Shipper / Carrier", "csv")).toBe(
       "pnl-by-shipper-carrier.csv"
     );
+    expect(exportFileName("Profit & Loss Monthly Sheet", "csv")).toBe(
+      "profit-and-loss-monthly-sheet.csv"
+    );
     expect(exportFileName("***", "csv")).toBe("export.csv");
   });
 });
