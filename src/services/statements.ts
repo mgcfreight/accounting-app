@@ -81,6 +81,15 @@ export const emailStatement = (partyId: string) =>
     .post("/statement/email", { partyId })
     .then((res) => parseBody(envelope(statementSchema), res.data).data);
 
+// The same saved statement, number and recipients, emailed again when its
+// email did not go (FAILED, or QUEUED while email was off). 409 when it was
+// sent already, or email is still off. The API also retries unsent ones
+// daily at 09:00 for 7 days.
+export const resendStatement = (statementId: string) =>
+  apiClient
+    .post("/statement/resend", undefined, { params: { statementId } })
+    .then((res) => parseBody(envelope(statementSchema), res.data).data);
+
 // "Send latest dues": the shipper's latest billing-period report, as of
 // today, with its PDF and CSV.
 export const sendLatestDues = (partyId: string) =>

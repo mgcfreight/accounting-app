@@ -36,6 +36,7 @@ import {
   getCurrentStatement,
   getStatement,
   listStatementHistory,
+  resendStatement,
   sendLatestDues,
   StatementFormat,
 } from "@/services";
@@ -250,6 +251,21 @@ export default function StatementModal({
   });
   const email = useMutation(sendMutation(emailStatement, "statement"));
   const dues = useMutation(sendMutation(sendLatestDues, "dues report"));
+  // Only a statement whose email did not go may be sent again; the API
+  // refuses one already sent.
+  const canResend = isShipper && can(Permission.ReportsSendEmail);
+  const resend = useMutation({
+    mutationFn: resendStatement,
+    onSuccess: (sent: PartyStatement) => {
+      emailOutcome(sent, "statement");
+      void queryClient.invalidateQueries({ queryKey: ["statements"] });
+    },
+    onError: (error: Error) => {
+      toast.error(errorMessage(error));
+      // 409: sent meanwhile, or email still off; show where it stands.
+      void queryClient.invalidateQueries({ queryKey: ["statements", "history"] });
+    },
+  });
 
   const download = useFileDownload((format: StatementFormat) =>
     statementId === null
@@ -390,6 +406,18 @@ export default function StatementModal({
                   </button>
                   <div className="flex items-center gap-2">
                     {chip && <StatusChip text={chip.text} tone={chip.tone} />}
+                    {canResend &&
+                      (item.emailStatus === EmailStatus.Failed ||
+                        item.emailStatus === EmailStatus.Queued) && (
+                        <BaseButton
+                          text="Resend"
+                          varient="bordered"
+                          className="text-base-primary rounded-full px-3 h-7 min-w-0"
+                          isLoading={resend.isPending && resend.variables === item.statementId}
+                          isDisabled={resend.isPending}
+                          onPress={() => resend.mutate(item.statementId)}
+                        />
+                      )}
                     <Money amount={item.closingBalance} currency={item.currency} />
                   </div>
                 </li>
