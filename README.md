@@ -72,7 +72,7 @@ src/
 | `/payments/`                   | Payments, Unmatched tab, Record Payment     | 2     |
 | `/shippers/`, `/carriers/`     | Parties with balance and overdue            | 2     |
 | `/shippers/view/?id=`, `/carriers/view/?id=` | Balance page and statements   | 2     |
-| `/reports/`                    | Reports with exports, P&L sheet, aging      | 3     |
+| `/reports/`                    | Reports with exports, Profit & Loss, aging  | 3     |
 | `/sync-status/`                | Last/next run, Sync now, checkpoints, runs  | 0     |
 | `/audit-log/`                  | Change history with before/after            | 0     |
 | `/settings/`                   | Company, tax rates, schedule, users (Admin) | 0     |
