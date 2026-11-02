@@ -20,6 +20,7 @@ import { Installment, InstallmentPlan } from "@/lib/interfaces";
 import { mockCarriers, mockShippers } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { DemoInvoiceLinks } from "../invoices/demo-invoice-link";
 
 // Plans to pay invoices in parts (requirement 3). Mock data: creating a plan
 // is a demo.
@@ -87,7 +88,7 @@ export default function InstallmentPlans({
       case "direction":
         return <DirectionChip direction={plan.direction} />;
       case "invoices":
-        return <span className="font-mono">{plan.invoiceNumbers.join(", ")}</span>;
+        return <DemoInvoiceLinks numbers={plan.invoiceNumbers} className="font-mono" />;
       case "total":
         return <Money amount={plan.total} currency={plan.currency} />;
       case "paid":

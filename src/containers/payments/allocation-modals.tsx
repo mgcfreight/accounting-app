@@ -22,6 +22,7 @@ import {
 } from "@/lib/mock";
 import { compareMoney, formatMoney, isZeroMoney, sumMoney } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
+import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 
 // Allocating a payment to invoices (design §8.5): the auto-match suggestion,
 // a manual split, and the read-only view of where a payment went. Nothing is
@@ -90,7 +91,9 @@ function AllocationList({
         <tbody>
           {allocations.map((allocation) => (
             <tr key={allocation.invoiceNumber}>
-              <td className="py-2 pr-3 font-semibold">{allocation.invoiceNumber}</td>
+              <td className="py-2 pr-3">
+                <DemoInvoiceLink number={allocation.invoiceNumber} />
+              </td>
               <td className="py-2 px-2 text-right">
                 <Money amount={allocation.invoiceBalanceBefore} currency={payment.currency} />
               </td>
@@ -224,8 +227,8 @@ export function AllocateModal({
                 className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-start"
               >
                 <div className="text-xs">
-                  <p className="font-semibold">
-                    {invoice.number}
+                  <p>
+                    <DemoInvoiceLink number={invoice.number} />
                     {isOpenDispute(invoice.number) && (
                       <StatusChip text="Disputed" tone="warning" className="ml-2" />
                     )}
