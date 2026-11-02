@@ -353,10 +353,11 @@ export default function InvoiceDetail({
 
       <ChargesCard invoice={data} />
 
-      {!demo && !isCustomerInvoice(data) && (
+      {!demo && (
         <DocumentsCard
+          invoice={data}
           onUpload={openIfOffered("upload")}
-          onEmail={openIfOffered("email-carrier")}
+          onEmail={openIfOffered("email-documents")}
         />
       )}
 

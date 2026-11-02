@@ -26,7 +26,7 @@ import {
   Permission,
 } from "@/lib/enums";
 import { Attachment } from "@/lib/interfaces";
-import { demoCarrierDocuments } from "@/lib/mock";
+import { demoCarrierDocuments, demoShipperDocuments } from "@/lib/mock";
 import { compareMoney, isZeroMoney } from "@/lib/money";
 import { getParty } from "@/services";
 import {
@@ -38,12 +38,12 @@ import {
 
 // Invoice actions the Accounts API has no endpoint for yet: emailing the
 // invoice, voiding it for a cancelled load, flagging a dispute, attaching a
-// document and emailing documents to the carrier. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
+// document and emailing documents to the shipper or carrier. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
 // says it's a demo: nothing is saved, sent or uploaded.
 
 export type ExtraAction =
   | "email"
-  | "email-carrier"
+  | "email-documents"
   | "void"
   | "dispute"
   | "upload";
@@ -68,6 +68,10 @@ export const canBeVoided = (invoice: InvoiceView) =>
     ? invoice.status === CustomerInvoiceStatus.Draft ||
       invoice.status === CustomerInvoiceStatus.Issued
     : VOIDABLE_CARRIER_STATUSES.includes(invoice.status));
+
+// Who an invoice's documents go to.
+const partyWord = (invoice: InvoiceView) =>
+  isCustomerInvoice(invoice) ? "shipper" : "carrier";
 
 const isClosed = (invoice: InvoiceView) =>
   invoice.status === CustomerInvoiceStatus.Void ||
@@ -101,13 +105,17 @@ export const extraActionsFor = (
   if (canEdit && !isClosed(invoice)) {
     actions.push({ key: "upload", label: "Upload document", onPress: () => onOpen("upload") });
   }
-  // No permission of its own for emailing a carrier yet: it goes with
-  // editing the carrier invoice.
-  if (!isCustomer && canEdit && !isClosed(invoice)) {
+  // Emailing a shipper goes with sending its invoices. There is no
+  // permission of its own for emailing a carrier yet: it goes with editing
+  // the carrier invoice.
+  const canEmailDocuments = isCustomer
+    ? can(Permission.CustomerInvoicesSendEmail)
+    : canEdit;
+  if (canEmailDocuments && !isClosed(invoice)) {
     actions.push({
-      key: "email-carrier",
-      label: "Email documents to carrier",
-      onPress: () => onOpen("email-carrier"),
+      key: "email-documents",
+      label: `Email documents to ${partyWord(invoice)}`,
+      onPress: () => onOpen("email-documents"),
     });
   }
   if (
@@ -139,8 +147,8 @@ export default function InvoiceExtraActionModal({
   switch (action) {
     case "email":
       return <EmailInvoiceModal {...props} />;
-    case "email-carrier":
-      return <EmailCarrierModal {...props} />;
+    case "email-documents":
+      return <EmailDocumentsModal {...props} />;
     case "void":
       return <VoidInvoiceModal {...props} />;
     case "dispute":
@@ -285,39 +293,42 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   );
 }
 
-// --------------------------------------------------------- carrier email
+// ------------------------------------------------------- documents email
 
-type CarrierEmailValues = {
+type DocumentsEmailValues = {
   to: string;
   subject: string;
   message: string;
 };
 
-// The documents on a carrier invoice, sent to the carrier: each one ticked
-// by default and left out by unticking it.
-function EmailCarrierModal({ invoice, partyName, onClose }: ModalProps) {
+// The documents on an invoice, sent to its shipper or carrier: each one
+// ticked by default and left out by unticking it.
+function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
   const { can } = useCan();
-  const documents = invoiceDocuments;
+  const isCustomer = isCustomerInvoice(invoice);
+  const who = partyWord(invoice);
+  const documents = documentsOf(invoice);
   const [chosen, setChosen] = useState<string[]>(() =>
     documents.map((item) => item.id)
   );
   const [missing, setMissing] = useState<string | null>(null);
-  // The carrier's email as the TMS holds it, for those who may read parties.
-  const carrierId =
-    !isCustomerInvoice(invoice) && can(Permission.PartiesView)
-      ? invoice.carrierId
-      : null;
+  // The party's email as the TMS holds it, for those who may read parties.
+  const partyId = can(Permission.PartiesView)
+    ? isCustomer
+      ? invoice.customerId
+      : invoice.carrierId
+    : null;
   const party = useQuery({
-    queryKey: ["parties", "detail", carrierId],
-    queryFn: ({ signal }) => getParty(carrierId!, signal),
-    enabled: !!carrierId,
+    queryKey: ["parties", "detail", partyId],
+    queryFn: ({ signal }) => getParty(partyId!, signal),
+    enabled: !!partyId,
   });
   const reference =
-    (!isCustomerInvoice(invoice) && invoice.carrierInvoiceNumber) ||
+    (!isCustomer && invoice.carrierInvoiceNumber) ||
     invoiceNumberOf(invoice) ||
-    "your load";
+    (isCustomer ? "your shipment" : "your load");
   const { control, handleSubmit, getValues, setValue } =
-    useForm<CarrierEmailValues>({
+    useForm<DocumentsEmailValues>({
       defaultValues: {
         to: "",
         subject: `Documents for ${reference} from MGC Freight`,
@@ -357,7 +368,7 @@ function EmailCarrierModal({ invoice, partyName, onClose }: ModalProps) {
     <FormModal
       isOpen
       onOpenChange={(open) => !open && onClose()}
-      title="Email Documents to Carrier"
+      title={`Email Documents to ${isCustomer ? "Shipper" : "Carrier"}`}
       confirmText={
         chosen.length > 0
           ? `Send ${chosen.length} ${chosen.length === 1 ? "document" : "documents"}`
@@ -371,17 +382,17 @@ function EmailCarrierModal({ invoice, partyName, onClose }: ModalProps) {
         name="to"
         control={control}
         label="To"
-        placeholder="billing@carrier.com"
+        placeholder={isCustomer ? "ap@shipper.com" : "billing@carrier.com"}
         description={
-          party.isPending && carrierId
-            ? "Looking up the carrier's email…"
-            : "The carrier's email. Separate several addresses with commas."
+          party.isPending && partyId
+            ? `Looking up the ${who}'s email…`
+            : `The ${who}'s email. Separate several addresses with commas.`
         }
         rules={{ validate: emailList(true) }}
       />
       {documents.length === 0 ? (
         <p className="text-sm text-content-5">
-          No documents on this invoice yet. Upload a POD first.
+          No documents on this invoice yet. Upload {isCustomer ? "a BOL or POD" : "a POD"} first.
         </p>
       ) : (
         <div className="flex flex-col gap-2">
@@ -600,10 +611,9 @@ const documentKindLabel = (kind: string) =>
 
 // The documents attached to an invoice. The API doesn't list them yet and
 // Upload Document stores nothing, so sample ones stand in until it does.
-const invoiceDocuments = demoCarrierDocuments;
+const documentsOf = (invoice: InvoiceView) =>
+  isCustomerInvoice(invoice) ? demoShipperDocuments : demoCarrierDocuments;
 
-// The documents on a carrier invoice, with uploading and emailing them to
-// the carrier for those allowed to.
 // A document's icon, name and kind, as one line of a list.
 function DocumentLine({ document }: { document: Attachment }) {
   return (
@@ -623,14 +633,20 @@ function DocumentLine({ document }: { document: Attachment }) {
   );
 }
 
+// The documents on an invoice, with uploading and emailing them to the
+// shipper or carrier for those allowed to.
 export function DocumentsCard({
+  invoice,
   onUpload,
   onEmail,
 }: {
+  invoice: InvoiceView;
   onUpload?: () => void;
   onEmail?: () => void;
 }) {
-  const documents = invoiceDocuments;
+  const isCustomer = isCustomerInvoice(invoice);
+  const who = partyWord(invoice);
+  const documents = documentsOf(invoice);
   return (
     <BaseCardWrapper
       heading={
@@ -645,8 +661,9 @@ export function DocumentsCard({
             <DocumentUpload className="h-8 w-8" aria-hidden />
             <p className="text-sm text-content-6">No documents yet</p>
             <p className="text-xs text-content-5">
-              Upload the signed POD to keep it with this bill and send it to
-              the carrier.
+              {isCustomer
+                ? "Upload the signed BOL and POD to keep them with this invoice and send them to the shipper."
+                : "Upload the signed POD to keep it with this bill and send it to the carrier."}
             </p>
           </div>
         ) : (
@@ -665,7 +682,7 @@ export function DocumentsCard({
           <div className="flex flex-wrap gap-2">
             {onEmail && documents.length > 0 && (
               <BaseButton
-                text="Email to carrier"
+                text={`Email to ${who}`}
                 startContent={<Send />}
                 className="px-4"
                 onPress={onEmail}
