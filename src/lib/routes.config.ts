@@ -42,7 +42,7 @@ export const routeConfig: Record<string, RouteConfig> = {
     access: { allOf: [Permission.CustomerInvoicesView] },
     childRoutes: {
       view: {
-        header: "Invoice",
+        header: "Shipper Invoice",
         previousRoute: "/shipper-invoices/",
       },
     },

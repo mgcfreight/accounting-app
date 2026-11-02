@@ -7,7 +7,7 @@ import {
 } from "react";
 
 // Lets a detail page add what it is showing to the header's title — e.g. an
-// invoice's number, "Invoice #sin_AST011_11" — once the page has loaded it,
+// invoice's number, "Shipper Invoice #sin_AST011_11" — once the page has loaded it,
 // without the header knowing about the page.
 const DetailContext = createContext<string | null>(null);
 const SetDetailContext = createContext<((detail: string | null) => void) | null>(
