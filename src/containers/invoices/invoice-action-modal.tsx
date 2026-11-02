@@ -220,6 +220,10 @@ function EditInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
 
   const keepIfSet = (current: string | null, what: string) => (value: string) =>
     !current || value.trim() !== "" || `The ${what} can't be removed once set`;
+  // A carrier invoice needs its BOL number; the other references are
+  // optional. Checked here only: the API doesn't require it.
+  const isRequiredReference = (key: keyof ReferenceNumbers) =>
+    !isCustomerInvoice(invoice) && key === "bolNumber";
 
   return (
     <FormModal
@@ -233,7 +237,8 @@ function EditInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     >
       <InvoiceSummary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
-        Amounts never change here. Clear a reference number to remove it.
+        Amounts never change here. Clear a reference number to remove it
+        {isCustomerInvoice(invoice) ? "" : " (the BOL number is required)"}.
       </p>
       <BaseInput
         name="tmsInvoiceCode"
@@ -276,7 +281,13 @@ function EditInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
             name={key}
             control={control}
             label={`${referenceLabels[key]} number`}
+            isRequired={isRequiredReference(key)}
+            placeholder={isRequiredReference(key) ? undefined : "Optional"}
             rules={{
+              validate: (value: string) =>
+                !isRequiredReference(key) ||
+                value.trim() !== "" ||
+                `Enter the ${referenceLabels[key]} number`,
               maxLength: {
                 value: key === "quoteNumber" ? 32 : 64,
                 message: `At most ${key === "quoteNumber" ? 32 : 64} characters`,
