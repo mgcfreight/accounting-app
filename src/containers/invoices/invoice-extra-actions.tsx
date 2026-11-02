@@ -79,8 +79,9 @@ const isClosed = (invoice: InvoiceView) =>
   invoice.status === CarrierInvoiceStatus.Void ||
   invoice.status === CarrierInvoiceStatus.Superseded;
 
-// The "More" menu of an invoice: what its status allows and the role may
-// do. Each opens a form (`onOpen`).
+// The extra actions of an invoice: what its status allows and the role may
+// do. Each opens a form (`onOpen`). The detail page shows "email" as a
+// button of its own and the rest in its "More" menu.
 export const extraActionsFor = (
   invoice: InvoiceView,
   can: (permission: Permission) => boolean,

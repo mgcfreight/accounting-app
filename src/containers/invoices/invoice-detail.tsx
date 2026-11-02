@@ -150,6 +150,9 @@ export default function InvoiceDetail({
   const actions = demo ? [] : availableActions(data, can);
   const extraActions = demo ? [] : extraActionsFor(data, can, setExtraAction);
   const canVoid = extraActions.some((item) => item.key === "void");
+  // Emailing the invoice is a button of its own; the rest stay under "More".
+  const emailAction = extraActions.find((item) => item.key === "email");
+  const menuActions = extraActions.filter((item) => item.key !== "email");
   // The Documents card offers what the "More" menu does, no more.
   const openIfOffered = (key: ExtraAction) =>
     extraActions.some((item) => item.key === key)
@@ -203,7 +206,17 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
-          {extraActions.length > 0 && <RowActions actions={extraActions} />}
+          {emailAction && (
+            <BaseButton
+              text="Email invoice"
+              varient={actions.length === 0 ? "solid" : "bordered"}
+              className={`rounded-xl px-4 ${actions.length === 0 ? "" : "text-base-primary"}`}
+              // The icon is drawn white: it shows on a solid button only.
+              startContent={actions.length === 0 ? <Send /> : undefined}
+              onPress={() => setExtraAction("email")}
+            />
+          )}
+          {menuActions.length > 0 && <RowActions actions={menuActions} />}
         </div>
       </div>
 
