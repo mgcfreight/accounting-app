@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChangeEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,9 @@ import {
   BaseSelect,
   BaseSwitch,
   BaseTextArea,
+  FileDropZone,
   FormModal,
+  formatFileSize,
   Money,
 } from "@/components/common";
 import { RowAction } from "@/components/common/row-actions";
@@ -408,11 +410,14 @@ const MAX_BYTES = 10 * 1024 * 1024;
 
 // Checked by type and extension both: either alone is easy to get wrong.
 const fileProblem = (file: File | null) => {
-  if (!file) return "Choose a file";
+  if (!file) return "Choose a file to upload";
   if (!ACCEPTED_TYPES.includes(file.type) || !ACCEPTED_EXTENSIONS.test(file.name)) {
-    return "A PDF, PNG or JPEG file";
+    return `${file.name} isn't a PDF, PNG or JPEG file`;
   }
-  if (file.size > MAX_BYTES) return "At most 10 MB";
+  if (file.size === 0) return `${file.name} is empty`;
+  if (file.size > MAX_BYTES) {
+    return `${file.name} is ${formatFileSize(file.size)}; the limit is 10 MB`;
+  }
   return null;
 };
 
@@ -423,10 +428,16 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
     defaultValues: { kind: "POD", note: "" },
   });
 
-  const choose = (event: ChangeEvent<HTMLInputElement>) => {
-    const chosen = event.target.files?.[0] ?? null;
-    setFile(chosen);
-    setError(chosen ? fileProblem(chosen) : null);
+  // One document per upload. A rejected file isn't kept, so the zone stays
+  // ready for another and the file that was there before isn't lost.
+  const choose = (files: File[]) => {
+    if (files.length > 1) {
+      setError("Choose one file at a time");
+      return;
+    }
+    const problem = fileProblem(files[0]);
+    setError(problem);
+    if (!problem) setFile(files[0]);
   };
 
   const submit = handleSubmit((values) => {
@@ -458,19 +469,19 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
         options={documentKinds}
         disallowEmptySelection
       />
-      <div className="flex flex-col gap-1">
-        <label htmlFor="invoice-document" className="text-xs text-base-primary">
-          File (PDF, PNG or JPEG, up to 10 MB)
-        </label>
-        <input
-          id="invoice-document"
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-          onChange={choose}
-          className="text-sm"
-        />
-        {error && <p className="text-xs text-danger">{error}</p>}
-      </div>
+      <FileDropZone
+        id="invoice-document"
+        label="File"
+        hint="PDF, PNG or JPEG, up to 10 MB."
+        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+        file={file}
+        error={error}
+        onSelect={choose}
+        onRemove={() => {
+          setFile(null);
+          setError(null);
+        }}
+      />
       <BaseInput
         name="note"
         control={control}
