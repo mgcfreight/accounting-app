@@ -34,6 +34,8 @@ import {
   StatementEntryType,
   StatementRunTrigger,
   StatementTrigger,
+  SyncInboxStatus,
+  SyncTrigger,
   TaxBasis,
   TaxTreatment,
   TwoFactorMethod,
@@ -92,6 +94,9 @@ import {
   StatementRun,
   StatementSchedule,
   SuggestedAllocation,
+  SyncEvent,
+  SyncRun,
+  SyncStatus,
   TaxRate,
   TaxReport,
   TaxSummaryRow,
@@ -1016,4 +1021,45 @@ export const createdShipmentSchema = z.object({
   shipment: shipmentSchema,
   customerInvoice: customerInvoiceSchema,
   carrierInvoice: carrierInvoiceSchema.nullable(),
+});
+
+// ------------------------------------------------------------- TMS sync
+
+export const syncRunSchema: z.ZodType<SyncRun> = z.object({
+  trigger: z.enum(SyncTrigger),
+  startedAt: timestamp,
+  finishedAt: timestamp,
+  pulled: count,
+  applied: count,
+  failed: count,
+  skipped: count,
+  error: z.string().nullable(),
+});
+
+export const syncStatusSchema: z.ZodType<SyncStatus> = z.object({
+  enabled: z.boolean(),
+  running: z.boolean(),
+  cursor: z.string().regex(/^\d{1,19}:\d{1,19}$/),
+  cursorUpdatedAt: timestamp,
+  inbox: z.object({
+    [SyncInboxStatus.Received]: count,
+    [SyncInboxStatus.Applied]: count,
+    [SyncInboxStatus.Skipped]: count,
+    [SyncInboxStatus.Failed]: count,
+  }),
+  outbox: z.object({ pending: count, rejected: count }),
+  lastRun: syncRunSchema.nullable(),
+});
+
+export const syncEventSchema: z.ZodType<SyncEvent> = z.object({
+  eventId: z.string(),
+  seq: z.string(),
+  type: z.string(),
+  aggregateId: z.string(),
+  status: z.enum(SyncInboxStatus),
+  error: z.string().nullable(),
+  attempts: count,
+  occurredAt: timestamp,
+  receivedAt: timestamp,
+  appliedAt: timestamp.nullable(),
 });

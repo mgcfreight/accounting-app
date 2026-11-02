@@ -5,7 +5,7 @@ import {
   MatchStatus,
   PaymentDirection,
   PaymentStatus,
-  SyncRunStatus,
+  SyncInboxStatus,
 } from "@/lib/enums";
 import { isZeroMoney } from "@/lib/money";
 import StatusChip, { ChipTone } from "./status-chip";
@@ -68,13 +68,15 @@ export const DirectionChip = ({
     <StatusChip text="Money out" tone="primary" />
   );
 
-const syncStatus: Record<SyncRunStatus, { label: string; tone: ChipTone }> = {
-  [SyncRunStatus.Success]: { label: "Success", tone: "success" },
-  [SyncRunStatus.Failed]: { label: "Failed", tone: "danger" },
-  [SyncRunStatus.Running]: { label: "Running", tone: "secondary" },
-};
+const syncStatus: Record<SyncInboxStatus, { label: string; tone: ChipTone }> =
+  {
+    [SyncInboxStatus.Received]: { label: "Waiting", tone: "secondary" },
+    [SyncInboxStatus.Applied]: { label: "Applied", tone: "success" },
+    [SyncInboxStatus.Skipped]: { label: "Skipped", tone: "neutral" },
+    [SyncInboxStatus.Failed]: { label: "Held", tone: "danger" },
+  };
 
-export const SyncStatusChip = ({ status }: { status: SyncRunStatus }) => (
+export const SyncStatusChip = ({ status }: { status: SyncInboxStatus }) => (
   <StatusChip text={syncStatus[status].label} tone={syncStatus[status].tone} />
 );
 

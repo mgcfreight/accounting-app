@@ -162,10 +162,19 @@ export enum ReviewKind {
   AmountChange = "AMOUNT_CHANGE",
 }
 
-export enum SyncRunStatus {
-  Success = "SUCCESS",
+// One TMS event in the Accounts API's sync inbox. SKIPPED: older than what
+// is already held for the same record. FAILED: held until its cause is
+// fixed; tried again on each run.
+export enum SyncInboxStatus {
+  Received = "RECEIVED",
+  Applied = "APPLIED",
+  Skipped = "SKIPPED",
   Failed = "FAILED",
-  Running = "RUNNING",
+}
+
+export enum SyncTrigger {
+  Schedule = "SCHEDULE",
+  Manual = "MANUAL",
 }
 
 // ---------------------------------------------------------------------------

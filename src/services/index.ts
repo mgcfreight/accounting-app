@@ -26,5 +26,6 @@ export * from "./roles";
 export * from "./settings";
 export * from "./shipments";
 export * from "./statements";
+export * from "./sync";
 export * from "./users";
 export * from "./write-offs";
