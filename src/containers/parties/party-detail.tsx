@@ -31,6 +31,7 @@ import {
   listCustomerInvoices,
 } from "@/services";
 import InvoiceViewCell, { InvoiceView } from "../invoices/invoice-view";
+import PartyContacts from "./party-contacts";
 import { AgreementFormModal } from "./party-modals";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -152,6 +153,8 @@ export default function PartyDetail({ type }: { type: PartyType }) {
           </Field>
         </div>
       </BaseCardWrapper>
+
+      <PartyContacts party={data} />
 
       <BaseCardWrapper heading="Agreements">
         {agreements.length === 0 ? (

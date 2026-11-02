@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   BillingTrigger,
   Currency,
@@ -7,7 +8,13 @@ import {
   TaxTreatment,
 } from "@/lib/enums";
 import { apiClient, parseBody } from "./api-client";
-import { agreementSchema, envelope, paginated, partySchema } from "./schemas";
+import {
+  agreementSchema,
+  contactSchema,
+  envelope,
+  paginated,
+  partySchema,
+} from "./schemas";
 
 // Customers (SHIPPER) and carriers (CARRIER), and their agreed terms (/party).
 // Reading needs parties.view, adding a party parties.create, and new terms
@@ -92,3 +99,38 @@ export const createAgreement = (agreement: NewAgreement) =>
   apiClient
     .post("/party/agreement", agreement)
     .then((res) => parseBody(envelope(agreementSchema), res.data).data);
+
+// A person at the party. The email is unique per party and stored
+// lower-case. Statements go to the first active contact with
+// receivesStatements; without one, emailing a statement is refused.
+export type NewContact = {
+  partyId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  receivesInvoices?: boolean;
+  receivesReminders?: boolean;
+  receivesStatements?: boolean;
+};
+
+// Send only what changes. `phone: ""` clears it; `isActive: false` retires
+// the contact.
+export type ContactChanges = Partial<Omit<NewContact, "partyId">> & {
+  isActive?: boolean;
+};
+
+// Active ones first, then by name. Not paged.
+export const listContacts = (partyId: string, signal?: AbortSignal) =>
+  apiClient
+    .get("/party/contacts", { params: { partyId }, signal })
+    .then((res) => parseBody(envelope(z.array(contactSchema)), res.data).data);
+
+export const createContact = (contact: NewContact) =>
+  apiClient
+    .post("/party/contact", contact)
+    .then((res) => parseBody(envelope(contactSchema), res.data).data);
+
+export const updateContact = (contactId: string, changes: ContactChanges) =>
+  apiClient
+    .put("/party/contact", changes, { params: { contactId } })
+    .then((res) => parseBody(envelope(contactSchema), res.data).data);

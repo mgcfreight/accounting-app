@@ -52,6 +52,7 @@ import {
   CarrierInvoiceView,
   ChargeType,
   CompanySettings,
+  ContactView,
   CurrencyAmounts,
   CustomerInvoiceView,
   DashboardSummary,
@@ -408,6 +409,20 @@ export const partySchema: z.ZodType<PartyView> = z.object({
   email: z.string().nullable().optional(),
   businessEmail: z.string().nullable().optional(),
   agreements: z.array(agreementSchema).optional(),
+});
+
+export const contactSchema: z.ZodType<ContactView> = z.object({
+  id: z.string(),
+  partyId: z.string(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable(),
+  receivesInvoices: z.boolean(),
+  receivesReminders: z.boolean(),
+  receivesStatements: z.boolean(),
+  isActive: z.boolean(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
 });
 
 // ------------------------------------------------------------- shipments

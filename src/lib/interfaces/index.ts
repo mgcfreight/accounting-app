@@ -509,6 +509,22 @@ export interface PartyView {
   agreements?: AgreementView[];
 }
 
+// GET /party/contacts: a person at a shipper or carrier, and what they
+// receive. Statements go to the first active contact with receivesStatements.
+export interface ContactView {
+  id: string;
+  partyId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  receivesInvoices: boolean;
+  receivesReminders: boolean;
+  receivesStatements: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // The seven numbers that tell a party which load an invoice is for.
 export interface ReferenceNumbers {
   bolNumber: string | null;
