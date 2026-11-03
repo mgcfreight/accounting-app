@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -6,11 +7,9 @@ import {
   BaseButton,
   BaseInput,
   ErrorState,
-  LeavePageModal,
   TableSkeleton,
 } from "@/components/common";
 import { DownArrow } from "@/components/icons";
-import { useUnsavedChanges } from "@/hooks";
 import { NoticeSettings, NoticeTerms } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
 import { errorMessage, getNoticeSettings, saveNoticeSettings } from "@/services";
@@ -40,7 +39,13 @@ const wholeDays = (max: number) => (value: string) =>
 // PREPAID get no notice), and the default for the carrier "payment due soon"
 // alert to the accounts team. Each customer's or carrier's agreement can set
 // its own. Saved only: nothing sends notices yet.
-export default function NoticeSettingsSection() {
+// The Settings page asks before leaving with unsaved edits; this section
+// reports them through `onDirtyChange`.
+export default function NoticeSettingsSection({
+  onDirtyChange,
+}: {
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: QUERY_KEY,
@@ -56,7 +61,8 @@ export default function NoticeSettingsSection() {
     mode: "onTouched",
     values: settings.data && toForm(settings.data),
   });
-  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
+  const isDirty = Object.keys(dirtyFields).length > 0;
+  useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
   const save = useMutation({
     mutationFn: (values: Values) =>
@@ -156,11 +162,6 @@ export default function NoticeSettingsSection() {
           isLoading={save.isPending}
         />
       </div>
-      <LeavePageModal
-        isOpen={leaving.blocked}
-        onStay={leaving.stay}
-        onLeave={leaving.leave}
-      />
     </form>
   );
 }
