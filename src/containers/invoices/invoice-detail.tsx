@@ -9,7 +9,7 @@ import {
   ErrorState,
   InfoStrip,
   Money,
-  RowActions,
+  MoreActions,
   TableSkeleton,
 } from "@/components/common";
 import { ArrowRight, Send } from "@/components/icons";
@@ -216,7 +216,7 @@ export default function InvoiceDetail({
               onPress={() => setExtraAction("email")}
             />
           )}
-          {menuActions.length > 0 && <RowActions actions={menuActions} />}
+          <MoreActions actions={menuActions} />
         </div>
       </div>
 
