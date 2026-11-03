@@ -72,6 +72,7 @@ import {
   InvoiceDocument,
   InvoiceEmailed,
   InvoiceLineView,
+  InvoicePayment,
   InvoiceTax,
   Me,
   MonthlyPnl,
@@ -647,6 +648,19 @@ export const paymentSchema: z.ZodType<Payment> = z.object({
   createdAt: timestamp,
   suggested: z.array(suggestedAllocationSchema),
   allocations: z.array(allocationSchema),
+});
+
+export const invoicePaymentSchema: z.ZodType<InvoicePayment> = z.object({
+  allocationId: z.string(),
+  paymentId: z.string(),
+  paymentNumber: z.string(),
+  method: z.enum(PaymentMethod),
+  paidOn: calendarDate,
+  reference: z.string().nullable(),
+  amount: money,
+  rule: z.enum(AllocationRule),
+  allocatedOn: calendarDate,
+  reversedAt: timestamp.nullable(),
 });
 
 export const allocationSuggestionSchema: z.ZodType<AllocationSuggestion> =

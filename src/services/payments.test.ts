@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   AllocationRule,
   MatchStatus,
@@ -15,6 +16,7 @@ import {
   allocationSuggestionSchema,
   customerInvoiceSchema,
   envelope,
+  invoicePaymentSchema,
   paginated,
   paymentSchema,
 } from "./schemas";
@@ -89,5 +91,56 @@ describe("paymentSchema on real responses", () => {
   it("refuses an amount that is not 2 decimals rather than showing it", () => {
     const bad = { ...recorded, data: { ...recorded.data, amount: "1500.5" } };
     expect(() => payment.parse(bad)).toThrow();
+  });
+});
+
+// Written from the API's InvoicePaymentView (src/dto/payment/payment.view.ts),
+// not captured: one live allocation and one reversed.
+const invoicePayments = {
+  message: "Success",
+  data: [
+    {
+      allocationId: "cpa_4fK9qZ0aB1",
+      paymentId: "cpy_4fK9qZ0aB1",
+      paymentNumber: "SPAY-12",
+      method: "EFT",
+      paidOn: "2026-10-20",
+      reference: "sin_EGP9wr_230",
+      amount: "1130.00",
+      rule: "INVOICE_NUMBER",
+      allocatedOn: "2026-10-21",
+      reversedAt: null,
+    },
+    {
+      allocationId: "cpa_7hT2mW5cD3",
+      paymentId: "cpy_7hT2mW5cD3",
+      paymentNumber: "SPAY-9",
+      method: "CHEQUE",
+      paidOn: "2026-10-02",
+      reference: null,
+      amount: "300.00",
+      rule: "MANUAL",
+      allocatedOn: "2026-10-03",
+      reversedAt: "2026-10-05T14:12:09.000Z",
+    },
+  ],
+};
+
+describe("invoicePaymentSchema", () => {
+  const list = envelope(z.array(invoicePaymentSchema));
+
+  it("reads the payments behind an invoice, reversed ones included", () => {
+    const { data } = list.parse(invoicePayments);
+    expect(data.map((p) => [p.paymentNumber, p.amount, p.rule, p.reversedAt])).toEqual([
+      ["SPAY-12", "1130.00", AllocationRule.InvoiceNumber, null],
+      ["SPAY-9", "300.00", AllocationRule.Manual, "2026-10-05T14:12:09.000Z"],
+    ]);
+  });
+
+  it("refuses an amount that is not 2 decimals rather than showing it", () => {
+    const [first] = invoicePayments.data;
+    expect(() =>
+      list.parse({ ...invoicePayments, data: [{ ...first, amount: "1130" }] })
+    ).toThrow();
   });
 });

@@ -12,7 +12,8 @@ import {
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
 import { useFileDownload } from "@/hooks";
-import { DocumentSource, Permission } from "@/lib/enums";
+import { paymentMethodLabel } from "@/lib/constants";
+import { DocumentSource, PaymentDirection, Permission } from "@/lib/enums";
 import { InvoiceDocument, WriteOff } from "@/lib/interfaces";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
@@ -20,10 +21,12 @@ import {
   downloadInvoiceDocument,
   errorMessage,
   listInvoiceDocuments,
+  listInvoicePayments,
   listWriteOffs,
   removeInvoiceDocument,
   reverseWriteOff,
 } from "@/services";
+import { allocationRuleLabels } from "../payments/allocation-modals";
 import { documentKindLabels } from "./invoice-extra-actions";
 import { directionOf, InvoiceView, isCustomerInvoice } from "./invoice-view";
 
@@ -113,6 +116,71 @@ export function DocumentsCard({ invoice }: { invoice: InvoiceView }) {
                   />
                 )}
               </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </BaseCardWrapper>
+  );
+}
+
+// The payments behind the invoice, oldest first: which payment, how much of
+// it went here, and how it was matched. Reversed ones stay, marked. Each
+// amount is in the invoice's currency, as an allocation always is. Shown
+// only to roles that may view the side's payments.
+export function PaymentsCard({ invoice }: { invoice: InvoiceView }) {
+  const { can } = useCan();
+  const isShipper = isCustomerInvoice(invoice);
+  const direction = isShipper ? PaymentDirection.In : PaymentDirection.Out;
+  const canView = can(
+    isShipper ? Permission.CustomerPaymentsView : Permission.CarrierPaymentsView
+  );
+  const payments = useQuery({
+    queryKey: ["payments", "invoice", invoice.id],
+    queryFn: ({ signal }) => listInvoicePayments(direction, invoice.id, signal),
+    enabled: canView,
+  });
+  if (!canView) return null;
+
+  return (
+    <BaseCardWrapper heading="Payments">
+      {payments.isError ? (
+        <p className="text-sm text-base-danger">
+          Couldn&apos;t load the payments.{" "}
+          <button type="button" className="underline" onClick={() => void payments.refetch()}>
+            Try again
+          </button>
+        </p>
+      ) : payments.isPending ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : payments.data.length === 0 ? (
+        <p className="text-sm text-gray-500">No payments yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {payments.data.map((item) => (
+            <li
+              key={item.allocationId}
+              className="flex flex-wrap justify-between items-start gap-2 text-sm border-b border-gray-100 pb-2"
+            >
+              <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{item.paymentNumber}</span>
+                  <span className="text-gray-500">
+                    {paymentMethodLabel(item.method)} · paid {formatDate(item.paidOn)}
+                    {item.reference ? ` · ${item.reference}` : ""}
+                  </span>
+                  {item.reversedAt && <StatusChip text="Reversed" tone="neutral" />}
+                </div>
+                <span className="text-xs text-gray-500">
+                  Applied {formatDate(item.allocatedOn)} · {allocationRuleLabels[item.rule]}
+                  {item.reversedAt && ` · reversed ${formatDateTime(item.reversedAt)}`}
+                </span>
+              </div>
+              <Money
+                amount={item.amount}
+                currency={invoice.currency}
+                className={item.reversedAt ? "text-gray-400 line-through" : "font-semibold"}
+              />
             </li>
           ))}
         </ul>

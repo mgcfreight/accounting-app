@@ -41,7 +41,7 @@ import {
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
-import { DocumentsCard, WriteOffsCard } from "./invoice-documents";
+import { DocumentsCard, PaymentsCard, WriteOffsCard } from "./invoice-documents";
 import InvoiceExtraActionModal, {
   canBeVoided,
   CancelledLoadBanner,
@@ -290,6 +290,8 @@ export default function InvoiceDetail({
       </div>
 
       <ChargesCard invoice={data} />
+
+      <PaymentsCard invoice={data} />
 
       <WriteOffsCard invoice={data} />
 

@@ -293,6 +293,22 @@ export interface Allocation {
   createdAt: string;
 }
 
+// GET /payment/customer|carrier/invoice: a payment as one invoice sees it.
+// `amount` is the part that went to this invoice, in the invoice's currency.
+export interface InvoicePayment {
+  allocationId: string;
+  paymentId: string;
+  // SPAY-<n> / CPAY-<n>
+  paymentNumber: string;
+  method: PaymentMethod;
+  paidOn: string;
+  reference: string | null;
+  amount: string;
+  rule: AllocationRule;
+  allocatedOn: string;
+  reversedAt: string | null;
+}
+
 // One line of the matching suggestion. Nothing is saved until staff confirm.
 export interface SuggestedAllocation {
   invoiceId: string;

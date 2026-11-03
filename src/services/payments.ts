@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   AllocationRule,
   Currency,
@@ -10,6 +11,7 @@ import { apiClient, parseBody } from "./api-client";
 import {
   allocationSuggestionSchema,
   envelope,
+  invoicePaymentSchema,
   paginated,
   paymentSchema,
 } from "./schemas";
@@ -103,6 +105,17 @@ export const recordPayment = (direction: PaymentDirection, body: NewPayment) =>
   apiClient
     .post(sidePath(direction), body)
     .then((res) => parseBody(payment, res.data).data);
+
+// The payments behind one invoice, oldest first, reversed ones included
+// (reversedAt). A shipper invoice is paid IN, a carrier invoice OUT.
+export const listInvoicePayments = (
+  direction: PaymentDirection,
+  invoiceId: string,
+  signal?: AbortSignal
+) =>
+  apiClient
+    .get(`${sidePath(direction)}/invoice`, { params: { invoiceId }, signal })
+    .then((res) => parseBody(envelope(z.array(invoicePaymentSchema)), res.data).data);
 
 // How matching would spread what is unapplied: the invoice number in the
 // reference, then an exact amount, then the oldest open invoice.
