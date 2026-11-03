@@ -17,6 +17,7 @@ export { default as Money } from "./money";
 export { default as PartyAvatar } from "./party-avatar";
 export { default as RecoveryCodes } from "./recovery-codes";
 export { default as RowActions } from "./row-actions";
+export { default as MoreActions } from "./more-actions";
 export { default as SectionTitle } from "./section-title";
 export { default as StatCard } from "./stat-card";
 export { default as StatusChip } from "./status-chip";

@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import {
   BaseInput,
   BaseSelect,
@@ -16,7 +17,16 @@ import {
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import {
+  limitParam,
+  oneOf,
+  pageParam,
+  searchParam,
+  useDebouncedValue,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import { PartyType } from "@/lib/enums";
 import { PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
@@ -48,6 +58,20 @@ const activeOptions = [
   { key: "false", label: "Inactive", value: "false" },
 ];
 
+const BLANK: Filters = { search: "", active: "ALL" };
+
+// The filters and page as kept in the URL (see useListUrlState).
+const urlSchema = z.object({
+  search: searchParam(100),
+  active: oneOf(
+    activeOptions.map((option) => option.value),
+    "ALL"
+  ),
+  page: pageParam,
+  limit: limitParam(),
+});
+const URL_DEFAULTS = { ...BLANK, page: "1", limit: "10" };
+
 // Shippers and carriers share one design (§9 "Shippers / Carriers"), from
 // the API's /party routes. Balances arrive with payments; until then the
 // list shows who the party is.
@@ -55,20 +79,31 @@ export default function PartyList({ type }: { type: PartyType }) {
   const navigate = useNavigate();
   const isShipper = type === PartyType.Shipper;
   const [adding, setAdding] = useState(false);
-  const {
-    control,
-    reset,
-    formState: { isDirty },
-  } = useForm<Filters>({
-    defaultValues: { search: "", active: "ALL" },
+  const fromUrl = useListUrlState(urlSchema);
+  const { control, reset } = useForm<Filters>({
+    defaultValues: { search: fromUrl.search, active: fromUrl.active },
   });
-  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
+  const typed = useWatch({ control, name: "search" });
+  const search = useDebouncedValue(typed.trim());
   const active = useWatch({ control, name: "active" });
 
   // The header's "Add Shipper / Carrier" (routes.config: parties.create).
   useHeaderAction("add-party", () => setAdding(true));
 
-  const paging = useServerPaging(JSON.stringify([type, search, active]));
+  const paging = useServerPaging(
+    JSON.stringify([type, search, active]),
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    {
+      search,
+      active,
+      page: String(paging.page),
+      limit: String(paging.limit),
+    },
+    URL_DEFAULTS
+  );
   const params = {
     page: paging.page,
     limit: paging.limit,
@@ -133,6 +168,7 @@ export default function PartyList({ type }: { type: PartyType }) {
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
           placeholder={`Search ${isShipper ? "shippers" : "carriers"} by name or MGC id`}
+          aria-label={`Search ${isShipper ? "shippers" : "carriers"}`}
           endContent={<SearchNormalSm />}
         />
         <BaseSelect
@@ -144,7 +180,10 @@ export default function PartyList({ type }: { type: PartyType }) {
           aria-label="Active"
           disallowEmptySelection
         />
-        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
+        <ClearFiltersButton
+          active={typed !== "" || active !== "ALL"}
+          onClear={() => reset(BLANK)}
+        />
       </FilterBar>
       <Card>
         {parties.isError ? (

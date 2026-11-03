@@ -1,17 +1,25 @@
+import { CheckboxGroup } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { ChangeEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import {
   AlertBanner,
+  BaseButton,
+  BaseCardWrapper,
+  BaseCheckbox,
   BaseInput,
   BaseSelect,
   BaseSwitch,
   BaseTextArea,
+  FileDropZone,
   FormModal,
+  formatFileSize,
   Money,
 } from "@/components/common";
 import { RowAction } from "@/components/common/row-actions";
+import { DocumentUpload, Pdf, Send } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import {
@@ -19,8 +27,10 @@ import {
   CustomerInvoiceStatus,
   Permission,
 } from "@/lib/enums";
+import { Attachment } from "@/lib/interfaces";
+import { demoCarrierDocuments, demoShipperDocuments } from "@/lib/mock";
 import { compareMoney, isZeroMoney } from "@/lib/money";
-import { getParty } from "@/services";
+import { listContacts } from "@/services";
 import {
   invoiceNumberOf,
   InvoiceView,
@@ -29,11 +39,16 @@ import {
 } from "./invoice-view";
 
 // Invoice actions the Accounts API has no endpoint for yet: emailing the
-// invoice, voiding it for a cancelled load, flagging a dispute and
-// attaching a document. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
+// invoice, voiding it for a cancelled load, flagging a dispute, attaching a
+// document and emailing documents to the shipper or carrier. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
 // says it's a demo: nothing is saved, sent or uploaded.
 
-export type ExtraAction = "email" | "void" | "dispute" | "upload";
+export type ExtraAction =
+  | "email"
+  | "email-documents"
+  | "void"
+  | "dispute"
+  | "upload";
 
 const AMOUNT = /^\d{1,9}\.\d{2}$/;
 
@@ -56,14 +71,19 @@ export const canBeVoided = (invoice: InvoiceView) =>
       invoice.status === CustomerInvoiceStatus.Issued
     : VOIDABLE_CARRIER_STATUSES.includes(invoice.status));
 
+// Who an invoice's documents go to.
+const partyWord = (invoice: InvoiceView) =>
+  isCustomerInvoice(invoice) ? "shipper" : "carrier";
+
 const isClosed = (invoice: InvoiceView) =>
   invoice.status === CustomerInvoiceStatus.Void ||
   invoice.status === CustomerInvoiceStatus.Superseded ||
   invoice.status === CarrierInvoiceStatus.Void ||
   invoice.status === CarrierInvoiceStatus.Superseded;
 
-// The "More" menu of an invoice: what its status allows and the role may
-// do. Each opens a form (`onOpen`).
+// The extra actions of an invoice: what its status allows and the role may
+// do. Each opens a form (`onOpen`). The detail page shows "email" as a
+// button of its own and the rest in its "More" menu.
 export const extraActionsFor = (
   invoice: InvoiceView,
   can: (permission: Permission) => boolean,
@@ -87,6 +107,19 @@ export const extraActionsFor = (
   }
   if (canEdit && !isClosed(invoice)) {
     actions.push({ key: "upload", label: "Upload document", onPress: () => onOpen("upload") });
+  }
+  // Emailing a shipper goes with sending its invoices. There is no
+  // permission of its own for emailing a carrier yet: it goes with editing
+  // the carrier invoice.
+  const canEmailDocuments = isCustomer
+    ? can(Permission.CustomerInvoicesSendEmail)
+    : canEdit;
+  if (canEmailDocuments && !isClosed(invoice)) {
+    actions.push({
+      key: "email-documents",
+      label: `Email documents to ${partyWord(invoice)}`,
+      onPress: () => onOpen("email-documents"),
+    });
   }
   if (
     canBeVoided(invoice) &&
@@ -117,6 +150,8 @@ export default function InvoiceExtraActionModal({
   switch (action) {
     case "email":
       return <EmailInvoiceModal {...props} />;
+    case "email-documents":
+      return <EmailDocumentsModal {...props} />;
     case "void":
       return <VoidInvoiceModal {...props} />;
     case "dispute":
@@ -148,6 +183,74 @@ type EmailValues = {
   attachDocuments: boolean;
 };
 
+// Where an invoice's emails go: the party's active contacts that receive
+// invoices, for those who may read parties. The party page reads the same
+// query, so it is often cached already. `href` is the party's page, where
+// contacts are added.
+function useInvoiceRecipients(invoice: InvoiceView) {
+  const { can } = useCan();
+  const isCustomer = isCustomerInvoice(invoice);
+  const partyId = isCustomer ? invoice.customerId : invoice.carrierId;
+  const canRead = can(Permission.PartiesView) && !!partyId;
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", partyId],
+    queryFn: ({ signal }) => listContacts(partyId!, signal),
+    enabled: canRead,
+  });
+  const emails = (contacts.data ?? [])
+    .filter((contact) => contact.isActive && contact.receivesInvoices)
+    .map((contact) => contact.email);
+  return {
+    emails,
+    isLoading: canRead && contacts.isPending,
+    // Only once the list has loaded, so a slow or failed request doesn't
+    // claim there are none.
+    hasNone: canRead && contacts.isSuccess && emails.length === 0,
+    isError: canRead && contacts.isError,
+    href: partyId
+      ? `${isCustomer ? "/shippers/" : "/carriers/"}view/?id=${encodeURIComponent(partyId)}`
+      : null,
+  };
+}
+
+// Fills "To" once the addresses arrive, unless something was typed first.
+function usePrefillTo(
+  emails: string[],
+  getValues: () => string,
+  setValue: (value: string) => void
+) {
+  const joined = emails.join(", ");
+  useEffect(() => {
+    if (joined && !getValues()) setValue(joined);
+  }, [joined, getValues, setValue]);
+}
+
+// The line under "To": looking the address up, where it came from, or that
+// the party has no contact for it yet.
+function recipientHint(
+  recipients: ReturnType<typeof useInvoiceRecipients>,
+  who: string
+) {
+  if (recipients.isLoading) return `Looking up the ${who}'s contacts…`;
+  if (recipients.isError) return `Couldn't load the ${who}'s contacts. Type the address instead.`;
+  if (recipients.hasNone) {
+    return (
+      <>
+        No {who} contact receives invoices yet.{" "}
+        {recipients.href && (
+          <Link to={recipients.href} className="text-base-primary underline">
+            Add one on the {who}&apos;s page
+          </Link>
+        )}
+      </>
+    );
+  }
+  if (recipients.emails.length > 0) {
+    return `From the ${who}'s contacts. Separate several addresses with commas.`;
+  }
+  return "Separate several addresses with commas.";
+}
+
 const addresses = (value: string) =>
   value
     .split(",")
@@ -166,19 +269,7 @@ const emailList = (required: boolean) => (value: string | boolean) => {
 
 function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   const number = invoiceNumberOf(invoice) ?? "";
-  const { can } = useCan();
-  // The customer's accounts address as the TMS holds it, for those who may
-  // read parties. The party page reads the same query, so it is often
-  // cached already.
-  const customerId =
-    isCustomerInvoice(invoice) && can(Permission.PartiesView)
-      ? invoice.customerId
-      : null;
-  const party = useQuery({
-    queryKey: ["parties", "detail", customerId],
-    queryFn: ({ signal }) => getParty(customerId!, signal),
-    enabled: !!customerId,
-  });
+  const recipients = useInvoiceRecipients(invoice);
   const { control, handleSubmit, getValues, setValue } = useForm<EmailValues>({
     defaultValues: {
       to: "",
@@ -189,12 +280,11 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       attachDocuments: true,
     },
   });
-
-  // Fills "To" once the address arrives, unless something was typed first.
-  const suggested = party.data?.businessEmail ?? party.data?.email ?? null;
-  useEffect(() => {
-    if (suggested && !getValues("to")) setValue("to", suggested);
-  }, [suggested, getValues, setValue]);
+  usePrefillTo(
+    recipients.emails,
+    () => getValues("to"),
+    (value) => setValue("to", value)
+  );
 
   const submit = handleSubmit((values) => {
     demo(`Email of ${number} to ${addresses(values.to).join(", ")}`, "sent");
@@ -220,11 +310,7 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         control={control}
         label="To"
         placeholder="ap@shipper.com"
-        description={
-          party.isPending && customerId
-            ? "Looking up the shipper's email…"
-            : "Separate several addresses with commas."
-        }
+        description={recipientHint(recipients, "shipper")}
         rules={{ validate: emailList(true) }}
       />
       <BaseInput
@@ -261,6 +347,156 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   );
 }
 
+// ------------------------------------------------------- documents email
+
+type DocumentsEmailValues = {
+  to: string;
+  subject: string;
+  message: string;
+};
+
+// The documents on an invoice, sent to its shipper or carrier: each one
+// ticked by default and left out by unticking it.
+function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
+  const isCustomer = isCustomerInvoice(invoice);
+  const who = partyWord(invoice);
+  const documents = documentsOf(invoice);
+  const [chosen, setChosen] = useState<string[]>(() =>
+    documents.map((item) => item.id)
+  );
+  const [missing, setMissing] = useState<string | null>(null);
+  const recipients = useInvoiceRecipients(invoice);
+  const reference =
+    (!isCustomer && invoice.carrierInvoiceNumber) ||
+    invoiceNumberOf(invoice) ||
+    (isCustomer ? "your shipment" : "your load");
+  const { control, handleSubmit, getValues, setValue } =
+    useForm<DocumentsEmailValues>({
+      defaultValues: {
+        to: "",
+        subject: `Documents for ${reference} from MGC Freight`,
+        message: `Please find attached the documents for ${reference}.`,
+      },
+    });
+  usePrefillTo(
+    recipients.emails,
+    () => getValues("to"),
+    (value) => setValue("to", value)
+  );
+
+  const submit = handleSubmit((values) => {
+    if (documents.length === 0) {
+      setMissing("There are no documents on this invoice to send.");
+      return;
+    }
+    if (chosen.length === 0) {
+      setMissing("Choose at least one document to send.");
+      return;
+    }
+    demo(
+      `Email of ${chosen.length} ${chosen.length === 1 ? "document" : "documents"} to ${addresses(values.to).join(", ")}`,
+      "sent"
+    );
+    onClose();
+  });
+
+  const allChosen = chosen.length === documents.length;
+  const choose = (value: string[]) => {
+    setChosen(value);
+    setMissing(null);
+  };
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title={`Email Documents to ${isCustomer ? "Shipper" : "Carrier"}`}
+      confirmText={
+        chosen.length > 0
+          ? `Send ${chosen.length} ${chosen.length === 1 ? "document" : "documents"}`
+          : "Send"
+      }
+      onConfirm={submit}
+      size="2xl"
+    >
+      <Summary invoice={invoice} partyName={partyName} />
+      <BaseInput
+        name="to"
+        control={control}
+        label="To"
+        placeholder={isCustomer ? "ap@shipper.com" : "billing@carrier.com"}
+        description={recipientHint(recipients, who)}
+        rules={{ validate: emailList(true) }}
+      />
+      {documents.length === 0 ? (
+        <p className="text-sm text-content-5">
+          No documents on this invoice yet. Upload {isCustomer ? "a BOL or POD" : "a POD"} first.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-base-primary">
+              Documents to send ({chosen.length} of {documents.length})
+            </span>
+            <button
+              type="button"
+              className="text-xs text-base-primary underline"
+              onClick={() => choose(allChosen ? [] : documents.map((item) => item.id))}
+            >
+              {allChosen ? "Clear all" : "Select all"}
+            </button>
+          </div>
+          <CheckboxGroup
+            aria-label="Documents to send"
+            size="sm"
+            value={chosen}
+            onValueChange={choose}
+            orientation="horizontal"
+            // Side by side, wrapping, as on the invoice's Documents card.
+            classNames={{ wrapper: "flex-wrap gap-2" }}
+          >
+            {documents.map((item) => (
+              <BaseCheckbox
+                key={item.id}
+                value={item.id}
+                classNames={{
+                  base: "m-0 min-w-0 max-w-full sm:max-w-xs rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
+                  label: "min-w-0 w-full",
+                }}
+              >
+                <DocumentLine document={item} />
+              </BaseCheckbox>
+            ))}
+          </CheckboxGroup>
+        </div>
+      )}
+      {missing && (
+        <p role="alert" className="text-xs text-base-danger">
+          {missing}
+        </p>
+      )}
+      <BaseInput
+        name="subject"
+        control={control}
+        label="Subject"
+        rules={{
+          required: "Enter a subject",
+          maxLength: { value: 200, message: "At most 200 characters" },
+        }}
+      />
+      <BaseTextArea
+        name="message"
+        control={control}
+        label="Message"
+        rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
+      />
+      <p className="text-xs text-content-5">
+        Demo only: the documents are samples and nothing is sent yet.
+      </p>
+    </FormModal>
+  );
+}
+
 // ----------------------------------------------------------------- void
 
 type VoidValues = { reason: string; keepFee: boolean; fee: string };
@@ -286,6 +522,7 @@ function VoidInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       onOpenChange={(open) => !open && onClose()}
       title="Void Invoice"
       confirmText="Void Invoice"
+      confirmColor="danger"
       onConfirm={submit}
       size="xl"
     >
@@ -293,6 +530,7 @@ function VoidInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       <p className="text-xs text-content-5">
         For a cancelled load. The invoice is kept, marked void, and owes
         nothing. A cancellation fee is billed on a new invoice of its own.
+        Voiding isn&apos;t built yet: this checks the form only.
       </p>
       <BaseTextArea
         name="reason"
@@ -353,7 +591,8 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       <Summary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
         While disputed, the amount shows in the aging report&apos;s Disputed
-        column and payment reminders for this invoice pause.
+        column and payment reminders for this invoice pause. Disputes
+        aren&apos;t built yet: this checks the form only.
       </p>
       <BaseTextArea
         name="reason"
@@ -402,17 +641,140 @@ const documentKinds = [
   { key: "OTHER", label: "Other", value: "OTHER" },
 ];
 
+// A carrier invoice takes only a POD or another document.
+const carrierDocumentKinds = documentKinds.filter(
+  (kind) => kind.key === "POD" || kind.key === "OTHER"
+);
+
+const documentKindLabel = (kind: string) =>
+  documentKinds.find((item) => item.key === kind)?.label ?? kind;
+
+// The documents attached to an invoice. The API doesn't list them yet and
+// Upload Document stores nothing, so sample ones stand in until it does.
+const documentsOf = (invoice: InvoiceView) =>
+  isCustomerInvoice(invoice) ? demoShipperDocuments : demoCarrierDocuments;
+
+// A document's icon, name and kind, as one line of a list.
+function DocumentLine({ document }: { document: Attachment }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      {/\.pdf$/i.test(document.fileName) ? (
+        <Pdf className="h-8 w-8 shrink-0" aria-hidden />
+      ) : (
+        <DocumentUpload className="h-8 w-8 shrink-0" aria-hidden />
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-sm text-content-6" title={document.fileName}>
+          {document.fileName}
+        </p>
+        <p className="text-xs text-content-5">{documentKindLabel(document.kind)}</p>
+      </div>
+    </div>
+  );
+}
+
+// The documents on an invoice, with uploading and emailing them to the
+// shipper or carrier for those allowed to.
+export function DocumentsCard({
+  invoice,
+  onUpload,
+  onEmail,
+}: {
+  invoice: InvoiceView;
+  onUpload?: () => void;
+  onEmail?: () => void;
+}) {
+  const isCustomer = isCustomerInvoice(invoice);
+  const who = partyWord(invoice);
+  const documents = documentsOf(invoice);
+  return (
+    <BaseCardWrapper
+      heading={
+        documents.length > 0
+          ? `Supporting Documents (${documents.length})`
+          : "Supporting Documents"
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {documents.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <DocumentUpload className="h-8 w-8" aria-hidden />
+            <p className="text-sm text-content-6">No documents yet</p>
+            <p className="text-xs text-content-5">
+              {isCustomer
+                ? "Upload the signed BOL and POD to keep them with this invoice and send them to the shipper."
+                : "Upload the signed POD to keep it with this bill and send it to the carrier."}
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {documents.map((item) => (
+              <li key={item.id} className="min-w-0 max-w-full sm:max-w-xs">
+                {/* Downloads the file under its own name, as the browser
+                    saves any download; `download` works only on our own
+                    origin, so only a same-origin path is linked. */}
+                {item.url?.startsWith("/") && !item.url.startsWith("//") ? (
+                  <a
+                    href={item.url}
+                    download={item.fileName}
+                    aria-label={`Download ${item.fileName}`}
+                    className="block rounded-medium border border-base-default p-3 transition-colors hover:border-base-primary hover:bg-content-12 focus-visible:outline-2 focus-visible:outline-focus"
+                  >
+                    <DocumentLine document={item} />
+                  </a>
+                ) : (
+                  <div className="rounded-medium border border-base-default p-3">
+                    <DocumentLine document={item} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {(onUpload || onEmail) && (
+          <div className="flex flex-wrap gap-2">
+            {onEmail && documents.length > 0 && (
+              <BaseButton
+                text={`Email to ${who}`}
+                startContent={<Send />}
+                className="px-4"
+                onPress={onEmail}
+              />
+            )}
+            {onUpload && (
+              <BaseButton
+                text="Upload document"
+                varient="bordered"
+                className="text-base-primary px-4"
+                onPress={onUpload}
+              />
+            )}
+          </div>
+        )}
+        {documents.length > 0 && (
+          <p className="text-xs text-content-5">
+            Demo data: sample documents, not files from this invoice.
+          </p>
+        )}
+      </div>
+    </BaseCardWrapper>
+  );
+}
+
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg"];
 const ACCEPTED_EXTENSIONS = /\.(pdf|png|jpe?g)$/i;
 const MAX_BYTES = 10 * 1024 * 1024;
 
 // Checked by type and extension both: either alone is easy to get wrong.
 const fileProblem = (file: File | null) => {
-  if (!file) return "Choose a file";
+  if (!file) return "Choose a file to upload";
   if (!ACCEPTED_TYPES.includes(file.type) || !ACCEPTED_EXTENSIONS.test(file.name)) {
-    return "A PDF, PNG or JPEG file";
+    return `${file.name} isn't a PDF, PNG or JPEG file`;
   }
-  if (file.size > MAX_BYTES) return "At most 10 MB";
+  if (file.size === 0) return `${file.name} is empty`;
+  if (file.size > MAX_BYTES) {
+    return `${file.name} is ${formatFileSize(file.size)}; the limit is 10 MB`;
+  }
   return null;
 };
 
@@ -423,10 +785,16 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
     defaultValues: { kind: "POD", note: "" },
   });
 
-  const choose = (event: ChangeEvent<HTMLInputElement>) => {
-    const chosen = event.target.files?.[0] ?? null;
-    setFile(chosen);
-    setError(chosen ? fileProblem(chosen) : null);
+  // One document per upload. A rejected file isn't kept, so the zone stays
+  // ready for another and the file that was there before isn't lost.
+  const choose = (files: File[]) => {
+    if (files.length > 1) {
+      setError("Choose one file at a time");
+      return;
+    }
+    const problem = fileProblem(files[0]);
+    setError(problem);
+    if (!problem) setFile(files[0]);
   };
 
   const submit = handleSubmit((values) => {
@@ -448,29 +816,31 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
     >
       <Summary invoice={invoice} partyName={partyName} />
       <p className="text-xs text-content-5">
-        Documents from the TMS (BOL, labels, invoice PDFs) already show in the
-        Documents card. Add one the TMS doesn&apos;t have, such as a signed POD.
+        Add a document the TMS doesn&apos;t have, such as a signed POD.
+        Uploading isn&apos;t built yet: this checks the file only.
       </p>
       <BaseSelect
         name="kind"
         control={control}
         label="Document"
-        options={documentKinds}
+        options={
+          isCustomerInvoice(invoice) ? documentKinds : carrierDocumentKinds
+        }
         disallowEmptySelection
       />
-      <div className="flex flex-col gap-1">
-        <label htmlFor="invoice-document" className="text-xs text-base-primary">
-          File (PDF, PNG or JPEG, up to 10 MB)
-        </label>
-        <input
-          id="invoice-document"
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-          onChange={choose}
-          className="text-sm"
-        />
-        {error && <p className="text-xs text-danger">{error}</p>}
-      </div>
+      <FileDropZone
+        id="invoice-document"
+        label="File"
+        hint="PDF, PNG or JPEG, up to 10 MB."
+        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+        file={file}
+        error={error}
+        onSelect={choose}
+        onRemove={() => {
+          setFile(null);
+          setError(null);
+        }}
+      />
       <BaseInput
         name="note"
         control={control}

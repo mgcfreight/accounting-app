@@ -305,6 +305,7 @@ export default function SessionReport() {
           onOpenChange={(open) => !open && setEnding(null)}
           title="End Session"
           confirmText="End Session"
+          confirmColor="danger"
           isConfirming={end.isPending}
           onConfirm={() => end.mutate(ending)}
         >

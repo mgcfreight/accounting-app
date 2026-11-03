@@ -22,7 +22,7 @@ import {
   taxTreatmentLabels,
 } from "@/lib/constants";
 import { InvoiceDirection, PartyType, Permission } from "@/lib/enums";
-import { AgreementView, Paginated, PartyView } from "@/lib/interfaces";
+import { AgreementView, ContactView, Paginated, PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
 import {
@@ -30,10 +30,15 @@ import {
   errorMessage,
   getParty,
   listCarrierInvoices,
+  listContacts,
   listCustomerInvoices,
 } from "@/services";
 import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
-import { AgreementFormModal, AgreementSettingsModal } from "./party-modals";
+import {
+  AgreementFormModal,
+  AgreementSettingsModal,
+  ContactFormModal,
+} from "./party-modals";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
@@ -146,6 +151,7 @@ export default function PartyDetail({ type }: { type: PartyType }) {
               .filter(Boolean)
               .join(", ")}
           </Field>
+          <ProfileContacts party={data} canEdit={can(Permission.PartiesEdit)} />
         </div>
       </BaseCardWrapper>
 
@@ -373,6 +379,94 @@ function Agreements({
         </div>
       )}
     </div>
+  );
+}
+
+// What a contact is sent, as short tags.
+const contactTags = (contact: ContactView, isShipper: boolean) =>
+  [
+    contact.receivesInvoices && "Invoices & documents",
+    contact.receivesReminders && "Reminders",
+    isShipper && contact.receivesStatements && "Statements",
+  ].filter((tag): tag is string => !!tag);
+
+const linkButton = "text-base-primary underline text-sm";
+
+// The party's contacts as Profile lines: who the invoice and document emails
+// go to. Those who may edit parties add and change them here; retired ones
+// are left out.
+function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolean }) {
+  const isShipper = party.type === PartyType.Shipper;
+  const [editing, setEditing] = useState<ContactView | "new" | null>(null);
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", party.id],
+    queryFn: ({ signal }) => listContacts(party.id, signal),
+  });
+  const active = (contacts.data ?? []).filter((contact) => contact.isActive);
+  const addButton = canEdit && (
+    <button type="button" className={linkButton} onClick={() => setEditing("new")}>
+      Add contact
+    </button>
+  );
+
+  return (
+    <>
+      {contacts.isError ? (
+        <Field label="Contact">
+          <span className="text-base-danger">Couldn&apos;t load the contacts.</span>{" "}
+          <button type="button" className={linkButton} onClick={() => void contacts.refetch()}>
+            Try again
+          </button>
+        </Field>
+      ) : contacts.isPending ? (
+        <Field label="Contact">
+          <span className="text-content-5">Loading…</span>
+        </Field>
+      ) : active.length === 0 ? (
+        <Field label="Contact">
+          <span className="text-content-5">
+            None yet: invoices and documents can&apos;t be emailed until one is added.
+          </span>{" "}
+          {addButton}
+        </Field>
+      ) : (
+        <>
+          {active.map((contact, index) => {
+            const tags = contactTags(contact, isShipper);
+            return (
+              <Field key={contact.id} label={index === 0 ? "Contact" : "Also"}>
+                {contact.name} · <span className="break-all">{contact.email}</span>
+                {contact.phone && ` · ${contact.phone}`}
+                {tags.length > 0 && (
+                  <span className="text-content-5"> ({tags.join(", ")})</span>
+                )}
+                {canEdit && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className={linkButton}
+                      aria-label={`Edit ${contact.name}`}
+                      onClick={() => setEditing(contact)}
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+              </Field>
+            );
+          })}
+          {addButton && <p>{addButton}</p>}
+        </>
+      )}
+      {editing && (
+        <ContactFormModal
+          party={party}
+          contact={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </>
   );
 }
 

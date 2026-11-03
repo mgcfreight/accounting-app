@@ -187,6 +187,8 @@ export interface Attachment {
   id: string;
   kind: "BOL" | "POD" | "MGC_INVOICE" | "OTHER";
   fileName: string;
+  // Where the file opens, on this app's own origin. Unset when there's none.
+  url?: string;
 }
 
 export interface HistoryEntry {
@@ -421,6 +423,22 @@ export interface PartyView {
   businessEmail?: string | null;
   // Newest first. Only from the single-party endpoint.
   agreements?: AgreementView[];
+}
+
+// A person at a shipper or carrier, and what they're sent. Never deleted:
+// isActive false retires one. Emails are stored lower-case, one per party.
+export interface ContactView {
+  id: string;
+  partyId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  receivesInvoices: boolean;
+  receivesReminders: boolean;
+  receivesStatements: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // The seven numbers that tell a party which load an invoice is for.

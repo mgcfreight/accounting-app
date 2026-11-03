@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Permission, SystemRoleId } from "@/lib/enums";
 import {
   carrierInvoiceSchema,
+  contactSchema,
   customerInvoiceSchema,
   meSchema,
   permissionCatalogSchema,
@@ -70,6 +71,35 @@ describe("userSchema", () => {
       ...user
     } = me;
     expect(userSchema.parse(user).role.name).toBe("Viewer");
+  });
+});
+
+describe("contactSchema", () => {
+  // GET /party/contacts, one row, as the API's ContactView sends it.
+  const contact = {
+    id: "pct_AP00000001",
+    partyId: "pty_4fK9qZ0aB1",
+    name: "Accounts Payable",
+    email: "ap@acmefoods.com",
+    phone: null,
+    receivesInvoices: true,
+    receivesReminders: true,
+    receivesStatements: false,
+    isActive: true,
+    createdAt: "2026-10-01T09:30:00.000Z",
+    updatedAt: "2026-10-01T09:30:00.000Z",
+  };
+
+  it("reads a contact and what it receives", () => {
+    const parsed = contactSchema.parse(contact);
+    expect(parsed.email).toBe("ap@acmefoods.com");
+    expect(parsed.receivesInvoices).toBe(true);
+    expect(parsed.phone).toBeNull();
+  });
+
+  it("refuses a contact without an email", () => {
+    const { email: _email, ...withoutEmail } = contact;
+    expect(contactSchema.safeParse(withoutEmail).success).toBe(false);
   });
 });
 

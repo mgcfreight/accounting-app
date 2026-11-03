@@ -132,5 +132,10 @@ export const TMS_INVOICE_CODE_PATTERN = /^[A-Za-z0-9]{6}$/;
 export const FX_RATE_PATTERN = /^(?!0+(\.0+)?$)\d{1,6}(\.\d{1,6})?$/;
 export const QUANTITY_PATTERN = /^(?!0+(\.0+)?$)\d{1,9}(\.\d{1,3})?$/;
 export const UNIT_PRICE_PATTERN = /^\d{1,10}(\.\d{1,4})?$/;
+// A line amount typed as quantity 1: a unit price, but to the cent, so the
+// API has nothing to round.
+export const LINE_AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
+// A base price to work commission from: above 0, up to 2 decimals.
+export const BASE_PRICE_PATTERN = /^(?!0+(\.0+)?$)\d{1,10}(\.\d{1,2})?$/;
 export const COUNTRY_PATTERN = /^[A-Z]{2}$/;
 export const REGION_PATTERN = /^[A-Z]{2,3}$/;

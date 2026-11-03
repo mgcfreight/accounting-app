@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   AlertBanner,
   BaseButton,
+  BaseCheckbox,
   BaseInput,
   BaseSwitch,
   BaseTable,
@@ -117,10 +118,13 @@ export default function TaxRates() {
     <div className="border-t-1 py-6 flex flex-col gap-4">
       <AlertBanner message="Verify every rate with MGC's accountant before go-live. Whether provincial PST applies to freight is still to be confirmed." />
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={showHistory} onChange={(e) => setShowHistory(e.target.checked)} />
+        <BaseCheckbox
+          isSelected={showHistory}
+          onValueChange={setShowHistory}
+          classNames={{ label: "text-sm" }}
+        >
           Show ended rates
-        </label>
+        </BaseCheckbox>
         <BaseButton text="Add Tax Rate" className="rounded-full px-6" startContent={<Add />} onPress={() => open()} />
       </div>
       {rates.isError && (

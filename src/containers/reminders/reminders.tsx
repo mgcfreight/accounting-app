@@ -32,6 +32,7 @@ import { Reminder } from "@/lib/interfaces";
 import { mockReminders, REMINDER_DAYS_BEFORE_DUE } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { moneyText } from "../reports/export-table";
 
 type View = "all" | ReminderStatus;
@@ -179,7 +180,7 @@ export default function Reminders() {
   const renderCell = (reminder: Reminder, key: string) => {
     switch (key) {
       case "invoice":
-        return <span className="font-bold whitespace-nowrap">{reminder.invoiceNumber}</span>;
+        return <DemoInvoiceLink number={reminder.invoiceNumber} />;
       case "party":
         return (
           <PartyAvatar

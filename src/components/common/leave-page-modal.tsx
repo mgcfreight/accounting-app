@@ -1,7 +1,7 @@
 import FormModal from "./form-modal";
 
 // Asks before leaving a form with unsaved edits (see useUnsavedChanges).
-// Cancel, Esc or a click outside keeps the user on the page.
+// Cancel or Esc keeps the user on the page.
 export default function LeavePageModal({
   isOpen,
   onStay,

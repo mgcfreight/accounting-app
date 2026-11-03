@@ -202,7 +202,9 @@ export default function ShipmentForm() {
       void queryClient.invalidateQueries({ queryKey: ["shipments"] });
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
       leaving.allowLeave();
-      navigate(shipmentHref(shipment));
+      // Replaces the form in history, so Back from the new shipment doesn't
+      // reopen an empty form.
+      navigate(shipmentHref(shipment), { replace: true });
     },
     onError: (error) => toast.error(errorMessage(error)),
   });

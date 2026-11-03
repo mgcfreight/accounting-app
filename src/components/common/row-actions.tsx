@@ -23,8 +23,10 @@ export type RowAction = {
 };
 
 // The "…" menu at the end of mokal-app's table rows. A row with one action
-// shows it as a button instead: a menu of one is a click for nothing.
+// shows it as a button instead: a menu of one is a click for nothing, and a
+// row with none shows nothing rather than a menu that opens empty.
 export default function RowActions({ actions }: { actions: RowAction[] }) {
+  if (actions.length === 0) return null;
   if (actions.length === 1) {
     return <RowActionButton action={actions[0]} />;
   }

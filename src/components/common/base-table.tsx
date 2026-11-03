@@ -66,13 +66,17 @@ export default function BaseTable<T>({
     <Table
       aria-label={ariaLabel}
       aria-busy={refreshing}
-      bottomContentPlacement="inside"
+      // The pager sits outside the scrolling wrapper, so wide rows scroll
+      // sideways with the scrollbar above the pager and the pager stays put.
+      // The card's padding and background move from wrapper to base.
+      bottomContentPlacement="outside"
       selectionMode={selectMode}
       onSelectionChange={onSelectionChange}
       sortDescriptor={toSortDescriptor(sort)}
       onSortChange={handleSortChange}
       classNames={{
-        wrapper: "shadow-none",
+        base: "gap-2 p-4 bg-content1 rounded-large",
+        wrapper: "p-0 shadow-none rounded-none",
         th: [
           "bg-transparent",
           "text-default-500",

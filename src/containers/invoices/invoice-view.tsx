@@ -253,7 +253,7 @@ export default function InvoiceViewCell({
           {/* A revised invoice: its earlier versions are on its page. */}
           {invoice.revision > 0 && (
             <StatusChip
-              text={`Version ${invoice.revision + 1}`}
+              text={`v${invoice.revision + 1}`}
               tone="secondary"
               className="px-2 py-0.5"
             />

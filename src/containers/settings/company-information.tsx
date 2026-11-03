@@ -1,15 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
   BaseButton,
   BaseInput,
   ErrorState,
-  LeavePageModal,
   TableSkeleton,
 } from "@/components/common";
 import { DownArrow } from "@/components/icons";
-import { useUnsavedChanges } from "@/hooks";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import { CompanySettings } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
@@ -47,7 +46,13 @@ export const SETTINGS_QUERY = { company: ["settings", "company"] } as const;
 
 // Printed on every invoice PDF and email (settings key `company`). Until an
 // Admin saves it, every field is empty — the API invents nothing.
-export default function CompanyInformation() {
+// The Settings page asks before leaving with unsaved edits; this section
+// reports them through `onDirtyChange`.
+export default function CompanyInformation({
+  onDirtyChange,
+}: {
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const company = useQuery({
     queryKey: SETTINGS_QUERY.company,
@@ -63,7 +68,8 @@ export default function CompanyInformation() {
     mode: "all",
     values: company.data && toForm(company.data),
   });
-  const leaving = useUnsavedChanges(Object.keys(dirtyFields).length > 0);
+  const isDirty = Object.keys(dirtyFields).length > 0;
+  useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
   const save = useMutation({
     mutationFn: (values: Company) =>
@@ -161,11 +167,6 @@ export default function CompanyInformation() {
           isLoading={save.isPending}
         />
       </div>
-      <LeavePageModal
-        isOpen={leaving.blocked}
-        onStay={leaving.stay}
-        onLeave={leaving.leave}
-      />
     </form>
   );
 }

@@ -6,6 +6,7 @@ import { useCan } from "@/components/providers/user-provider";
 import { currencyOptions, paymentMethodOptions } from "@/lib/constants";
 import { Permission } from "@/lib/enums";
 import { mockCarriers, mockShippers } from "@/lib/mock";
+import { isZeroMoney } from "@/lib/money";
 
 type FormValues = {
   direction: string;
@@ -129,9 +130,11 @@ export default function RecordPaymentModal({
           control={control}
           label="Amount"
           placeholder="0.00"
+          inputMode="decimal"
           rules={{
             required: "Enter the amount",
             pattern: { value: AMOUNT, message: "Enter the amount with cents, e.g. 1500.00" },
+            validate: (value) => !isZeroMoney(value) || "Enter more than 0.00",
           }}
         />
         <BaseInput
@@ -139,6 +142,7 @@ export default function RecordPaymentModal({
           control={control}
           label="Bank fee (optional)"
           placeholder="0.00"
+          inputMode="decimal"
           rules={{
             validate: (value) =>
               !value || AMOUNT.test(value) || "Enter the fee with cents, e.g. 15.00",

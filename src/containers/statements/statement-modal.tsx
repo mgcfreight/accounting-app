@@ -28,6 +28,7 @@ import {
 } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { DemoInvoiceLink, DemoInvoiceLinks } from "../invoices/demo-invoice-link";
 import { exportTable, moneyText } from "../reports/export-table";
 
 const columns: BaseTableColumn[] = [
@@ -212,7 +213,7 @@ export default function StatementModal({
         renderCell={(row, key) => {
           switch (key) {
             case "number":
-              return <span className="font-bold">{row.number}</span>;
+              return <DemoInvoiceLink number={row.number} />;
             case "invoiceDate":
               return <span className="whitespace-nowrap">{formatDate(row.invoiceDate)}</span>;
             case "dueDate":
@@ -250,7 +251,9 @@ export default function StatementModal({
                 return <Money amount={row.amount} currency={row.currency} />;
               case "appliedTo":
                 return row.allocations.length ? (
-                  appliedToText(row)
+                  <DemoInvoiceLinks
+                    numbers={row.allocations.map((allocation) => allocation.invoiceNumber)}
+                  />
                 ) : (
                   <span className="text-gray-500">{appliedToText(row)}</span>
                 );

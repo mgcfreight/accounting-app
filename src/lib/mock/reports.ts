@@ -120,39 +120,41 @@ export const mockReports = [
     key: "summary",
     title: "Monthly / Quarterly Summary",
     description:
-      "Revenue, carrier cost, gross margin, sales tax (GST/HST/QST) collected and paid, money collected and paid out.",
+      "The headline numbers for one period: what MGC billed, what carriers cost, the margin, sales tax, and money in and out.",
     formats: ["Excel", "PDF"],
   },
   {
     key: "pnl-monthly",
-    title: "P&L Monthly Sheet",
-    description: "Month-by-month revenue − carrier cost = gross margin, margin %.",
+    title: "Profit & Loss Monthly Sheet",
+    description:
+      "Revenue, carrier cost and gross margin for each month in the period, with the period's total.",
     formats: ["Excel", "PDF"],
   },
   {
     key: "pnl-party",
-    title: "P&L by Shipper / Carrier / Shipment",
-    description: "Revenue, cost, margin and margin % for each.",
-    formats: ["Excel", "PDF"],
-  },
-  {
-    key: "aging",
-    title: "Aging (Receivable and Payable)",
+    title: "Profit & Loss by Shipper and Carrier",
     description:
-      "Current, 1–30, 31–60, 61–90, 90+ per party, with disputed amounts in their own column.",
+      "Revenue, carrier cost and margin for each shipper and each carrier, to see who earns and who costs.",
     formats: ["Excel", "PDF"],
   },
   {
     key: "tax",
     title: "Tax Report (HST/GST)",
     description:
-      "Tax collected on shipper invoices vs input tax credits on carrier invoices, by period and province.",
+      "Sales tax collected on shipper invoices against input tax credits on carrier invoices, by province.",
+    formats: ["Excel", "PDF"],
+  },
+  {
+    key: "aging",
+    title: "Aging (Receivable and Payable)",
+    description:
+      "What shippers owe MGC and what MGC owes carriers, grouped by days past due. Disputed amounts are shown separately.",
     formats: ["Excel", "PDF"],
   },
   {
     key: "statements",
     title: "Statements",
-    description: "Per shipper or carrier, for any date range.",
+    description: "Account statements for one shipper or carrier, for any date range.",
     formats: ["PDF"],
   },
   {

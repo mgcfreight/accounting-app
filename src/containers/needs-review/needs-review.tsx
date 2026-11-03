@@ -26,6 +26,7 @@ import { Dispute, ReviewItem } from "@/lib/interfaces";
 import { mockDisputes, mockReviewItems } from "@/lib/mock";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 
 type View = "changes" | "disputes";
 
@@ -92,10 +93,10 @@ export default function NeedsReview() {
         );
       case "shipment":
         return <span className="font-mono">{item.shipmentId}</span>;
-      // Demo invoices aren't in the API, so their numbers aren't links: the
-      // invoice page would find nothing.
+      // Demo invoices aren't in the API, so their numbers link only in
+      // development (DemoInvoiceLink).
       case "invoice":
-        return <span className="font-bold">{item.invoiceNumber}</span>;
+        return <DemoInvoiceLink number={item.invoiceNumber} />;
       case "party":
         return <PartyAvatar name={item.partyName} tone="success" />;
       case "previous":
@@ -124,7 +125,7 @@ export default function NeedsReview() {
   const renderDispute = (dispute: Dispute, key: string) => {
     switch (key) {
       case "invoice":
-        return <span className="font-bold">{dispute.invoiceNumber}</span>;
+        return <DemoInvoiceLink number={dispute.invoiceNumber} />;
       case "party":
         return (
           <PartyAvatar

@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import {
   BaseInput,
   BaseSelect,
@@ -14,7 +15,16 @@ import {
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import {
+  limitParam,
+  oneOf,
+  pageParam,
+  searchParam,
+  useDebouncedValue,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import {
   CarrierInvoiceStatus,
   CustomerInvoiceStatus,
@@ -99,6 +109,48 @@ const columnsFor = (direction: InvoiceDirection): BaseTableColumn[] => [
 
 const filterTrigger = { trigger: "bg-white border-none h-12 rounded-lg" };
 
+const BLANK: Filters = { search: "", status: ALL, payment: ALL };
+const URL_DEFAULTS = { ...BLANK, sort: "", order: "", page: "1", limit: "10" };
+
+// The filters, sort and page as kept in the URL (see useListUrlState): only
+// the values this list offers are read.
+const urlSchemaFor = (direction: InvoiceDirection) =>
+  z.object({
+    search: searchParam(64),
+    status: oneOf(
+      statusOptionsFor(direction).map((option) => option.value),
+      ALL
+    ),
+    payment: oneOf(
+      paymentOptions.map((option) => option.value),
+      ALL
+    ),
+    sort: oneOf(
+      columnsFor(direction).flatMap((column) =>
+        column.sortable && column.sortKey ? [column.sortKey] : []
+      ),
+      ""
+    ),
+    order: oneOf(["asc", "desc"], "asc"),
+    page: pageParam,
+    limit: limitParam(),
+  });
+
+const sortFrom = (
+  direction: InvoiceDirection,
+  sortKey: string,
+  order: string
+): TableSort | null => {
+  const column = columnsFor(direction).find((c) => c.sortKey === sortKey);
+  return column
+    ? {
+        column: column.key,
+        sortKey,
+        direction: order === "desc" ? "desc" : "asc",
+      }
+    : null;
+};
+
 // The shipper (AR) and carrier (AP) invoice lists share one container, as
 // they share one design (§9: "Carrier invoices: same as above"). Filtered,
 // sorted and paged by the API.
@@ -114,20 +166,41 @@ export default function InvoiceList({
     action: InvoiceAction;
     invoice: InvoiceView;
   } | null>(null);
-  const [sort, setSort] = useState<TableSort | null>(null);
-  const {
-    control,
-    reset,
-    formState: { isDirty },
-  } = useForm<Filters>({
-    defaultValues: { search: "", status: ALL, payment: ALL },
+  const fromUrl = useListUrlState(urlSchemaFor(direction));
+  const [sort, setSort] = useState<TableSort | null>(() =>
+    sortFrom(direction, fromUrl.sort, fromUrl.order)
+  );
+  const { control, reset } = useForm<Filters>({
+    defaultValues: {
+      search: fromUrl.search,
+      status: fromUrl.status,
+      payment: fromUrl.payment,
+    },
   });
-  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
+  const typed = useWatch({ control, name: "search" });
+  const search = useDebouncedValue(typed.trim());
   const status = useWatch({ control, name: "status" });
   const payment = useWatch({ control, name: "payment" });
+  // Against the blank filters, not the form's defaults: a list opened with
+  // filters from the URL can still clear them.
+  const filtered = typed !== "" || status !== ALL || payment !== ALL;
 
   const paging = useServerPaging(
-    JSON.stringify([direction, search, status, payment, sort])
+    JSON.stringify([direction, search, status, payment, sort]),
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    {
+      search,
+      status,
+      payment,
+      sort: sort?.sortKey ?? "",
+      order: sort ? sort.direction : "",
+      page: String(paging.page),
+      limit: String(paging.limit),
+    },
+    URL_DEFAULTS
   );
   const params = {
     page: paging.page,
@@ -198,6 +271,7 @@ export default function InvoiceList({
               ? "Invoice # (start of it) or exact BOL, PO, PRO…"
               : "Reference #, carrier bill # or exact BOL, PO, PRO…"
           }
+          aria-label="Search invoices"
           endContent={<SearchNormalSm />}
         />
         <BaseSelect
@@ -218,7 +292,7 @@ export default function InvoiceList({
           aria-label="Payment"
           disallowEmptySelection
         />
-        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
+        <ClearFiltersButton active={filtered} onClear={() => reset(BLANK)} />
       </FilterBar>
       {demo && <DemoInvoicesBanner list />}
       <Card>

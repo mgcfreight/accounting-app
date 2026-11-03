@@ -1,8 +1,10 @@
-import { Card, CardBody } from "@heroui/react";
+import { Tab, Tabs } from "@heroui/react";
+import { ReactNode, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { PiFileXls, PiFilePdf, PiFileCsv } from "react-icons/pi";
 import { Link } from "react-router";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   AgingTable,
   BaseButton,
@@ -10,11 +12,11 @@ import {
   BaseSelect,
   BaseTable,
   DetailRow,
-  FilterBar,
   Money,
 } from "@/components/common";
 import { ReportingIcon } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
+import { oneOf, useListUrlState, useSyncListUrl } from "@/hooks";
 import { Currency, PartyType, Permission } from "@/lib/enums";
 import { ExportColumn } from "@/lib/export";
 import {
@@ -45,9 +47,48 @@ const periodOptions = [
 ];
 
 const ALL_MONTHS = "all";
+const DEFAULT_PERIOD = "2026-10";
+const DEFAULT_REPORT = "summary";
 
-// The one period the demo's party P&L and tax summary cover.
-const BREAKDOWN_PERIOD = "2026-10";
+// The tab label for each report: short, so the row of tabs reads at a glance.
+const tabLabels: Record<string, string> = {
+  summary: "Summary",
+  "pnl-monthly": "Profit & Loss by month",
+  "pnl-party": "Profit & Loss by shipper and carrier",
+  tax: "Tax (HST/GST)",
+  aging: "Aging",
+  statements: "Statements",
+  accountant: "Accountant export",
+};
+
+// How each report is tied to a period. "choose" reports follow the period
+// picker; the demo's party P&L and tax summary only cover October, so they
+// show that period fixed rather than a picker that changes nothing; aging and
+// statements are not period reports.
+type PeriodScope = "choose" | "fixed" | "none";
+
+const periodScope: Record<string, PeriodScope> = {
+  summary: "choose",
+  "pnl-monthly": "choose",
+  accountant: "choose",
+  "pnl-party": "fixed",
+  tax: "fixed",
+  aging: "none",
+  statements: "none",
+};
+
+// The report and period are kept in the URL, so a refresh or a shared link
+// opens the same report for the same period.
+const urlSchema = z.object({
+  report: oneOf(
+    mockReports.map((report) => report.key),
+    DEFAULT_REPORT
+  ),
+  period: oneOf(
+    periodOptions.map((option) => option.key),
+    DEFAULT_PERIOD
+  ),
+});
 
 const formatIcon = {
   Excel: <PiFileXls className="text-lg" />,
@@ -62,6 +103,10 @@ const formatPermission = (format: string) =>
 const cad = (amount: string) => moneyText(amount, Currency.CAD);
 // A null margin % had no revenue to take a percentage of.
 const percent = (value: string | null) => (value === null ? "—" : `${value}%`);
+
+// The monthly sheet's rows; the period's total, when there is one, is the
+// last row and is marked so it can be set apart.
+type PnlRow = MonthlyPnl & { isTotal?: boolean };
 
 const pnlColumns: BaseTableColumn[] = [
   { key: "month", label: "Month" },
@@ -89,9 +134,9 @@ type TaxRow = Omit<TaxSummaryRow, "taxableSales" | "taxablePurchases"> & {
 };
 
 const taxColumns: BaseTableColumn[] = [
-  { key: "tax", label: "Tax" },
+  { key: "tax", label: "Province / Tax" },
   { key: "taxableSales", label: "Taxable Sales", align: "end" },
-  { key: "taxCollected", label: "Collected", align: "end" },
+  { key: "taxCollected", label: "Tax Collected", align: "end" },
   { key: "taxablePurchases", label: "Taxable Purchases", align: "end" },
   { key: "inputTaxCredits", label: "Input Tax Credits", align: "end" },
   { key: "netTax", label: "Net", align: "end" },
@@ -121,7 +166,7 @@ const taxLabel = (row: TaxRow) =>
 // The P&L sheet's rows for a period: its own months, then the period's total
 // when it is not a single month. "All months on file" shows every month and
 // no total; a period without months on file shows nothing.
-const pnlRowsFor = (periodKey: string, summary?: PeriodSummary): MonthlyPnl[] => {
+const pnlRowsFor = (periodKey: string, summary?: PeriodSummary): PnlRow[] => {
   if (periodKey === ALL_MONTHS) return mockMonthlyPnl;
   const months = mockPeriodMonths[periodKey];
   if (!months || !summary) return [];
@@ -130,11 +175,12 @@ const pnlRowsFor = (periodKey: string, summary?: PeriodSummary): MonthlyPnl[] =>
   return [
     ...rows,
     {
-      month: summary.period,
+      month: `Total, ${summary.period}`,
       revenue: summary.revenue,
       carrierCost: summary.carrierCost,
       grossMargin: summary.grossMargin,
       marginPercent: summary.marginPercent,
+      isTotal: true,
     },
   ];
 };
@@ -147,20 +193,42 @@ type SummaryField = {
   label: string;
   value: (summary: PeriodSummary) => string;
   currency: Currency | null;
+  strong?: boolean;
 };
 
-const summaryFields: SummaryField[] = [
-  { key: "revenue", label: "Revenue", value: (s) => s.revenue, currency: Currency.CAD },
-  { key: "carrierCost", label: "Carrier cost", value: (s) => s.carrierCost, currency: Currency.CAD },
-  { key: "grossMargin", label: "Gross margin", value: (s) => s.grossMargin, currency: Currency.CAD },
-  { key: "marginPercent", label: "Margin %", value: (s) => s.marginPercent, currency: null },
-  { key: "taxCollected", label: "Sales tax collected (GST/HST/QST)", value: (s) => s.taxCollected, currency: Currency.CAD },
-  { key: "inputTaxCredits", label: "Input tax credits", value: (s) => s.inputTaxCredits, currency: Currency.CAD },
-  { key: "collectedCad", label: "Money collected (CAD)", value: (s) => s.collected[Currency.CAD], currency: Currency.CAD },
-  { key: "collectedUsd", label: "Money collected (USD)", value: (s) => s.collected[Currency.USD], currency: Currency.USD },
-  { key: "paidOutCad", label: "Money paid out (CAD)", value: (s) => s.paidOut[Currency.CAD], currency: Currency.CAD },
-  { key: "paidOutUsd", label: "Money paid out (USD)", value: (s) => s.paidOut[Currency.USD], currency: Currency.USD },
+// The summary in three groups, each answering one question.
+const summaryGroups: { title: string; hint: string; fields: SummaryField[] }[] = [
+  {
+    title: "Profit",
+    hint: "What MGC billed shippers, what carriers cost, and what was left.",
+    fields: [
+      { key: "revenue", label: "Revenue", value: (s) => s.revenue, currency: Currency.CAD },
+      { key: "carrierCost", label: "Carrier cost", value: (s) => s.carrierCost, currency: Currency.CAD },
+      { key: "grossMargin", label: "Gross margin", value: (s) => s.grossMargin, currency: Currency.CAD, strong: true },
+      { key: "marginPercent", label: "Margin %", value: (s) => s.marginPercent, currency: null },
+    ],
+  },
+  {
+    title: "Sales tax",
+    hint: "Tax charged on shipper invoices and claimed back on carrier bills.",
+    fields: [
+      { key: "taxCollected", label: "Sales tax collected (GST/HST/QST)", value: (s) => s.taxCollected, currency: Currency.CAD },
+      { key: "inputTaxCredits", label: "Input tax credits", value: (s) => s.inputTaxCredits, currency: Currency.CAD },
+    ],
+  },
+  {
+    title: "Cash in and out",
+    hint: "Payments actually received and sent, in their own currency.",
+    fields: [
+      { key: "collectedCad", label: "Money collected (CAD)", value: (s) => s.collected[Currency.CAD], currency: Currency.CAD },
+      { key: "collectedUsd", label: "Money collected (USD)", value: (s) => s.collected[Currency.USD], currency: Currency.USD },
+      { key: "paidOutCad", label: "Money paid out (CAD)", value: (s) => s.paidOut[Currency.CAD], currency: Currency.CAD },
+      { key: "paidOutUsd", label: "Money paid out (USD)", value: (s) => s.paidOut[Currency.USD], currency: Currency.USD },
+    ],
+  },
 ];
+
+const summaryFields = summaryGroups.flatMap((group) => group.fields);
 
 const summaryValue = (summary: PeriodSummary, field: SummaryField) =>
   field.currency
@@ -190,25 +258,48 @@ const agingBuckets: { key: keyof AgingRow; label: string }[] = [
 
 const demo = (covers: string) => `${covers} · CAD · demo data`;
 
-// Design §10: every report with its exports, and the reports themselves for
-// the chosen period. The figures are demo data until the API has reports;
-// the Excel (CSV) and PDF (print view) exports are real files of them.
+const muted = "text-xs text-[#8F9494]";
+
+// Design §10: one report at a time, picked from the tabs. Each report says
+// what it is, which period it covers and what its amounts are in, with its
+// own exports beside it; the exports are the table shown. The figures are
+// demo data until the API has reports; the Excel (CSV) and PDF (print view)
+// exports are real files of them.
 export default function Reports() {
-  const { control } = useForm({ defaultValues: { period: "2026-10" } });
+  const fromUrl = useListUrlState(urlSchema);
+  const [reportKey, setReportKey] = useState(fromUrl.report);
+  const { control } = useForm({ defaultValues: { period: fromUrl.period } });
   const periodKey = useWatch({ control, name: "period" });
+  useSyncListUrl(
+    { report: reportKey, period: periodKey },
+    { report: DEFAULT_REPORT, period: DEFAULT_PERIOD }
+  );
+
+  const report = mockReports.find((item) => item.key === reportKey) ?? mockReports[0];
+  const scope = periodScope[report.key] ?? "none";
   const period = periodOptions.find((option) => option.key === periodKey);
   const summary = mockPeriodSummaries[periodKey];
   const pnlRows = pnlRowsFor(periodKey, summary);
+  // The chosen period as the data names it ("October 2026 (MTD)").
+  const chosenPeriod = summary?.period ?? period?.label ?? "";
   const { can } = useCan();
 
-  const breakdownNote = (covers: string) =>
-    periodKey === BREAKDOWN_PERIOD
-      ? `${covers}, CAD.`
-      : `Showing ${covers}: the demo data only has October.`;
+  // What each report covers: the period it shows, and what its amounts are in.
+  const coverage: Record<string, { period: string; note: string }> = {
+    summary: { period: chosenPeriod, note: SUMMARY_NOTE },
+    "pnl-monthly": { period: chosenPeriod, note: "CAD at invoice-date rates" },
+    "pnl-party": { period: mockPartyPnl.period, note: "CAD · the demo data only has October" },
+    tax: { period: mockTaxSummary.period, note: "CAD · the demo data only has October" },
+    aging: { period: "Open balances as of now", note: "each currency on its own line, not converted" },
+    statements: { period: "Any date range", note: "chosen on the Statements page" },
+    accountant: { period: chosenPeriod, note: "CSV for MGC's accounting software" },
+  };
+  const covers = coverage[report.key];
 
-  // What each report card's buttons export: the table shown below it. A
-  // report without one ("Accountant Export") is still a demo.
-  const exporters: Record<string, ((format: ExportFormat) => void) | undefined> = {
+  // What each report's buttons export: the table shown below it. A report
+  // whose table is empty for the period has nothing to export; one without
+  // a table ("Accountant Export") is still a demo.
+  const exporters: Record<string, ((format: ExportFormat) => void) | null | undefined> = {
     summary: summary
       ? (format) =>
           exportTable<SummaryField>(
@@ -223,21 +314,24 @@ export default function Reports() {
             },
             format
           )
-      : undefined,
-    "pnl-monthly": (format) =>
-      exportTable<MonthlyPnl>(
-        {
-          title: "P&L Monthly Sheet",
-          subtitle: demo(period?.label ?? ""),
-          columns: [{ label: "Month", value: (row) => row.month }, ...pnlExportColumns<MonthlyPnl>()],
-          rows: pnlRows,
-        },
-        format
-      ),
+      : null,
+    "pnl-monthly":
+      pnlRows.length > 0
+        ? (format) =>
+            exportTable<PnlRow>(
+              {
+                title: "Profit & Loss Monthly Sheet",
+                subtitle: demo(chosenPeriod),
+                columns: [{ label: "Month", value: (row) => row.month }, ...pnlExportColumns<PnlRow>()],
+                rows: pnlRows,
+              },
+              format
+            )
+        : null,
     "pnl-party": (format) =>
       exportTable<PartyPnl>(
         {
-          title: "P&L by Shipper and Carrier",
+          title: "Profit & Loss by Shipper and Carrier",
           subtitle: demo(mockPartyPnl.period),
           columns: [
             { label: "Side", value: (row) => (row.type === PartyType.Shipper ? "Shipper" : "Carrier") },
@@ -286,81 +380,242 @@ export default function Reports() {
       ),
   };
 
-  const exportReport = (key: string, title: string, format: string) => {
-    const run = exporters[key];
-    if (!run) {
-      toast.info(`${title} (${format}, ${period?.label}) — demo only. This export arrives with the API.`);
+  const exporter = exporters[report.key];
+
+  const exportReport = (format: string) => {
+    if (!exporter) {
+      toast.info(`${report.title} (${format}, ${covers.period}) — demo only. This export arrives with the API.`);
       return;
     }
-    run(format as ExportFormat);
+    exporter(format as ExportFormat);
   };
+
+  const actions =
+    report.key === "statements" ? (
+      <BaseButton
+        as={Link}
+        to="/statements/"
+        text="Open Statements"
+        varient="bordered"
+        className="text-base-primary rounded-xl px-3"
+      />
+    ) : (
+      report.formats
+        .filter((format) => can(formatPermission(format)))
+        .map((format) => (
+          <BaseButton
+            key={format}
+            text={`Export ${format}`}
+            varient="bordered"
+            className="text-base-primary rounded-xl px-3"
+            startContent={formatIcon[format as keyof typeof formatIcon]}
+            isDisabled={exporter === null}
+            onPress={() => exportReport(format)}
+          />
+        ))
+    );
 
   return (
     <div className="flex flex-col gap-6">
-      <FilterBar>
-        <span className="text-sm font-semibold text-base-primary">Period</span>
-        <BaseSelect
-          name="period"
-          control={control}
-          options={periodOptions}
-          className="w-full sm:w-56"
-          classNames={{ trigger: "bg-white border-none h-12 rounded-lg" }}
-          aria-label="Period"
-          disallowEmptySelection
-        />
-        <span className="text-xs text-[#8F9494]">Demo data until the API has reports.</span>
-      </FilterBar>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {mockReports.map((report) => (
-          <Card key={report.key} className="bg-white">
-            <CardBody className="flex flex-col justify-between gap-4 p-4">
-              <div className="flex gap-3">
-                <div className="min-w-12 h-12 rounded-2xl bg-icon-lightDarkBlue flex items-center justify-center">
-                  <ReportingIcon className="svg-primary-light" />
-                </div>
-                <div>
-                  <p className="font-semibold text-base-primary-900">{report.title}</p>
-                  <p className="text-xs text-[#8F9494] mt-1">{report.description}</p>
-                </div>
-              </div>
-              <div className="flex gap-2 justify-end">
-                {report.key === "statements" ? (
-                  <BaseButton
-                    as={Link}
-                    to="/statements/"
-                    text="Open Statements"
-                    varient="bordered"
-                    className="text-base-primary rounded-xl px-3"
-                  />
-                ) : (
-                  report.formats
-                    .filter((format) => can(formatPermission(format)))
-                    .map((format) => (
-                      <BaseButton
-                        key={format}
-                        text={format}
-                        varient="bordered"
-                        className="text-base-primary rounded-xl px-3"
-                        startContent={formatIcon[format as keyof typeof formatIcon]}
-                        onPress={() => exportReport(report.key, report.title, format)}
-                      />
-                    ))
-                )}
-              </div>
-            </CardBody>
-          </Card>
+      <Tabs
+        aria-label="Reports"
+        color="primary"
+        variant="underlined"
+        selectedKey={report.key}
+        onSelectionChange={(key) => setReportKey(String(key))}
+        // `base` is inline-flex and grows to fit every tab, which widens the
+        // page on a phone; capped, the tab list scrolls instead.
+        classNames={{
+          base: "max-w-full",
+          cursor: "bg-base-primary",
+        }}
+      >
+        {mockReports.map((item) => (
+          <Tab key={item.key} title={tabLabels[item.key] ?? item.title} />
         ))}
+      </Tabs>
+
+      <div className="bg-white rounded-lg shadow-md p-4 flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex gap-3">
+            <div className="min-w-12 h-12 rounded-2xl bg-icon-lightDarkBlue flex items-center justify-center">
+              <ReportingIcon className="svg-primary-light" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-base-primary-900">{report.title}</h2>
+              <p className={`${muted} mt-1 max-w-2xl`}>{report.description}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">{actions}</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t-2 border-base-default pt-4">
+          <span className="text-sm font-semibold text-base-primary">Period</span>
+          {scope === "choose" ? (
+            <BaseSelect
+              name="period"
+              control={control}
+              options={periodOptions}
+              className="w-full sm:w-56"
+              classNames={{ trigger: "h-10 rounded-lg", value: "text-sm" }}
+              aria-label="Period"
+              disallowEmptySelection
+            />
+          ) : (
+            <span className="text-sm font-semibold">{covers.period}</span>
+          )}
+          <span className={muted}>
+            {scope === "choose" && covers.period && <>Showing <strong>{covers.period}</strong> · </>}
+            {covers.note} · demo data until the API has reports
+          </span>
+        </div>
       </div>
 
-      {summary && (
-        <BaseCardWrapper heading={`Summary: ${summary.period}`}>
-          <p className="text-xs text-[#8F9494] mb-2">{SUMMARY_NOTE}.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-            {summaryFields.map((field) => (
+      {report.key === "summary" && <SummaryReport summary={summary} />}
+
+      {report.key === "pnl-monthly" && (
+        <BaseCardWrapper heading={`Profit & Loss by month: ${chosenPeriod}`}>
+          <p className={`${muted} mb-2`}>
+            Gross margin = revenue − carrier cost. Revenue counts issued
+            invoices only.
+          </p>
+          {pnlRows.length > 0 ? (
+            <BaseTable<PnlRow>
+              ariaLabel="Profit & Loss by month"
+              columns={pnlColumns}
+              data={pnlRows}
+              rowKey={(row) => row.month}
+              renderCell={(row, key) => {
+                const weight = row.isTotal ? "font-semibold" : "";
+                return key === "month" ? (
+                  <span className="font-semibold whitespace-nowrap">{row.month}</span>
+                ) : key === "marginPercent" ? (
+                  <span className={weight}>{percent(row.marginPercent)}</span>
+                ) : (
+                  <Money amount={row[key as keyof MonthlyPnl] as string} currency={Currency.CAD} className={weight} />
+                );
+              }}
+            />
+          ) : (
+            <EmptyReport>No months on file for {chosenPeriod}.</EmptyReport>
+          )}
+        </BaseCardWrapper>
+      )}
+
+      {report.key === "pnl-party" && (
+        <>
+          <p className={muted}>
+            The same shipments seen from each side: each table adds up to the
+            period&apos;s revenue, carrier cost and margin.
+          </p>
+          <PartyPnlCard title="By shipper" side="Shipper" rows={mockPartyPnl.shippers} />
+          <PartyPnlCard title="By carrier" side="Carrier" rows={mockPartyPnl.carriers} />
+        </>
+      )}
+
+      {report.key === "tax" && (
+        <BaseCardWrapper heading={`Tax by province: ${mockTaxSummary.period}`}>
+          <p className={`${muted} mb-2`}>
+            Tax collected on shipper invoices against input tax credits on
+            carrier bills. Net = tax collected − input tax credits.
+          </p>
+          <BaseTable<TaxRow>
+            ariaLabel="Tax report"
+            columns={taxColumns}
+            data={taxRows}
+            rowKey={(row) => row.key}
+            renderCell={(row, key) => {
+              switch (key) {
+                case "tax":
+                  return <span className="font-semibold whitespace-nowrap">{taxLabel(row)}</span>;
+                case "taxableSales":
+                case "taxablePurchases": {
+                  const amount = row[key];
+                  return amount ? (
+                    <Money amount={amount} currency={Currency.CAD} />
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  );
+                }
+                case "taxCollected":
+                case "inputTaxCredits":
+                case "netTax":
+                  return (
+                    <Money
+                      amount={row[key]}
+                      currency={Currency.CAD}
+                      className={row.isTotal ? "font-semibold" : ""}
+                    />
+                  );
+                default:
+                  return null;
+              }
+            }}
+          />
+        </BaseCardWrapper>
+      )}
+
+      {report.key === "aging" && (
+        <>
+          <BaseCardWrapper heading="Receivable: what shippers owe MGC">
+            <p className={`${muted} mb-2`}>Open shipper invoices, by days past their due date.</p>
+            <AgingTable rows={mockAging.receivable} />
+          </BaseCardWrapper>
+          <BaseCardWrapper heading="Payable: what MGC owes carriers">
+            <p className={`${muted} mb-2`}>Open carrier invoices, by days past their due date.</p>
+            <AgingTable rows={mockAging.payable} />
+          </BaseCardWrapper>
+        </>
+      )}
+
+      {report.key === "statements" && (
+        <BaseCardWrapper heading="Statements">
+          <p className="text-sm">
+            Statements are made per shipper or carrier on the Statements page,
+            where you pick the party and the date range. Use{" "}
+            <strong>Open Statements</strong> above.
+          </p>
+        </BaseCardWrapper>
+      )}
+
+      {report.key === "accountant" && (
+        <BaseCardWrapper heading={`Accountant export: ${chosenPeriod}`}>
+          <p className="text-sm">
+            A CSV file of the period&apos;s invoices, notes and payments, for
+            import into MGC&apos;s accounting software. There is no preview: it
+            arrives with the API.
+          </p>
+        </BaseCardWrapper>
+      )}
+    </div>
+  );
+}
+
+function SummaryReport({ summary }: { summary?: PeriodSummary }) {
+  if (!summary) {
+    return (
+      <BaseCardWrapper heading="Summary">
+        <EmptyReport>
+          There is no summary for all months on file. Pick a month, a quarter
+          or the year to date.
+        </EmptyReport>
+      </BaseCardWrapper>
+    );
+  }
+  return (
+    <BaseCardWrapper heading={`Summary: ${summary.period}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {summaryGroups.map((group) => (
+          <div key={group.title} className="flex flex-col gap-2">
+            <div>
+              <p className="text-sm font-semibold text-base-primary-900">{group.title}</p>
+              <p className={muted}>{group.hint}</p>
+            </div>
+            {group.fields.map((field) => (
               <DetailRow
                 key={field.key}
                 label={field.label}
+                strong={field.strong}
                 value={
                   field.currency ? (
                     <Money amount={field.value(summary)} currency={field.currency} />
@@ -371,105 +626,29 @@ export default function Reports() {
               />
             ))}
           </div>
-        </BaseCardWrapper>
-      )}
-
-      <BaseCardWrapper heading="P&L Monthly Sheet (CAD)">
-        <BaseTable<MonthlyPnl>
-          ariaLabel="P&L monthly"
-          columns={pnlColumns}
-          data={pnlRows}
-          rowKey={(row) => row.month}
-          renderCell={(row, key) =>
-            key === "month" ? (
-              <span className="font-semibold">{row.month}</span>
-            ) : key === "marginPercent" ? (
-              percent(row.marginPercent)
-            ) : (
-              <Money amount={row[key as keyof MonthlyPnl]} currency={Currency.CAD} />
-            )
-          }
-        />
-      </BaseCardWrapper>
-
-      <div className="flex flex-col gap-6">
-        <PartyPnlCard
-          title="P&L by Shipper"
-          side="Shipper"
-          rows={mockPartyPnl.shippers}
-          note={breakdownNote(mockPartyPnl.period)}
-        />
-        <PartyPnlCard
-          title="P&L by Carrier"
-          side="Carrier"
-          rows={mockPartyPnl.carriers}
-          note={breakdownNote(mockPartyPnl.period)}
-        />
+        ))}
       </div>
-
-      <BaseCardWrapper heading="Tax Report (HST/GST)">
-        <p className="text-xs text-[#8F9494] mb-2">
-          {breakdownNote(mockTaxSummary.period)} Tax collected on shipper
-          invoices against input tax credits on carrier bills.
-        </p>
-        <BaseTable<TaxRow>
-          ariaLabel="Tax report"
-          columns={taxColumns}
-          data={taxRows}
-          rowKey={(row) => row.key}
-          renderCell={(row, key) => {
-            switch (key) {
-              case "tax":
-                return <span className="font-semibold whitespace-nowrap">{taxLabel(row)}</span>;
-              case "taxableSales":
-              case "taxablePurchases": {
-                const amount = row[key];
-                return amount ? (
-                  <Money amount={amount} currency={Currency.CAD} />
-                ) : (
-                  <span className="text-gray-400">—</span>
-                );
-              }
-              case "taxCollected":
-              case "inputTaxCredits":
-              case "netTax":
-                return (
-                  <Money
-                    amount={row[key]}
-                    currency={Currency.CAD}
-                    className={row.isTotal ? "font-semibold" : ""}
-                  />
-                );
-              default:
-                return null;
-            }
-          }}
-        />
-      </BaseCardWrapper>
-
-      <BaseCardWrapper heading="Aging">
-        <AgingTable rows={[...mockAging.receivable, ...mockAging.payable]} />
-      </BaseCardWrapper>
-    </div>
+    </BaseCardWrapper>
   );
+}
+
+function EmptyReport({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-[#8F9494] py-6 text-center">{children}</p>;
 }
 
 function PartyPnlCard({
   title,
   side,
   rows,
-  note,
 }: {
   title: string;
   side: string;
   rows: PartyPnl[];
-  note: string;
 }) {
   return (
     <BaseCardWrapper heading={title}>
-      <p className="text-xs text-[#8F9494] mb-2">{note}</p>
       <BaseTable<PartyPnl>
-        ariaLabel={title}
+        ariaLabel={`Profit & Loss ${title.toLowerCase()}`}
         columns={partyColumns(side)}
         data={rows}
         rowKey={(row) => row.partyId}

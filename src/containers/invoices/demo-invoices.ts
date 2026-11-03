@@ -23,7 +23,7 @@ import { InvoiceView } from "./invoice-view";
 // real ones; there the API's error shows. Demo invoices are marked
 // (isDemoInvoice) so the page says so and offers nothing that would write.
 
-const DEMO_FALLBACK = import.meta.env.DEV;
+export const DEMO_FALLBACK = import.meta.env.DEV;
 
 const demoIds = new Set<string>();
 

@@ -2,6 +2,7 @@ import { Card } from "@heroui/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router";
 import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import {
   BaseInput,
   BaseTable,
@@ -14,7 +15,15 @@ import {
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import {
+  limitParam,
+  pageParam,
+  searchParam,
+  useDebouncedValue,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import { ShipmentSource } from "@/lib/enums";
 import { ShipmentView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
@@ -36,27 +45,43 @@ const columns: BaseTableColumn[] = [
   { key: "carrier", label: "Carrier" },
   { key: "lane", label: "Lane" },
   { key: "pickupDate", label: "Pickup" },
-  { key: "sell", label: "Sell" },
-  { key: "buy", label: "Buy" },
+  { key: "sell", label: "Sell", align: "end" },
+  { key: "buy", label: "Buy", align: "end" },
   { key: "source", label: "Source" },
   { key: "actions", label: "Actions", align: "center" },
 ];
+
+// The search and page as kept in the URL (see useListUrlState).
+const urlSchema = z.object({
+  search: searchParam(64),
+  page: pageParam,
+  limit: limitParam(),
+});
+const URL_DEFAULTS = { search: "", page: "1", limit: "10" };
 
 // Shipments from the TMS (§9), from the API's /shipment routes. Entering
 // one makes its customer and carrier invoices.
 export default function ShipmentList() {
   const navigate = useNavigate();
-  const {
-    control,
-    reset,
-    formState: { isDirty },
-  } = useForm({ defaultValues: { search: "" } });
-  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
+  const fromUrl = useListUrlState(urlSchema);
+  const { control, reset } = useForm({
+    defaultValues: { search: fromUrl.search },
+  });
+  const typed = useWatch({ control, name: "search" });
+  const search = useDebouncedValue(typed.trim());
 
   // The header's "New Shipment" (routes.config: shipments.create).
   useHeaderAction("new-shipment", () => navigate("/shipments/new/"));
 
-  const paging = useServerPaging(search);
+  const paging = useServerPaging(
+    search,
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    { search, page: String(paging.page), limit: String(paging.limit) },
+    URL_DEFAULTS
+  );
   const params = {
     page: paging.page,
     limit: paging.limit,
@@ -157,9 +182,13 @@ export default function ShipmentList() {
           className="max-w-sm"
           classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
           placeholder="Exact load #, MGC id, BOL, PO, PRO…"
+          aria-label="Search shipments"
           endContent={<SearchNormalSm />}
         />
-        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
+        <ClearFiltersButton
+          active={typed !== ""}
+          onClear={() => reset({ search: "" })}
+        />
       </FilterBar>
       <Card>
         {shipments.isError ? (

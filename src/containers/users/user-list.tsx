@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   AlertBanner,
   BaseInput,
+  BasePasswordInput,
   BaseSelect,
   BaseTable,
   ClearFiltersButton,
@@ -345,6 +346,7 @@ export default function UserList() {
           onOpenChange={(open) => !open && setPending(null)}
           title={`${confirmText[pending.kind]}: ${fullName(pending.user)}`}
           confirmText={confirmText[pending.kind]}
+          confirmColor={pending.kind === "disable" ? "danger" : "primary"}
           isConfirming={act.isPending}
           onConfirm={
             pending.kind === "password"
@@ -356,10 +358,9 @@ export default function UserList() {
         >
           <p className="text-sm">{explain(pending)}</p>
           {pending.kind === "password" && (
-            <BaseInput
+            <BasePasswordInput
               name="password"
               control={passwordForm.control}
-              type="password"
               autoComplete="new-password"
               label="New password"
               description={PASSWORD_RULE_TEXT}
