@@ -187,6 +187,8 @@ export interface Attachment {
   id: string;
   kind: "BOL" | "POD" | "MGC_INVOICE" | "OTHER";
   fileName: string;
+  // Where the file opens, on this app's own origin. Unset when there's none.
+  url?: string;
 }
 
 export interface HistoryEntry {

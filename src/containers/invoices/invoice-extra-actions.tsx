@@ -704,13 +704,26 @@ export function DocumentsCard({
             </p>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-wrap gap-2">
             {documents.map((item) => (
-              <li
-                key={item.id}
-                className="rounded-medium border border-base-default p-3"
-              >
-                <DocumentLine document={item} />
+              <li key={item.id} className="min-w-0 max-w-full sm:max-w-xs">
+                {/* Downloads the file under its own name, as the browser
+                    saves any download; `download` works only on our own
+                    origin, so only a same-origin path is linked. */}
+                {item.url?.startsWith("/") && !item.url.startsWith("//") ? (
+                  <a
+                    href={item.url}
+                    download={item.fileName}
+                    aria-label={`Download ${item.fileName}`}
+                    className="block rounded-medium border border-base-default p-3 transition-colors hover:border-base-primary hover:bg-content-12 focus-visible:outline-2 focus-visible:outline-focus"
+                  >
+                    <DocumentLine document={item} />
+                  </a>
+                ) : (
+                  <div className="rounded-medium border border-base-default p-3">
+                    <DocumentLine document={item} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
