@@ -17,25 +17,32 @@ const line = (description: string): ChargeValues => ({
 function Form({
   lines,
   layout,
+  showQuantity,
 }: {
   lines: ChargeValues[];
   layout?: "rows" | "table";
+  showQuantity?: boolean;
 }) {
-  const { control } = useForm({ defaultValues: { lines } });
+  const { control } = useForm({ defaultValues: { lines }, mode: "onChange" });
   return (
     <ChargeLines
       control={control}
       name="lines"
       layout={layout}
+      showQuantity={showQuantity}
       footer={<p>Subtotal footer</p>}
     />
   );
 }
 
-const renderLines = (lines: ChargeValues[], layout?: "rows" | "table") =>
+const renderLines = (
+  lines: ChargeValues[],
+  layout?: "rows" | "table",
+  showQuantity?: boolean
+) =>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <Form lines={lines} layout={layout} />
+      <Form lines={lines} layout={layout} showQuantity={showQuantity} />
     </QueryClientProvider>
   );
 
@@ -61,6 +68,37 @@ describe("ChargeLines", () => {
 
     expect(descriptions()).toEqual(["Fuel"]);
     expect(screen.queryByRole("button", { name: "Remove charge" })).toBeNull();
+  });
+
+  describe("the price", () => {
+    const typePrice = async (value: string) => {
+      const price = screen.getByRole("textbox", { name: /Unit price|Amount/ });
+      await userEvent.type(price, value);
+    };
+
+    it("takes a unit price to 4 decimals beside a quantity", async () => {
+      renderLines([line("Freight")]);
+
+      await typePrice("100.1255");
+
+      expect(screen.queryByText("Up to 4 decimals")).toBeNull();
+    });
+
+    it("takes a line amount to the cent only, without a quantity", async () => {
+      renderLines([line("Freight")], "table", false);
+
+      await typePrice("100.125");
+
+      expect(screen.getByText("Up to 2 decimals")).toBeTruthy();
+    });
+
+    it("accepts a line amount with 2 decimals", async () => {
+      renderLines([line("Freight")], "table", false);
+
+      await typePrice("100.12");
+
+      expect(screen.queryByText("Up to 2 decimals")).toBeNull();
+    });
   });
 
   describe("as a table", () => {

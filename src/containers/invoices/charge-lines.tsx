@@ -11,7 +11,7 @@ import {
 } from "react-hook-form";
 import { BaseButton, BaseInput, BaseSelect } from "@/components/common";
 import { Trash } from "@/components/icons";
-import { QUANTITY_PATTERN, UNIT_PRICE_PATTERN } from "@/lib/constants";
+import { LINE_AMOUNT_PATTERN, QUANTITY_PATTERN, UNIT_PRICE_PATTERN } from "@/lib/constants";
 import { InvoiceLineView } from "@/lib/interfaces";
 import { Charge, getInvoiceChargeTypes } from "@/services";
 
@@ -103,6 +103,14 @@ export default function ChargeLines<T extends FieldValues>({
   const path = (index: number, field: keyof ChargeValues) =>
     `${name}.${index}.${field}` as Path<T>;
   const add = () => append(emptyCharge as FieldArray<T, ArrayPath<T>>);
+  // Without a quantity the price is the whole line amount, so it's money:
+  // 2 decimals, not a unit price's 4.
+  const priceRules = {
+    required: "Required",
+    pattern: showQuantity
+      ? { value: UNIT_PRICE_PATTERN, message: "Up to 4 decimals" }
+      : { value: LINE_AMOUNT_PATTERN, message: "Up to 2 decimals" },
+  };
 
   const loadError = chargeTypes.isError && (
     <p className="text-xs text-base-danger">
@@ -203,10 +211,7 @@ export default function ChargeLines<T extends FieldValues>({
                     size="sm"
                     inputMode="decimal"
                     classNames={{ input: "text-xs text-right tabular-nums" }}
-                    rules={{
-                      required: "Required",
-                      pattern: { value: UNIT_PRICE_PATTERN, message: "Up to 4 decimals" },
-                    }}
+                    rules={priceRules}
                   />
                 )}
                 <div className="flex justify-end sm:pt-0.5">
@@ -280,10 +285,7 @@ export default function ChargeLines<T extends FieldValues>({
             label={priceLabel}
             placeholder="0.00"
             className={showQuantity ? "sm:col-span-2" : "sm:col-span-3"}
-            rules={{
-              required: "Required",
-              pattern: { value: UNIT_PRICE_PATTERN, message: "Up to 4 decimals" },
-            }}
+            rules={priceRules}
           />
           <div className="sm:col-span-1 flex sm:h-14 sm:items-center">
             {fields.length > 1 && (
