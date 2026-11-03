@@ -17,7 +17,6 @@ export default function LeavePageModal({
       onOpenChange={(open) => !open && onStay()}
       title="Leave without saving?"
       confirmText="Leave"
-      confirmColor="danger"
       onConfirm={onLeave}
       size="sm"
     >
