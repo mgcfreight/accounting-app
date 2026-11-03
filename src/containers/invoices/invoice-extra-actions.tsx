@@ -458,6 +458,7 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
                 value={item.id}
                 classNames={{
                   base: "m-0 w-full max-w-full rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
+                  wrapper: "text-white",
                   label: "min-w-0 w-full",
                 }}
               >
