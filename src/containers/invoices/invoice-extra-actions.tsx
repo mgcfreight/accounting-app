@@ -1,4 +1,4 @@
-import { Checkbox, CheckboxGroup } from "@heroui/react";
+import { CheckboxGroup } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -8,6 +8,7 @@ import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
+  BaseCheckbox,
   BaseInput,
   BaseSelect,
   BaseSwitch,
@@ -455,17 +456,16 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
             classNames={{ wrapper: "flex-wrap gap-2" }}
           >
             {documents.map((item) => (
-              <Checkbox
+              <BaseCheckbox
                 key={item.id}
                 value={item.id}
                 classNames={{
                   base: "m-0 min-w-0 max-w-full sm:max-w-xs rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
-                  wrapper: "text-white",
                   label: "min-w-0 w-full",
                 }}
               >
                 <DocumentLine document={item} />
-              </Checkbox>
+              </BaseCheckbox>
             ))}
           </CheckboxGroup>
         </div>
