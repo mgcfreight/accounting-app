@@ -445,7 +445,8 @@ export function AgreementFormModal({
       confirmText="Add Agreement"
       isConfirming={save.isPending}
       onConfirm={handleSubmit((values) => save.mutate(values))}
-      size="2xl"
+      size="3xl"
+      className="xl:max-w-4xl"
     >
       <p className="text-xs text-content-5">
         The current open-ended agreement, if any, ends the day before this one

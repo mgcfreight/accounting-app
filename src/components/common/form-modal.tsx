@@ -21,6 +21,7 @@ export default function FormModal({
   confirmColor = "primary",
   requireConfirm = false,
   size = "md",
+  className,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,7 +39,10 @@ export default function FormModal({
   // Only the confirm button closes it: no Cancel, Esc or close button. For
   // something shown once that the user must act on, like recovery codes.
   requireConfirm?: boolean;
-  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "5xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "5xl";
+  // On the modal itself: e.g. responsive max-widths to widen it on wide
+  // screens beyond `size`.
+  className?: string;
 }) {
   // While saving, the modal stays open — Cancel, Esc, the close button and a
   // click outside are all ignored — so the outcome is seen and the form can't
@@ -67,6 +71,7 @@ export default function FormModal({
     <Modal
       isOpen={isOpen}
       size={size}
+      className={className}
       scrollBehavior="inside"
       onOpenChange={handleOpenChange}
       isDismissable={!locked && !onConfirm}
