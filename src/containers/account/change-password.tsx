@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
+  AlertBanner,
   BaseButton,
   BaseCardWrapper,
   BasePasswordInput,
@@ -33,7 +34,7 @@ export default function ChangePassword() {
     <BaseCardWrapper heading="Password">
       <form
         noValidate
-        className="flex flex-col gap-4 max-w-md"
+        className="flex flex-col gap-4"
         onSubmit={handleSubmit((values) => change.mutate(values))}
       >
         <BasePasswordInput
@@ -66,14 +67,12 @@ export default function ChangePassword() {
               value === getValues("newPassword") || "The passwords don't match",
           }}
         />
-        <p className="text-xs text-content-5">
-          Changing your password signs you out on every other device.
-        </p>
+        <AlertBanner message="Changing your password signs you out on every other device." />
         <div>
           <BaseButton
             type="submit"
             text="Change Password"
-            className="px-6"
+            className="w-full px-6 sm:w-auto"
             isLoading={change.isPending}
           />
         </div>

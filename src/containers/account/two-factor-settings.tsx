@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   BaseCardWrapper,
   BaseInput,
   BasePasswordInput,
-  DetailRow,
   FormModal,
   RecoveryCodes,
   StatusChip,
@@ -30,6 +29,30 @@ type Flow = "authenticator" | "email" | "disable" | "recovery-codes" | null;
 type Values = { code: string; password: string };
 
 const SIX_DIGITS = /^\d{6}$/;
+// At or below this many recovery codes, the page warns to make new ones.
+const LOW_RECOVERY_CODES = 3;
+
+// One way of signing in: what it is, its state, and its action, which sits
+// on the right on wider screens and below on a phone.
+function MethodRow({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <li className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-[#343A40]">{title}</p>
+        <p className="wrap-break-word text-xs text-content-5">{detail}</p>
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </li>
+  );
+}
 
 // The signed-in user's own two-factor sign-in. Admins must keep it on (the
 // API refuses to turn it off for them). Every step needs a fresh code.
@@ -118,68 +141,113 @@ export default function TwoFactorSettings() {
 
   return (
     <BaseCardWrapper heading="Two-Factor Sign-in">
-      <div className="flex flex-col gap-3 max-w-xl">
-        <DetailRow
-          label="Status"
-          value={
-            me.twoFactorEnabled ? (
-              <StatusChip text="On" tone="success" />
-            ) : (
-              <StatusChip text="Off" tone="warning" />
-            )
-          }
-        />
-        <DetailRow
-          label="Authenticator app"
-          value={twoFactor.authenticatorSetUp ? "Set up" : "Not set up"}
-        />
-        {twoFactor.authenticatorSetUp && (
-          <DetailRow
-            label="Recovery codes left"
-            value={me.recoveryCodesRemaining}
+      <div className="flex flex-col gap-4">
+        <div
+          role="status"
+          className={`flex items-start gap-3 rounded-lg border p-3 ${
+            me.twoFactorEnabled
+              ? "border-success bg-success-50"
+              : "border-warning bg-warning-50"
+          }`}
+        >
+          <StatusChip
+            text={me.twoFactorEnabled ? "On" : "Off"}
+            tone={me.twoFactorEnabled ? "success" : "warning"}
           />
-        )}
-        <div className="flex flex-wrap gap-3 mt-3">
-          {canApp && !twoFactor.authenticatorSetUp && (
-            <BaseButton
-              text="Set Up Authenticator App"
-              isLoading={start.isPending}
-              onPress={() => start.mutate("authenticator")}
+          <p className="text-sm text-[#343A40]">
+            {me.twoFactorEnabled
+              ? "Signing in needs your password and a code, so a stolen password alone can't get in."
+              : "Only your password protects this account. Turn on two-factor sign-in below."}
+          </p>
+        </div>
+
+        <ul className="flex flex-col divide-y divide-content-3 rounded-lg border border-base-default">
+          {(canApp || twoFactor.authenticatorSetUp) && (
+            <MethodRow
+              title="Authenticator app"
+              detail={
+                twoFactor.authenticatorSetUp
+                  ? "Set up. Codes come from the app on your phone."
+                  : "Not set up. Use an app like Google or Microsoft Authenticator."
+              }
+              action={
+                canApp &&
+                !twoFactor.authenticatorSetUp && (
+                  <BaseButton
+                    text="Set Up"
+                    className="w-full px-4 sm:w-auto"
+                    isLoading={start.isPending}
+                    onPress={() => start.mutate("authenticator")}
+                  />
+                )
+              }
             />
           )}
-          {canEmail && !me.twoFactorEnabled && (
-            <BaseButton
-              text="Use Email Codes"
-              varient="bordered"
-              className="text-base-primary"
-              isLoading={start.isPending}
-              onPress={() => start.mutate("email")}
+          {canEmail && (
+            <MethodRow
+              title="Email codes"
+              detail={`A 6-digit code sent to ${me.email} when you sign in.`}
+              action={
+                !me.twoFactorEnabled && (
+                  <BaseButton
+                    text="Use Email Codes"
+                    varient="bordered"
+                    className="w-full px-4 text-base-primary sm:w-auto"
+                    isLoading={start.isPending}
+                    onPress={() => start.mutate("email")}
+                  />
+                )
+              }
             />
           )}
           {twoFactor.authenticatorSetUp && (
-            <BaseButton
-              text="New Recovery Codes"
-              varient="bordered"
-              className="text-base-primary"
-              onPress={() => {
-                reset();
-                setFlow("recovery-codes");
-              }}
+            <MethodRow
+              title="Recovery codes"
+              detail={
+                <span
+                  className={
+                    me.recoveryCodesRemaining <= LOW_RECOVERY_CODES ? "text-base-danger" : ""
+                  }
+                >
+                  {me.recoveryCodesRemaining} left.{" "}
+                  {me.recoveryCodesRemaining <= LOW_RECOVERY_CODES
+                    ? "Running low: make new ones before you run out."
+                    : "Each signs you in once if you lose your phone."}
+                </span>
+              }
+              action={
+                <BaseButton
+                  text="New Codes"
+                  varient="bordered"
+                  className="w-full px-4 text-base-primary sm:w-auto"
+                  onPress={() => {
+                    reset();
+                    setFlow("recovery-codes");
+                  }}
+                />
+              }
             />
           )}
-          {me.twoFactorEnabled && twoFactor.canTurnOff && (
+        </ul>
+
+        {me.twoFactorEnabled && twoFactor.canTurnOff && (
+          <div className="flex flex-col gap-2 border-t border-content-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-content-5">
+              Turning it off leaves only your password protecting this account.
+            </p>
             <BaseButton
-              text="Turn Off"
+              text="Turn Off Two-Factor"
               color="danger"
               varient="bordered"
+              className="w-full px-4 sm:w-auto"
               onPress={() => {
                 reset();
                 setEmailSentTo(null);
                 setFlow("disable");
               }}
             />
-          )}
-        </div>
+          </div>
+        )}
         {me.twoFactorEnabled && !twoFactor.canTurnOff && (
           <p className="text-xs text-content-5">
             Your role must keep two-factor sign-in on.
