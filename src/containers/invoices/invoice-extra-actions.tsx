@@ -450,14 +450,16 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
             size="sm"
             value={chosen}
             onValueChange={choose}
-            classNames={{ wrapper: "gap-2" }}
+            orientation="horizontal"
+            // Side by side, wrapping, as on the invoice's Documents card.
+            classNames={{ wrapper: "flex-wrap gap-2" }}
           >
             {documents.map((item) => (
               <Checkbox
                 key={item.id}
                 value={item.id}
                 classNames={{
-                  base: "m-0 w-full max-w-full rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
+                  base: "m-0 min-w-0 max-w-full sm:max-w-xs rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
                   wrapper: "text-white",
                   label: "min-w-0 w-full",
                 }}
