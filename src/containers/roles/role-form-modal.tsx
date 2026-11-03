@@ -166,7 +166,7 @@ export default function RoleFormModal({
       {isLocked && (
         <AlertBanner message="The Admin role always has every permission, plus users, roles and settings. It can't be changed." />
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex flex-col gap-4">
         <BaseInput
           name="name"
           control={control}
@@ -194,7 +194,6 @@ export default function RoleFormModal({
           name="description"
           control={control}
           label="Description (optional)"
-          minRows={1}
           isDisabled={isLocked}
           rules={{
             validate: (value: string) =>
