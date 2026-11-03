@@ -2,6 +2,7 @@ import { Checkbox, CheckboxGroup } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -28,7 +29,7 @@ import {
 import { Attachment } from "@/lib/interfaces";
 import { demoCarrierDocuments, demoShipperDocuments } from "@/lib/mock";
 import { compareMoney, isZeroMoney } from "@/lib/money";
-import { getParty } from "@/services";
+import { listContacts } from "@/services";
 import {
   invoiceNumberOf,
   InvoiceView,
@@ -181,6 +182,74 @@ type EmailValues = {
   attachDocuments: boolean;
 };
 
+// Where an invoice's emails go: the party's active contacts that receive
+// invoices, for those who may read parties. The party page reads the same
+// query, so it is often cached already. `href` is the party's page, where
+// contacts are added.
+function useInvoiceRecipients(invoice: InvoiceView) {
+  const { can } = useCan();
+  const isCustomer = isCustomerInvoice(invoice);
+  const partyId = isCustomer ? invoice.customerId : invoice.carrierId;
+  const canRead = can(Permission.PartiesView) && !!partyId;
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", partyId],
+    queryFn: ({ signal }) => listContacts(partyId!, signal),
+    enabled: canRead,
+  });
+  const emails = (contacts.data ?? [])
+    .filter((contact) => contact.isActive && contact.receivesInvoices)
+    .map((contact) => contact.email);
+  return {
+    emails,
+    isLoading: canRead && contacts.isPending,
+    // Only once the list has loaded, so a slow or failed request doesn't
+    // claim there are none.
+    hasNone: canRead && contacts.isSuccess && emails.length === 0,
+    isError: canRead && contacts.isError,
+    href: partyId
+      ? `${isCustomer ? "/shippers/" : "/carriers/"}view/?id=${encodeURIComponent(partyId)}`
+      : null,
+  };
+}
+
+// Fills "To" once the addresses arrive, unless something was typed first.
+function usePrefillTo(
+  emails: string[],
+  getValues: () => string,
+  setValue: (value: string) => void
+) {
+  const joined = emails.join(", ");
+  useEffect(() => {
+    if (joined && !getValues()) setValue(joined);
+  }, [joined, getValues, setValue]);
+}
+
+// The line under "To": looking the address up, where it came from, or that
+// the party has no contact for it yet.
+function recipientHint(
+  recipients: ReturnType<typeof useInvoiceRecipients>,
+  who: string
+) {
+  if (recipients.isLoading) return `Looking up the ${who}'s contacts…`;
+  if (recipients.isError) return `Couldn't load the ${who}'s contacts. Type the address instead.`;
+  if (recipients.hasNone) {
+    return (
+      <>
+        No {who} contact receives invoices yet.{" "}
+        {recipients.href && (
+          <Link to={recipients.href} className="text-base-primary underline">
+            Add one on the {who}&apos;s page
+          </Link>
+        )}
+      </>
+    );
+  }
+  if (recipients.emails.length > 0) {
+    return `From the ${who}'s contacts. Separate several addresses with commas.`;
+  }
+  return "Separate several addresses with commas.";
+}
+
 const addresses = (value: string) =>
   value
     .split(",")
@@ -199,19 +268,7 @@ const emailList = (required: boolean) => (value: string | boolean) => {
 
 function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   const number = invoiceNumberOf(invoice) ?? "";
-  const { can } = useCan();
-  // The customer's accounts address as the TMS holds it, for those who may
-  // read parties. The party page reads the same query, so it is often
-  // cached already.
-  const customerId =
-    isCustomerInvoice(invoice) && can(Permission.PartiesView)
-      ? invoice.customerId
-      : null;
-  const party = useQuery({
-    queryKey: ["parties", "detail", customerId],
-    queryFn: ({ signal }) => getParty(customerId!, signal),
-    enabled: !!customerId,
-  });
+  const recipients = useInvoiceRecipients(invoice);
   const { control, handleSubmit, getValues, setValue } = useForm<EmailValues>({
     defaultValues: {
       to: "",
@@ -222,12 +279,11 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       attachDocuments: true,
     },
   });
-
-  // Fills "To" once the address arrives, unless something was typed first.
-  const suggested = party.data?.businessEmail ?? party.data?.email ?? null;
-  useEffect(() => {
-    if (suggested && !getValues("to")) setValue("to", suggested);
-  }, [suggested, getValues, setValue]);
+  usePrefillTo(
+    recipients.emails,
+    () => getValues("to"),
+    (value) => setValue("to", value)
+  );
 
   const submit = handleSubmit((values) => {
     demo(`Email of ${number} to ${addresses(values.to).join(", ")}`, "sent");
@@ -253,11 +309,7 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         control={control}
         label="To"
         placeholder="ap@shipper.com"
-        description={
-          party.isPending && customerId
-            ? "Looking up the shipper's email…"
-            : "Separate several addresses with commas."
-        }
+        description={recipientHint(recipients, "shipper")}
         rules={{ validate: emailList(true) }}
       />
       <BaseInput
@@ -305,7 +357,6 @@ type DocumentsEmailValues = {
 // The documents on an invoice, sent to its shipper or carrier: each one
 // ticked by default and left out by unticking it.
 function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
-  const { can } = useCan();
   const isCustomer = isCustomerInvoice(invoice);
   const who = partyWord(invoice);
   const documents = documentsOf(invoice);
@@ -313,17 +364,7 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
     documents.map((item) => item.id)
   );
   const [missing, setMissing] = useState<string | null>(null);
-  // The party's email as the TMS holds it, for those who may read parties.
-  const partyId = can(Permission.PartiesView)
-    ? isCustomer
-      ? invoice.customerId
-      : invoice.carrierId
-    : null;
-  const party = useQuery({
-    queryKey: ["parties", "detail", partyId],
-    queryFn: ({ signal }) => getParty(partyId!, signal),
-    enabled: !!partyId,
-  });
+  const recipients = useInvoiceRecipients(invoice);
   const reference =
     (!isCustomer && invoice.carrierInvoiceNumber) ||
     invoiceNumberOf(invoice) ||
@@ -336,12 +377,11 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
         message: `Please find attached the documents for ${reference}.`,
       },
     });
-
-  // Fills "To" once the address arrives, unless something was typed first.
-  const suggested = party.data?.businessEmail ?? party.data?.email ?? null;
-  useEffect(() => {
-    if (suggested && !getValues("to")) setValue("to", suggested);
-  }, [suggested, getValues, setValue]);
+  usePrefillTo(
+    recipients.emails,
+    () => getValues("to"),
+    (value) => setValue("to", value)
+  );
 
   const submit = handleSubmit((values) => {
     if (documents.length === 0) {
@@ -384,11 +424,7 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
         control={control}
         label="To"
         placeholder={isCustomer ? "ap@shipper.com" : "billing@carrier.com"}
-        description={
-          party.isPending && partyId
-            ? `Looking up the ${who}'s email…`
-            : `The ${who}'s email. Separate several addresses with commas.`
-        }
+        description={recipientHint(recipients, who)}
         rules={{ validate: emailList(true) }}
       />
       {documents.length === 0 ? (
