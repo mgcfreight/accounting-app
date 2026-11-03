@@ -58,6 +58,12 @@ export const listAccountSummaries = (
         parseBody(envelope(paginated(accountSummarySchema)), res.data).data
     );
 
+// One party's account figures; 403 without its side's invoice view.
+export const getAccountSummary = (partyId: string, signal?: AbortSignal) =>
+  apiClient
+    .get("/account/summary", { params: { partyId }, signal })
+    .then((res) => parseBody(envelope(accountSummarySchema), res.data).data);
+
 // Every account matching the filters, as Excel (reports.export_csv) or PDF
 // (reports.export_pdf): a sheet per side the role may see.
 export const exportAccountSummaries = (

@@ -1004,6 +1004,9 @@ export interface PartyAccountSummary {
   businessVolume: string;
   shipmentCount: number;
   balance: string;
+  // Received from (or paid to) the party and not yet allocated to an
+  // invoice. Null when the role may not view the side's payments.
+  unapplied: string | null;
   overdue: string;
   // Days past due of the oldest overdue invoice; 0 when nothing is overdue.
   oldestOverdueDays: number;

@@ -728,6 +728,9 @@ export const accountSummarySchema: z.ZodType<PartyAccountSummary> = z.object({
   businessVolume: money,
   shipmentCount: count,
   balance: money,
+  // Null without the side's payments view. An API from before the field
+  // existed leaves it out, read the same way: not shown, never "0.00".
+  unapplied: money.nullable().default(null),
   overdue: money,
   oldestOverdueDays: count,
   lastPayment: z

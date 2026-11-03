@@ -40,6 +40,26 @@ describe("account and report schemas on real responses", () => {
     expect(data.items.every((row) => row.type === PartyType.Shipper)).toBe(true);
   });
 
+  it("reads one party's summary with its unapplied money", () => {
+    // Written from the API's PartyAccountSummaryView, not captured.
+    const [first] = summaries.data.items;
+    const { data } = envelope(accountSummarySchema).parse({
+      message: "Success",
+      data: { ...first, unapplied: "250.00" },
+    });
+    expect([data.balance, data.unapplied]).toEqual([first.balance, "250.00"]);
+  });
+
+  it("reads unapplied left out or hidden as null, never 0.00", () => {
+    const [first] = summaries.data.items;
+    const read = (row: object) =>
+      envelope(accountSummarySchema).parse({ message: "Success", data: row }).data
+        .unapplied;
+    expect(read(first)).toBeNull();
+    expect(read({ ...first, unapplied: null })).toBeNull();
+    expect(() => read({ ...first, unapplied: "250" })).toThrow();
+  });
+
   it("reads the monthly P&L, a row per month and the total", () => {
     const { data } = envelope(monthlyPnlReportSchema).parse(pnlMonthly);
     expect(data.period.key).toBe("2026-YTD");
