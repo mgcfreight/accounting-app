@@ -28,6 +28,7 @@ import Setting2 from "./setting-2.svg";
 import SettingsIcon from "./settings-icon.svg";
 import SignoutIcon from "./signout-icon.svg";
 import TrackingIcon from "./tracking-icon.svg";
+import Trash from "./trash.icon.svg";
 import User from "./user.icon.svg";
 import Warning2 from "./warning-2.icon.svg";
 
@@ -60,6 +61,7 @@ export {
   SettingsIcon,
   SignoutIcon,
   TrackingIcon,
+  Trash,
   User,
   Warning2,
 };
