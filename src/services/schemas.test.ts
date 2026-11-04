@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Permission, SystemRoleId } from "@/lib/enums";
+import { CreditStatus, PaymentTerms, Permission, SystemRoleId } from "@/lib/enums";
 import {
+  agreementSchema,
   carrierInvoiceSchema,
   contactSchema,
   customerInvoiceSchema,
@@ -100,6 +101,65 @@ describe("contactSchema", () => {
   it("refuses a contact without an email", () => {
     const { email: _email, ...withoutEmail } = contact;
     expect(contactSchema.safeParse(withoutEmail).success).toBe(false);
+  });
+});
+
+describe("agreementSchema", () => {
+  // One of GET /party/:id's agreements, as the API's AgreementView sends it.
+  const agreement = {
+    id: "pag_AGR0000001",
+    partyId: "pty_4fK9qZ0aB1",
+    paymentTerms: "NET_90",
+    currency: "CAD",
+    creditStatus: "ALLOWED",
+    creditLimit: "25000.00",
+    taxTreatment: "STANDARD",
+    taxBasis: "BILL_TO",
+    billingTrigger: null,
+    noticeDaysBefore: null,
+    alertDaysBefore: null,
+    defaultAdjustmentMode: "SEPARATE",
+    autoSendInvoices: false,
+    billingNoticeEnabled: true,
+    remindersEnabled: true,
+    weeklyStatementEnabled: false,
+    effectiveFrom: "2026-11-01",
+    effectiveTo: null,
+    notes: null,
+    createdAt: "2026-11-01T09:30:00.000Z",
+  };
+
+  it("reads Net 90 and the credit limit as text", () => {
+    const parsed = agreementSchema.parse(agreement);
+    expect(parsed.paymentTerms).toBe(PaymentTerms.Net90);
+    expect(parsed.creditLimit).toBe("25000.00");
+    expect(agreementSchema.parse({ ...agreement, creditLimit: null }).creditLimit).toBeNull();
+  });
+
+  it("reads each credit status, null for a carrier, and refuses an unknown one", () => {
+    for (const status of [CreditStatus.Allowed, CreditStatus.Blocked, CreditStatus.NotAllowed]) {
+      const parsed = agreementSchema.parse({ ...agreement, creditStatus: status, creditLimit: null });
+      expect(parsed.creditStatus).toBe(status);
+    }
+    expect(agreementSchema.parse({ ...agreement, creditStatus: null }).creditStatus).toBeNull();
+    expect(agreementSchema.safeParse({ ...agreement, creditStatus: "SUSPENDED" }).success).toBe(false);
+  });
+
+  it("refuses a credit limit that isn't a 2-decimal string", () => {
+    for (const creditLimit of [25000, "25000", "25000.5", "abc"]) {
+      expect(agreementSchema.safeParse({ ...agreement, creditLimit }).success).toBe(false);
+    }
+  });
+
+  it("reads an agreement from today's API, which sends no credit settings", () => {
+    const {
+      creditStatus: _creditStatus,
+      creditLimit: _creditLimit,
+      ...current
+    } = agreement;
+    const parsed = agreementSchema.parse({ ...current, paymentTerms: "NET_30" });
+    expect(parsed.creditStatus).toBeUndefined();
+    expect(parsed.creditLimit).toBeUndefined();
   });
 });
 

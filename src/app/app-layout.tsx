@@ -5,6 +5,7 @@ import { ErrorBoundary, ErrorState } from "@/components/common";
 import { DashboardLayout } from "@/components/layouts";
 import { useUser } from "@/components/providers/user-provider";
 import { LOGIN_PATH } from "@/lib/constants";
+import TmsOverdueBar from "@/containers/payments/tms-overdue-bar";
 import RouteGuard from "./route-guard";
 
 // Signed-in pages render only once GET /auth/me (UserProvider) has returned a
@@ -49,7 +50,7 @@ export default function AppLayout() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout topBar={<TmsOverdueBar />}>
       <ErrorBoundary resetKey={pathname}>
         <RouteGuard>
           <Suspense
