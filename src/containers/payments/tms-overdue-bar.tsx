@@ -1,10 +1,11 @@
-import { FocusEvent, Fragment, useEffect, useState } from "react";
-import { FormModal, Money } from "@/components/common";
+import { FocusEvent, useEffect, useState } from "react";
+import { Money } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
 import { Permission } from "@/lib/enums";
 import { TmsOverdueShipper } from "@/lib/interfaces";
 import { mockTmsOverdue } from "@/lib/mock";
 import RecordPaymentModal from "./record-payment-modal";
+import TmsOverdueModal from "./tms-overdue-modal";
 
 // How long each overdue shipper stays in the bar before the next.
 export const TICKER_MS = 5000;
@@ -29,8 +30,8 @@ const iconButton =
 // Clear Payment also needs customer_payments.create.
 //
 // Demo only: the figures are mockTmsOverdue and recording a payment saves
-// nothing, so AppLayout mounts it in development only, and it says "Demo data"
-// before any figure. Dismissing hides it until the next page load.
+// nothing, so AppLayout mounts it in development only. Dismissing hides it
+// until the next page load.
 export default function TmsOverdueBar() {
   const { can } = useCan();
   const canView = can(Permission.CustomerPaymentsView);
@@ -84,7 +85,6 @@ export default function TmsOverdueBar() {
         onBlur={leave}
       >
         <p className="text-center" aria-live={rotating ? "off" : "polite"} aria-atomic>
-          <strong className="uppercase tracking-wide">Demo data</strong> ·{" "}
           <strong>
             Payment overdue in the TMS{count > 1 && ` · ${position + 1} of ${count}`}:
           </strong>{" "}
@@ -156,49 +156,12 @@ export default function TmsOverdueBar() {
         </div>
       </section>
 
-      <FormModal
+      <TmsOverdueModal
         isOpen={listing}
-        onOpenChange={setListing}
-        title="Overdue Payments in the TMS (Demo Data)"
-        size="2xl"
-      >
-        <p className="text-sm text-[#343A40]">
-          <strong>Total overdue:</strong>{" "}
-          {overdue.totals.map((total, i) => (
-            <Fragment key={total.currency}>
-              {i > 0 && " · "}
-              <Money amount={total.amount} currency={total.currency} />
-            </Fragment>
-          ))}
-          <span className="text-xs text-content-5"> (Demo data — nothing here is saved.)</span>
-        </p>
-        <ul className="flex flex-col gap-2">
-          {shippers.map((shipper) => (
-            <li
-              key={shipper.partyId}
-              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-gray-100 pb-2 text-sm text-[#343A40]"
-            >
-              <div className="min-w-0">
-                <p className="font-semibold">{shipper.partyName}</p>
-                <p className="text-content-5">
-                  {plural(shipper.invoiceCount, "invoice")}, the oldest{" "}
-                  {plural(shipper.oldestOverdueDays, "day")} past due
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <strong>
-                  <Money amount={shipper.amount} currency={shipper.currency} />
-                </strong>
-                {canRecord && (
-                  <button type="button" className={barButton} onClick={() => record(shipper)}>
-                    Clear Payment
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </FormModal>
+        onClose={() => setListing(false)}
+        overdue={overdue}
+        onRecord={canRecord ? record : undefined}
+      />
 
       {/* Mounted per shipper, so the form opens filled in for them. */}
       {recording && (

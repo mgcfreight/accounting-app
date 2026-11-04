@@ -835,6 +835,19 @@ export interface AutomationRule {
   statementScope: StatementScope;
   // Credit limit only: alert at this share of the limit.
   thresholdPercent: number;
+  // Invoice and statement messages: attach the PDF.
+  attachPdf: boolean;
+  // Shipper reminders only: don't remind about a balance under this amount
+  // (a 2-decimal string in the agreement's currency); null reminds for any.
+  minBalance: string | null;
+  subject: string;
+  body: string;
+  // A different message for some steps, keyed by the step's day ("7").
+  // A step with no entry uses `subject` and `body`.
+  stepTemplates: Record<string, AutomationTemplate>;
+}
+
+export interface AutomationTemplate {
   subject: string;
   body: string;
 }

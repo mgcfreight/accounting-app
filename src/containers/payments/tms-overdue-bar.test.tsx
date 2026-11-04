@@ -33,6 +33,8 @@ vi.mock("@/lib/mock", async (importOriginal) => {
 
 const bar = () => screen.getByRole("region", { name: "Overdue payments" });
 const tick = () => act(() => vi.advanceTimersByTime(TICKER_MS));
+// The table's body rows, one per shipper (the first row is the header).
+const shipperRows = (dialog: HTMLElement) => within(dialog).getAllByRole("row").slice(1);
 
 const PRAIRIE = "Payment overdue in the TMS · 1 of 3: Prairie Agri Inc. owes CAD 2,320.50";
 const GREAT_LAKES = "Payment overdue in the TMS · 2 of 3: Great Lakes Supply owes USD 1,475.00";
@@ -45,12 +47,12 @@ describe("TmsOverdueBar", () => {
     state.overdue = null;
   });
 
-  it("labels its figures as demo data before anything else", async () => {
+  it("opens with the overdue heading and lists all under View All", async () => {
     render(<TmsOverdueBar />);
-    expect(bar()).toHaveTextContent(/^Demo data · Payment overdue in the TMS/);
+    expect(bar()).toHaveTextContent(/^Payment overdue in the TMS/);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     expect(
-      await screen.findByRole("dialog", { name: "Overdue Payments in the TMS (Demo Data)" })
+      await screen.findByRole("dialog", { name: "Overdue Payments in the TMS" })
     ).toBeInTheDocument();
   });
 
@@ -112,18 +114,27 @@ describe("TmsOverdueBar", () => {
     });
   });
 
-  it("lists every shipper, with the totals per currency", async () => {
+  it("sums up per currency, then lists every shipper in a table", async () => {
     render(<TmsOverdueBar />);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Total overdue: CAD 5,137.39 · USD 1,475.00");
-    const rows = within(dialog).getAllByRole("listitem");
+    expect(dialog).toHaveTextContent("Overdue · CADCAD 5,137.39");
+    expect(dialog).toHaveTextContent("Overdue · USDUSD 1,475.00");
+    expect(dialog).toHaveTextContent("Shippers3");
+    expect(dialog).toHaveTextContent("Oldest66 days");
+
+    const table = within(dialog).getByRole("table", { name: "Overdue payments by shipper" });
+    expect(
+      within(table).getAllByRole("columnheader").map((cell) => cell.textContent)
+    ).toEqual(["Shipper", "Past due", "Amount", "Action"]);
+    const rows = shipperRows(dialog);
     expect(rows.map((row) => row.textContent)).toEqual([
       expect.stringContaining("Prairie Agri Inc."),
       expect.stringContaining("Great Lakes Supply"),
       expect.stringContaining("Northwind Distribution"),
     ]);
-    expect(rows[1]).toHaveTextContent("USD 1,475.00");
+    expect(rows[0]).toHaveTextContent("1 overdue invoice66 days61–90 daysCAD 2,320.50");
+    expect(rows[1]).toHaveTextContent("1 overdue invoice22 days1–30 daysUSD 1,475.00");
   });
 
   it("lists every shipper the totals count, even one at zero", async () => {
@@ -144,17 +155,20 @@ describe("TmsOverdueBar", () => {
     render(<TmsOverdueBar />);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Total overdue: CAD 5,137.39 · USD 1,475.00");
-    const rows = within(dialog).getAllByRole("listitem");
+    expect(dialog).toHaveTextContent("Overdue · CADCAD 5,137.39");
+    expect(dialog).toHaveTextContent("Shippers4");
+    const rows = shipperRows(dialog);
     expect(rows).toHaveLength(4);
-    expect(rows[3]).toHaveTextContent("Zero Balance Ltd.");
+    expect(rows[3]).toHaveTextContent("Zero Balance Ltd.0 overdue invoices0 daysCurrentCAD 0.00");
   });
 
   it("opens Record Payment for the chosen shipper in their currency", async () => {
     render(<TmsOverdueBar />);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
-    const rows = within(await screen.findByRole("dialog")).getAllByRole("listitem");
-    await userEvent.click(within(rows[1]).getByRole("button", { name: "Clear Payment" }));
+    const rows = shipperRows(await screen.findByRole("dialog"));
+    await userEvent.click(
+      within(rows[1]).getByRole("button", { name: "Clear payment for Great Lakes Supply" })
+    );
 
     const form = await screen.findByRole("dialog", { name: "Record Payment" });
     // What each select shows as chosen (every option is also in the DOM, in
@@ -171,7 +185,7 @@ describe("TmsOverdueBar", () => {
     };
     render(<TmsOverdueBar />);
     expect(bar()).toHaveTextContent(
-      "Demo data · Payment overdue in the TMS: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
+      "Payment overdue in the TMS: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
     );
     expect(screen.queryByRole("button", { name: "View All" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
@@ -186,7 +200,9 @@ describe("TmsOverdueBar", () => {
     expect(screen.queryByRole("button", { name: /Clear payment/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).queryByRole("button", { name: "Clear Payment" })).not.toBeInTheDocument();
+    expect(shipperRows(dialog)).toHaveLength(3);
+    expect(within(dialog).queryByRole("button", { name: /Clear payment/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("columnheader", { name: "Action" })).not.toBeInTheDocument();
   });
 
   it("shows nothing when no one is overdue, and goes away when dismissed", async () => {

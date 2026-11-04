@@ -27,6 +27,9 @@ const base: Omit<AutomationRule, "kind" | "steps" | "subject" | "body"> = {
   weekday: 5,
   statementScope: StatementScope.OpenInvoices,
   thresholdPercent: 80,
+  attachPdf: true,
+  minBalance: null,
+  stepTemplates: {},
 };
 
 const rule = (

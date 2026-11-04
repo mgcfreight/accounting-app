@@ -195,6 +195,154 @@ export function parseEmails(text: string): { emails: string[] } | { error: strin
   return { emails: [...new Set(emails)] };
 }
 
+// Adds one step to a list, keeping it in the order the steps happen.
+export function addStep(
+  steps: number[],
+  text: string,
+  spec: NonNullable<AutomationSpec["steps"]>,
+  countDown: boolean
+): { steps: number[] } | { error: string } {
+  const day = text.trim();
+  if (!/^\d{1,3}$/.test(day) || Number(day) > spec.max) {
+    return { error: `A whole number of days from 0 to ${spec.max}` };
+  }
+  if (steps.includes(Number(day))) return { error: `${day} is already a step` };
+  if (steps.length >= spec.maxSteps) {
+    return {
+      error: spec.maxSteps === 1 ? "Remove the current day first" : `At most ${spec.maxSteps} steps`,
+    };
+  }
+  return { steps: sortSteps([...steps, Number(day)], countDown) };
+}
+
+export const sortSteps = (steps: number[], countDown: boolean) =>
+  [...steps].sort((a, b) => (countDown ? b - a : a - b));
+
+// Ready-made step lists, offered as one-click choices in the editor.
+export const stepPresets: Partial<Record<AutomationKind, { label: string; steps: number[] }[]>> = {
+  [AutomationKind.BeforeDue]: [
+    { label: "One reminder", steps: [7] },
+    { label: "Two reminders", steps: [7, 1] },
+    { label: "Early and often", steps: [14, 7, 3, 1] },
+  ],
+  [AutomationKind.Overdue]: [
+    { label: "Light", steps: [7, 30] },
+    { label: "Firm", steps: [1, 7, 14, 30] },
+    { label: "Strict", steps: [1, 3, 7, 14, 30] },
+  ],
+  [AutomationKind.CarrierBillDue]: [
+    { label: "A week ahead", steps: [7] },
+    { label: "Week and day before", steps: [7, 1] },
+  ],
+  [AutomationKind.OverduePayable]: [
+    { label: "Next day", steps: [1] },
+    { label: "Daily first week", steps: [1, 3, 7] },
+  ],
+};
+
+// Kinds that carry a PDF, and kinds that can skip small balances.
+export const ATTACHABLE = new Set([
+  AutomationKind.InvoiceDelivery,
+  AutomationKind.BeforeDue,
+  AutomationKind.Overdue,
+  AutomationKind.Statement,
+]);
+export const HAS_MIN_BALANCE = new Set([AutomationKind.BeforeDue, AutomationKind.Overdue]);
+
+// The message a step sends: its own, or the rule's.
+export const templateFor = (rule: AutomationRule, day: number) =>
+  rule.stepTemplates[String(day)] ?? { subject: rule.subject, body: rule.body };
+
+// Only the step templates for days that are still steps: removing a step
+// drops its message rather than keeping it unseen.
+export const keepStepTemplates = (
+  templates: Record<string, { subject: string; body: string }>,
+  steps: number[]
+) =>
+  Object.fromEntries(
+    Object.entries(templates).filter(([day]) => steps.includes(Number(day)))
+  );
+
+// Example values for the template preview. Clearly made up: the real ones,
+// amounts included, are filled in by the API when it sends.
+export const SAMPLE_VALUES: Record<string, string> = {
+  partyName: "Acme Logistics",
+  invoiceNumber: "INV-0000",
+  dueDate: "1 Jan 2027",
+  balance: "[balance]",
+  daysUntilDue: "7",
+  daysOverdue: "7",
+  periodFrom: "1 Dec 2026",
+  periodTo: "31 Dec 2026",
+  totalOpen: "[open balance]",
+  owed: "[amount owed]",
+  creditLimit: "[credit limit]",
+  shipmentRef: "SHP-0000",
+  daysSinceDelivery: "14",
+  amountPaid: "[amount paid]",
+  paymentDate: "1 Jan 2027",
+};
+
+// A template with its placeholders swapped for the example values. Unknown
+// ones are left as typed, so a mistake shows in the preview.
+export const fillTemplate = (text: string, values: Record<string, string> = SAMPLE_VALUES) =>
+  text.replace(/\{([^{}]*)\}/g, (whole, name: string) => values[name] ?? whole);
+
+// One point on the reminder timeline: days from the due date (negative is
+// before it), what fires, and whether the accounts team is copied.
+export interface TimelinePoint {
+  offset: number;
+  kind: AutomationKind;
+  teamCopied: boolean;
+}
+
+// Every enabled before-due and overdue step around the due date, in order.
+export function reminderTimeline(rules: AutomationRule[]): TimelinePoint[] {
+  const points: TimelinePoint[] = [];
+  for (const rule of rules) {
+    if (!rule.enabled) continue;
+    const before =
+      rule.kind === AutomationKind.BeforeDue || rule.kind === AutomationKind.CarrierBillDue;
+    const after =
+      rule.kind === AutomationKind.Overdue || rule.kind === AutomationKind.OverduePayable;
+    if (!before && !after) continue;
+    for (const day of rule.steps) {
+      points.push({
+        offset: before ? -day : day,
+        kind: rule.kind,
+        teamCopied:
+          rule.notifyTeam ||
+          (rule.kind === AutomationKind.Overdue &&
+            rule.escalateFromDays !== null &&
+            day >= rule.escalateFromDays),
+      });
+    }
+  }
+  return points.sort((a, b) => a.offset - b.offset);
+}
+
+export const timelineLabel = (offset: number) =>
+  offset === 0
+    ? "On the due date"
+    : `${Math.abs(offset)} day${Math.abs(offset) === 1 ? "" : "s"} ${offset < 0 ? "before" : "after"}`;
+
+// True when an enabled rule would reach no one: no contact picked or
+// flagged, no team copy, no extra address. Unknown while contacts load.
+export function reachesNobody(
+  rule: AutomationRule,
+  spec: AutomationSpec,
+  contacts: ContactView[]
+): boolean {
+  if (!rule.enabled) return false;
+  return recipientText(rule, spec, contacts) === "";
+}
+
+export const contactFlagLabels: Record<ContactFlag, string> = {
+  receivesInvoices: "invoices",
+  receivesReminders: "reminders",
+  receivesStatements: "statements",
+};
+
 // The {placeholders} in a template that this kind can't fill.
 export function unknownPlaceholders(text: string, allowed: string[]): string[] {
   const found = Array.from(text.matchAll(/\{([^{}]*)\}/g), (match) => match[1]);
