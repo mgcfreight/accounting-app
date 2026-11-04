@@ -4,7 +4,6 @@ import { useCan } from "@/components/providers/user-provider";
 import { Permission } from "@/lib/enums";
 import { TmsOverdueShipper } from "@/lib/interfaces";
 import { mockTmsOverdue } from "@/lib/mock";
-import { isZeroMoney } from "@/lib/money";
 import RecordPaymentModal from "./record-payment-modal";
 
 // How long each overdue shipper stays in the bar before the next.
@@ -26,11 +25,16 @@ const iconButton =
 // after Pause. While it rotates, screen readers aren't told of each change;
 // stepping with the arrows announces the new one.
 //
+// Only for those who may see customer payments (customer_payments.view);
+// Clear Payment also needs customer_payments.create.
+//
 // Demo only: the figures are mockTmsOverdue and recording a payment saves
-// nothing. Dismissing hides it until the next page load.
+// nothing, so AppLayout mounts it in development only, and it says "Demo data"
+// before any figure. Dismissing hides it until the next page load.
 export default function TmsOverdueBar() {
   const { can } = useCan();
-  const canRecord = can(Permission.CustomerPaymentsCreate);
+  const canView = can(Permission.CustomerPaymentsView);
+  const canRecord = canView && can(Permission.CustomerPaymentsCreate);
   const [dismissed, setDismissed] = useState(false);
   const [listing, setListing] = useState(false);
   const [recording, setRecording] = useState<TmsOverdueShipper | null>(null);
@@ -39,10 +43,12 @@ export default function TmsOverdueBar() {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
 
+  // Rows and totals are both shown exactly as the summary sends them. Filtering
+  // rows here would leave the sender's totals counting shippers the list no
+  // longer shows, and re-summing them would be arithmetic on money. Which
+  // shippers count as overdue is the sender's call.
   const overdue = mockTmsOverdue;
-  const shippers = overdue.shippers.filter(
-    (shipper) => shipper.invoiceCount > 0 && !isZeroMoney(shipper.amount)
-  );
+  const shippers = overdue.shippers;
   const count = shippers.length;
   const rotating =
     count > 1 && !dismissed && !paused && !hovered && !focused && !listing && !recording;
@@ -53,7 +59,7 @@ export default function TmsOverdueBar() {
     return () => clearInterval(timer);
   }, [rotating, count]);
 
-  if (dismissed || count === 0) return null;
+  if (!canView || dismissed || count === 0) return null;
   // The list can shrink under the index when real data refreshes.
   const position = index % count;
   const current = shippers[position];
@@ -78,6 +84,7 @@ export default function TmsOverdueBar() {
         onBlur={leave}
       >
         <p className="text-center" aria-live={rotating ? "off" : "polite"} aria-atomic>
+          <strong className="uppercase tracking-wide">Demo data</strong> ·{" "}
           <strong>
             Payment overdue in the TMS{count > 1 && ` · ${position + 1} of ${count}`}:
           </strong>{" "}
@@ -93,7 +100,7 @@ export default function TmsOverdueBar() {
             on {plural(current.invoiceCount, "invoice")}, the oldest{" "}
             {plural(current.oldestOverdueDays, "day")} past due.
           </span>{" "}
-          Clear the overdue payment. <span className="opacity-75">(Demo data)</span>
+          Clear the overdue payment.
         </p>
         <div className="flex items-center gap-1">
           {canRecord && (
@@ -152,7 +159,7 @@ export default function TmsOverdueBar() {
       <FormModal
         isOpen={listing}
         onOpenChange={setListing}
-        title="Overdue Payments in the TMS"
+        title="Overdue Payments in the TMS (Demo Data)"
         size="2xl"
       >
         <p className="text-sm text-[#343A40]">

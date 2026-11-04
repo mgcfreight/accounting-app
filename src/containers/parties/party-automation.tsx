@@ -1,57 +1,76 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { Switch } from "@heroui/react";
 import { BaseButton, BaseCardWrapper, FormModal, StatusChip } from "@/components/common";
-import { AutomationKind, InvoiceDeliveryMode, PartyType, StatementFrequency, StatementScope } from "@/lib/enums";
-import { AutomationRule, ContactView, PartyAutomation } from "@/lib/interfaces";
+import { BaseInput, BaseSelect, BaseTextArea } from "@/components/common/form";
+import { AutomationKind, PartyType } from "@/lib/enums";
+import { AgreementView, AutomationRule, PartyAutomation } from "@/lib/interfaces";
 import { torontoToday } from "@/lib/utils";
 import {
   AutomationSpec,
-  automationKinds,
   automationSpecs,
+  ContactsState,
   describeRule,
   effectiveRule,
   hourText,
   isPaused,
   recipientText,
+  seedAutomation,
+  unavailableReason,
 } from "./automation-rules";
 import AutomationRuleModal from "./party-automation-modal";
 
 // ---------------------------------------------------------------------------
 // Pause banner + controls
 
+type PauseFormValues = { until: string; reason: string };
+
+const hourOptions = Array.from({ length: 24 }, (_, h) => ({
+  key: String(h),
+  label: hourText(h),
+  value: String(h),
+}));
+
 function PauseSection({
   automation,
+  canEdit,
   onChange,
 }: {
   automation: PartyAutomation;
+  canEdit: boolean;
   onChange: (next: Partial<PartyAutomation>) => void;
 }) {
   const today = torontoToday();
   const paused = isPaused(automation, today);
   const [editing, setEditing] = useState(false);
-  const [until, setUntil] = useState(automation.pausedUntil ?? "");
-  const [reason, setReason] = useState(automation.pauseReason);
+  const { control, handleSubmit } = useForm<PauseFormValues>({
+    values: { until: automation.pausedUntil ?? "", reason: automation.pauseReason },
+  });
 
-  const resume = () => onChange({ pausedUntil: null, pauseReason: "" });
-  const save = () => {
-    onChange({ pausedUntil: until || null, pauseReason: reason });
+  const resume = () => onChange({ paused: false, pausedUntil: null, pauseReason: "" });
+  const save = handleSubmit(({ until, reason }) => {
+    onChange({ paused: true, pausedUntil: until || null, pauseReason: reason });
     setEditing(false);
-  };
+  });
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
       <Switch
         isSelected={paused}
+        isReadOnly={!canEdit}
         onValueChange={(on) => (on ? setEditing(true) : resume())}
         size="sm"
       >
         <span className={paused ? "text-base-danger font-medium" : "text-content-5"}>
-          {paused
-            ? `Paused until ${automation.pausedUntil}`
-            : "Pause all notifications"}
+          {!paused
+            ? "Pause all notifications"
+            : automation.pausedUntil === null
+              ? "Paused indefinitely"
+              : `Paused until ${automation.pausedUntil}`}
         </span>
       </Switch>
-      {paused && (
+      {paused && canEdit && (
         <BaseButton
           varient="light"
           className="h-7 px-2 text-xs"
@@ -59,11 +78,11 @@ function PauseSection({
           onPress={() => setEditing(true)}
         />
       )}
-      {automation.pauseReason && (
+      {paused && automation.pauseReason && (
         <span className="text-content-5 text-xs">— {automation.pauseReason}</span>
       )}
 
-      {editing && (
+      {editing && canEdit && (
         <FormModal
           isOpen
           onOpenChange={(open) => !open && setEditing(false)}
@@ -77,26 +96,20 @@ function PauseSection({
             pause indefinitely.
           </p>
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Pause until (inclusive)</label>
-              <input
-                type="date"
-                value={until}
-                min={today}
-                onChange={(e) => setUntil(e.target.value)}
-                className="border border-content-3 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-base-primary-300"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Reason (optional)</label>
-              <textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={2}
-                maxLength={200}
-                className="border border-content-3 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-base-primary-300"
-              />
-            </div>
+            <BaseInput
+              name="until"
+              control={control}
+              type="date"
+              label="Pause until (inclusive)"
+              min={today}
+            />
+            <BaseTextArea
+              name="reason"
+              control={control}
+              label="Reason (optional)"
+              minRows={2}
+              maxLength={200}
+            />
           </div>
         </FormModal>
       )}
@@ -109,28 +122,37 @@ function PauseSection({
 
 function ScheduleRow({
   automation,
+  canEdit,
   onChange,
 }: {
   automation: PartyAutomation;
+  canEdit: boolean;
   onChange: (next: Partial<PartyAutomation>) => void;
 }) {
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const { control } = useForm<{ sendHour: string }>({
+    values: { sendHour: String(automation.sendHour) },
+  });
   return (
     <div className="flex flex-wrap items-center gap-4 text-sm text-[#343A40]">
-      <span className="text-content-5">Send at</span>
-      <select
-        value={automation.sendHour}
-        onChange={(e) => onChange({ sendHour: Number(e.target.value) })}
-        className="border border-content-3 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-base-primary-300"
-      >
-        {hours.map((h) => (
-          <option key={h} value={h}>
-            {hourText(h)}
-          </option>
-        ))}
-      </select>
+      <BaseSelect
+        name="sendHour"
+        control={control}
+        label="Send at"
+        labelPlacement="outside-left"
+        options={hourOptions}
+        disallowEmptySelection
+        isDisabled={!canEdit}
+        className="w-auto"
+        classNames={{ label: "text-content-5 text-sm", trigger: "min-w-28", value: "text-xs" }}
+        rules={{
+          // Applies the hour as soon as it is picked; there is no Save here.
+          onChange: (e: { target: { value: string } }) =>
+            onChange({ sendHour: Number(e.target.value) }),
+        }}
+      />
       <Switch
         isSelected={automation.skipWeekends}
+        isReadOnly={!canEdit}
         onValueChange={(on) => onChange({ skipWeekends: on })}
         size="sm"
       >
@@ -143,26 +165,49 @@ function ScheduleRow({
 // ---------------------------------------------------------------------------
 // One rule row
 
+// As on the Profile contacts lines, so Try again looks the same in both.
+const linkButton = "text-base-primary underline text-xs";
+
 function RuleRow({
   rule,
   spec,
   contacts,
+  unavailable,
+  canEdit,
   onToggle,
   onCustomise,
 }: {
   rule: AutomationRule;
   spec: AutomationSpec;
-  contacts: ContactView[];
+  contacts: ContactsState;
+  // Why the rule can't be switched on, or null when it can.
+  unavailable: string | null;
+  canEdit: boolean;
   onToggle: () => void;
   onCustomise: () => void;
 }) {
   const effective = effectiveRule(rule);
   const description = describeRule(effective, spec);
-  const recipients = recipientText(effective, spec, contacts);
+  // Until the contacts load, a party message's recipients aren't known; saying
+  // "the accounts team" alone would read as "no contacts get it".
+  const contactsUnknown = spec.audience === "party" && contacts.status !== "success";
+  const recipients = recipientText(
+    effective,
+    spec,
+    contacts.status === "success" ? contacts.contacts : []
+  );
 
   return (
     <div className="flex flex-wrap items-start gap-3 py-3 border-b border-content-10 last:border-0">
-      <Switch isSelected={rule.enabled} onValueChange={onToggle} size="sm" className="mt-0.5" />
+      <Switch
+        isSelected={rule.enabled}
+        isDisabled={!!unavailable && !rule.enabled}
+        isReadOnly={!canEdit}
+        onValueChange={onToggle}
+        size="sm"
+        className="mt-0.5"
+        aria-label={spec.label}
+      />
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-[#343A40]">{spec.label}</span>
@@ -176,21 +221,36 @@ function RuleRow({
           )}
         </div>
         <p className="text-xs text-content-5 mt-0.5">{spec.help}</p>
+        {unavailable && !rule.enabled && (
+          <p className="text-xs text-content-5 mt-1">Unavailable: {unavailable}.</p>
+        )}
         {rule.enabled && (
           <p className="text-xs text-[#343A40] mt-1">
             {description}
-            {recipients && (
-              <span className="text-content-5"> · {recipients}</span>
+            {contacts.status === "pending" && contactsUnknown ? (
+              <span className="text-content-5"> · Loading recipients…</span>
+            ) : contacts.status === "error" && contactsUnknown ? (
+              <>
+                {" · "}
+                <span className="text-base-danger">Couldn&apos;t load the recipients.</span>{" "}
+                <button type="button" className={linkButton} onClick={contacts.retry}>
+                  Try again
+                </button>
+              </>
+            ) : (
+              recipients && <span className="text-content-5"> · {recipients}</span>
             )}
           </p>
         )}
       </div>
-      <BaseButton
-        varient="bordered"
-        className="h-7 px-3 text-xs shrink-0"
-        text="Customise"
-        onPress={onCustomise}
-      />
+      {canEdit && (
+        <BaseButton
+          varient="bordered"
+          className="h-7 px-3 text-xs shrink-0"
+          text="Customise"
+          onPress={onCustomise}
+        />
+      )}
     </div>
   );
 }
@@ -198,60 +258,60 @@ function RuleRow({
 // ---------------------------------------------------------------------------
 // The card
 
+// Seeded once from the agreement in force; mount it with `key` set to that
+// agreement's id so a different agreement re-seeds it. Without `canEdit`
+// (parties.edit) the settings are shown read-only.
 export default function PartyAutomationCard({
   type,
+  agreement,
   contacts,
+  canEdit,
 }: {
   type: PartyType;
-  contacts: ContactView[];
+  agreement: AgreementView | undefined;
+  contacts: ContactsState;
+  canEdit: boolean;
 }) {
-  const kinds = automationKinds(type);
-
   // Local state only — no API yet.
-  const [automation, setAutomation] = useState<PartyAutomation>(() => ({
-    pausedUntil: null,
-    pauseReason: "",
-    sendHour: 9,
-    skipWeekends: true,
-    rules: kinds.map((kind) => ({
-      ...effectiveRule({
-        kind,
-        enabled: true,
-        custom: false,
-        steps: [],
-        contactIds: [],
-        notifyTeam: false,
-        extraEmails: [],
-        escalateFromDays: null,
-        deliveryMode: InvoiceDeliveryMode.Manual,
-        frequency: StatementFrequency.WeeklyAndMonthEnd,
-        weekday: 5,
-        statementScope: StatementScope.OpenInvoices,
-        thresholdPercent: 80,
-        subject: "",
-        body: "",
-      }),
-    })),
-  }));
+  const [automation, setAutomation] = useState<PartyAutomation>(() =>
+    seedAutomation(type, agreement)
+  );
 
   const [editingKind, setEditingKind] = useState<AutomationKind | null>(null);
 
-  const updateAutomation = (next: Partial<PartyAutomation>) =>
-    setAutomation((prev) => ({ ...prev, ...next }));
+  // Every change says it wasn't saved, as on the other not-yet-wired screens.
+  const demoOnly = (what: string) =>
+    toast.info(`${what} — demo only, nothing was saved.`);
 
-  const toggleRule = (kind: AutomationKind) =>
+  const updateAutomation = (next: Partial<PartyAutomation>) => {
+    setAutomation((prev) => ({ ...prev, ...next }));
+    if ("paused" in next) {
+      demoOnly(next.paused ? "Notifications paused" : "Notifications resumed");
+    } else if ("sendHour" in next) {
+      demoOnly("Send time");
+    } else if ("skipWeekends" in next) {
+      demoOnly("Weekend setting");
+    }
+  };
+
+  // Switching off is always allowed; switching on only when available.
+  const toggleRule = (kind: AutomationKind) => {
+    const rule = automation.rules.find((r) => r.kind === kind);
+    if (!rule || (!rule.enabled && unavailableReason(kind, agreement))) return;
     setAutomation((prev) => ({
       ...prev,
-      rules: prev.rules.map((r) =>
-        r.kind === kind ? { ...r, enabled: !r.enabled } : r
-      ),
+      rules: prev.rules.map((r) => (r.kind === kind ? { ...r, enabled: !r.enabled } : r)),
     }));
+    demoOnly(`${automationSpecs[kind].label} ${rule.enabled ? "off" : "on"}`);
+  };
 
-  const saveRule = (updated: AutomationRule) =>
+  const saveRule = (updated: AutomationRule) => {
     setAutomation((prev) => ({
       ...prev,
       rules: prev.rules.map((r) => (r.kind === updated.kind ? updated : r)),
     }));
+    demoOnly(automationSpecs[updated.kind].label);
+  };
 
   const editingRule = editingKind
     ? automation.rules.find((r) => r.kind === editingKind)
@@ -264,8 +324,8 @@ export default function PartyAutomationCard({
           Demo only — settings are not saved yet.
         </p>
 
-        <PauseSection automation={automation} onChange={updateAutomation} />
-        <ScheduleRow automation={automation} onChange={updateAutomation} />
+        <PauseSection automation={automation} canEdit={canEdit} onChange={updateAutomation} />
+        <ScheduleRow automation={automation} canEdit={canEdit} onChange={updateAutomation} />
 
         <div className="flex flex-col">
           {automation.rules.map((rule) => {
@@ -276,6 +336,8 @@ export default function PartyAutomationCard({
                 rule={rule}
                 spec={spec}
                 contacts={contacts}
+                unavailable={unavailableReason(rule.kind, agreement)}
+                canEdit={canEdit}
                 onToggle={() => toggleRule(rule.kind)}
                 onCustomise={() => setEditingKind(rule.kind)}
               />
@@ -284,11 +346,12 @@ export default function PartyAutomationCard({
         </div>
       </div>
 
-      {editingRule && editingKind && (
+      {canEdit && editingRule && editingKind && (
         <AutomationRuleModal
           rule={editingRule}
           spec={automationSpecs[editingKind]}
           contacts={contacts}
+          unavailable={unavailableReason(editingKind, agreement)}
           onSave={(updated) => {
             saveRule(updated);
             setEditingKind(null);

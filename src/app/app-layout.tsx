@@ -19,6 +19,12 @@ import RouteGuard from "./route-guard";
 // content area while its chunk loads. Router navigations are transitions, so
 // moving between pages keeps the current one on screen until the next is
 // ready.
+//
+// The overdue bar runs on lib/mock, so it is development only (`npm run dev`),
+// like the invoice pages' demo fallback: a build must never show demo figures
+// on every page as if they were real. It comes back here once it reads the API.
+const SHOW_TMS_OVERDUE_BAR = import.meta.env.DEV;
+
 export default function AppLayout() {
   const { pathname, search } = useLocation();
   const { user, loadError, retry } = useUser();
@@ -50,7 +56,7 @@ export default function AppLayout() {
   }
 
   return (
-    <DashboardLayout topBar={<TmsOverdueBar />}>
+    <DashboardLayout topBar={SHOW_TMS_OVERDUE_BAR ? <TmsOverdueBar /> : undefined}>
       <ErrorBoundary resetKey={pathname}>
         <RouteGuard>
           <Suspense

@@ -1,5 +1,6 @@
 import {
   AutomationKind,
+  CreditStatus,
   InvoiceDeliveryMode,
   PartyType,
   StatementFrequency,
@@ -212,6 +213,13 @@ const hourText = (hour: number) =>
 
 export { hourText };
 
+// The party's contacts as the automation card sees them. Loading and failure
+// are kept apart from "no contacts", so neither reads as "nobody receives it".
+export type ContactsState =
+  | { status: "pending" }
+  | { status: "error"; retry: () => void }
+  | { status: "success"; contacts: ContactView[] };
+
 // Who a rule goes to, in words: named contacts, the contacts flagged for it,
 // the team, extra addresses.
 export function recipientText(
@@ -273,6 +281,21 @@ export function effectiveRule(rule: AutomationRule): AutomationRule {
   return { ...companyAutomationDefaults[rule.kind], enabled: rule.enabled };
 }
 
+// Why a message can't be switched on for this party, or null when it can.
+// The credit-limit alert needs a limit to watch: credit allowed and a limit
+// set on the agreement in force (null means "no limit"; undefined means the
+// API hasn't sent credit settings yet).
+export function unavailableReason(
+  kind: AutomationKind,
+  agreement: AgreementView | undefined
+): string | null {
+  if (kind !== AutomationKind.CreditLimit) return null;
+  const hasLimit =
+    agreement?.creditStatus === CreditStatus.Allowed &&
+    typeof agreement.creditLimit === "string";
+  return hasLimit ? null : "No credit limit on the agreement in force";
+}
+
 // A party's automation as the page first shows it. The on/off of the
 // messages the agreement already has a switch for comes from the agreement
 // in force (the real data); days set on the agreement count as customised.
@@ -282,6 +305,7 @@ export function seedAutomation(
 ): PartyAutomation {
   const rules = automationKinds(type).map((kind): AutomationRule => {
     const rule = { ...companyAutomationDefaults[kind] };
+    if (unavailableReason(kind, agreement)) rule.enabled = false;
     if (!agreement) return rule;
     switch (kind) {
       case AutomationKind.InvoiceDelivery:
@@ -304,10 +328,6 @@ export function seedAutomation(
           rule.custom = true;
         }
         break;
-      case AutomationKind.CreditLimit:
-        // Nothing to watch without a limit.
-        rule.enabled = rule.enabled && !!agreement.creditLimit;
-        break;
       case AutomationKind.CarrierBillDue:
         rule.enabled = agreement.remindersEnabled;
         if (agreement.alertDaysBefore !== null) {
@@ -319,6 +339,7 @@ export function seedAutomation(
     return rule;
   });
   return {
+    paused: false,
     pausedUntil: null,
     pauseReason: "",
     sendHour: DEFAULT_SEND_HOUR,
@@ -327,6 +348,8 @@ export function seedAutomation(
   };
 }
 
-// Paused through `pausedUntil`, inclusive. Calendar dates compare as text.
+// Paused when `paused` is set: indefinitely if `pausedUntil` is null,
+// otherwise through `pausedUntil`, inclusive. Calendar dates compare as text.
 export const isPaused = (automation: PartyAutomation, today: string) =>
-  automation.pausedUntil !== null && automation.pausedUntil >= today;
+  automation.paused &&
+  (automation.pausedUntil === null || automation.pausedUntil >= today);

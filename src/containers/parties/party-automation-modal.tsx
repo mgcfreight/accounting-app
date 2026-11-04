@@ -1,16 +1,24 @@
 import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { CheckboxGroup } from "@heroui/react";
 import { FormModal } from "@/components/common";
-import { BaseInput, BaseSelect, BaseSwitch, BaseTextArea } from "@/components/common/form";
+import {
+  BaseCheckbox,
+  BaseInput,
+  BaseSelect,
+  BaseSwitch,
+  BaseTextArea,
+} from "@/components/common/form";
 import {
   AutomationKind,
   InvoiceDeliveryMode,
   StatementFrequency,
   StatementScope,
 } from "@/lib/enums";
-import { AutomationRule, ContactView } from "@/lib/interfaces";
+import { AutomationRule } from "@/lib/interfaces";
 import {
   AutomationSpec,
+  ContactsState,
   frequencyLabels,
   parseEmails,
   parseSteps,
@@ -81,12 +89,23 @@ const toForm = (rule: AutomationRule): RuleFormValues => ({
   body: rule.body,
 });
 
-const fromForm = (values: RuleFormValues, rule: AutomationRule): AutomationRule => {
+const WHOLE_NUMBER = /^\d+$/;
+
+const fromForm = (
+  values: RuleFormValues,
+  rule: AutomationRule,
+  spec: AutomationSpec
+): AutomationRule => {
+  // The steps field is validated with parseSteps before submit, so this only
+  // keeps the old steps for kinds that have none.
   const parsedSteps = (() => {
-    if (!values.stepsText.trim()) return [];
-    const parts = values.stepsText.split(",").map((p) => p.trim()).filter(Boolean);
-    const nums = parts.map(Number);
-    return nums.some(isNaN) ? rule.steps : nums;
+    if (!spec.steps) return rule.steps;
+    const result = parseSteps(
+      values.stepsText,
+      spec.steps,
+      rule.kind === AutomationKind.BeforeDue
+    );
+    return "steps" in result ? result.steps : rule.steps;
   })();
   const parsedEmails = (() => {
     if (!values.extraEmailsText.trim()) return [];
@@ -119,32 +138,29 @@ export default function AutomationRuleModal({
   rule,
   spec,
   contacts,
+  unavailable,
   onSave,
   onClose,
 }: {
   rule: AutomationRule;
   spec: AutomationSpec;
-  contacts: ContactView[];
+  contacts: ContactsState;
+  // Why the rule can't be switched on, or null when it can.
+  unavailable: string | null;
   onSave: (updated: AutomationRule) => void;
   onClose: () => void;
 }) {
   const defaults = companyAutomationDefaults[rule.kind];
   const isCountDown = rule.kind === AutomationKind.BeforeDue;
-  const activeContacts = contacts.filter((c) => c.isActive);
+  const activeContacts =
+    contacts.status === "success" ? contacts.contacts.filter((c) => c.isActive) : [];
 
-  const { control, handleSubmit, setValue, watch } = useForm<RuleFormValues>({
+  const { control, handleSubmit, setValue } = useForm<RuleFormValues>({
     defaultValues: toForm(rule),
   });
 
   const custom = useWatch({ control, name: "custom" });
-  const contactIds = watch("contactIds");
-
-  const toggleContact = (id: string) => {
-    const next = contactIds.includes(id)
-      ? contactIds.filter((c) => c !== id)
-      : [...contactIds, id];
-    setValue("contactIds", next);
-  };
+  const contactIds = useWatch({ control, name: "contactIds" });
 
   useEffect(() => {
     if (!custom) {
@@ -160,13 +176,22 @@ export default function AutomationRuleModal({
       onOpenChange={(open) => !open && onClose()}
       title={spec.label}
       confirmText="Save"
-      onConfirm={handleSubmit((values) => onSave(fromForm(values, rule)))}
+      onConfirm={handleSubmit((values) => onSave(fromForm(values, rule, spec)))}
       size="2xl"
     >
       <p className="text-xs text-content-5">{spec.help}</p>
 
-      <BaseSwitch name="enabled" control={control}>
-        Enabled
+      <BaseSwitch
+        name="enabled"
+        control={control}
+        isDisabled={!!unavailable && !rule.enabled}
+      >
+        <span className="flex flex-col">
+          <span>Enabled</span>
+          {unavailable && !rule.enabled && (
+            <span className="text-xs text-content-5">Unavailable: {unavailable}.</span>
+          )}
+        </span>
       </BaseSwitch>
 
       <BaseSwitch name="custom" control={control}>
@@ -226,8 +251,12 @@ export default function AutomationRuleModal({
           isDisabled={!custom}
           rules={{
             validate: (v: FieldValue) => {
-              const n = Number(v);
-              return (n >= 1 && n <= 100) || "Enter a number from 1 to 100";
+              const s = String(v).trim();
+              const n = Number(s);
+              return (
+                (WHOLE_NUMBER.test(s) && n >= 1 && n <= 100) ||
+                "Enter a whole number from 1 to 100"
+              );
             },
           }}
         />
@@ -262,35 +291,51 @@ export default function AutomationRuleModal({
             validate: (v: FieldValue) => {
               const s = String(v).trim();
               if (!s) return true;
-              const n = Number(s);
-              return (!isNaN(n) && n >= 0 && n <= 120) || "0–120 days";
+              return (
+                (WHOLE_NUMBER.test(s) && Number(s) <= 120) || "Whole days from 0 to 120"
+              );
             },
           }}
         />
       )}
 
-      {spec.audience === "party" && activeContacts.length > 0 && (
-        <div className="flex flex-col gap-2">
+      {spec.audience === "party" && contacts.status !== "success" && (
+        <div className="flex flex-col gap-1">
           <p className="text-sm font-medium text-[#343A40]">Recipients</p>
-          <p className="text-xs text-content-5">
-            Leave all unchecked to use the contacts flagged for this message type.
-          </p>
-          <div className="flex flex-col gap-1">
-            {activeContacts.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={contactIds.includes(c.id)}
-                  onChange={() => toggleContact(c.id)}
-                  disabled={!custom}
-                  className="rounded"
-                />
-                <span>{c.name}</span>
-                <span className="text-content-5 text-xs">{c.email}</span>
-              </label>
-            ))}
-          </div>
+          {contacts.status === "pending" ? (
+            <p className="text-sm text-content-5">Loading the contacts…</p>
+          ) : (
+            <p className="text-sm">
+              <span className="text-base-danger">Couldn&apos;t load the contacts.</span>{" "}
+              <button
+                type="button"
+                className="text-base-primary underline text-sm"
+                onClick={contacts.retry}
+              >
+                Try again
+              </button>
+            </p>
+          )}
         </div>
+      )}
+
+      {spec.audience === "party" && activeContacts.length > 0 && (
+        <CheckboxGroup
+          label="Recipients"
+          description="Leave all unchecked to use the contacts flagged for this message type."
+          size="sm"
+          value={contactIds}
+          onValueChange={(ids) => setValue("contactIds", ids)}
+          isDisabled={!custom}
+          classNames={{ label: "text-sm font-medium text-[#343A40]", wrapper: "gap-1" }}
+        >
+          {activeContacts.map((c) => (
+            <BaseCheckbox key={c.id} value={c.id}>
+              <span className="text-sm">{c.name}</span>{" "}
+              <span className="text-content-5 text-xs">{c.email}</span>
+            </BaseCheckbox>
+          ))}
+        </CheckboxGroup>
       )}
 
       <BaseSwitch name="notifyTeam" control={control} isDisabled={!custom}>

@@ -1,17 +1,24 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Permission } from "@/lib/enums";
 import { mockTmsOverdue } from "@/lib/mock";
 import { TmsOverdueSummary } from "@/lib/interfaces";
 import TmsOverdueBar, { TICKER_MS } from "./tms-overdue-bar";
 
 const state = vi.hoisted(() => ({
+  canView: true,
   canRecord: true,
   overdue: null as TmsOverdueSummary | null,
 }));
 
 vi.mock("@/components/providers/user-provider", () => ({
-  useCan: () => ({ can: () => state.canRecord }),
+  useCan: () => ({
+    can: (permission: Permission) =>
+      permission === Permission.CustomerPaymentsView
+        ? state.canView
+        : permission === Permission.CustomerPaymentsCreate && state.canRecord,
+  }),
 }));
 
 vi.mock("@/lib/mock", async (importOriginal) => {
@@ -33,8 +40,24 @@ const NORTHWIND = "Payment overdue in the TMS · 3 of 3: Northwind Distribution 
 
 describe("TmsOverdueBar", () => {
   beforeEach(() => {
+    state.canView = true;
     state.canRecord = true;
     state.overdue = null;
+  });
+
+  it("labels its figures as demo data before anything else", async () => {
+    render(<TmsOverdueBar />);
+    expect(bar()).toHaveTextContent(/^Demo data · Payment overdue in the TMS/);
+    await userEvent.click(screen.getByRole("button", { name: "View All" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Overdue Payments in the TMS (Demo Data)" })
+    ).toBeInTheDocument();
+  });
+
+  it("shows nothing to those who can't view customer payments", () => {
+    state.canView = false;
+    render(<TmsOverdueBar />);
+    expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
   });
 
   describe("rotating", () => {
@@ -103,6 +126,30 @@ describe("TmsOverdueBar", () => {
     expect(rows[1]).toHaveTextContent("USD 1,475.00");
   });
 
+  it("lists every shipper the totals count, even one at zero", async () => {
+    state.overdue = {
+      ...mockTmsOverdue,
+      shippers: [
+        ...mockTmsOverdue.shippers,
+        {
+          partyId: "USR_00ZZ",
+          partyName: "Zero Balance Ltd.",
+          currency: mockTmsOverdue.shippers[0].currency,
+          amount: "0.00",
+          invoiceCount: 0,
+          oldestOverdueDays: 0,
+        },
+      ],
+    };
+    render(<TmsOverdueBar />);
+    await userEvent.click(screen.getByRole("button", { name: "View All" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Total overdue: CAD 5,137.39 · USD 1,475.00");
+    const rows = within(dialog).getAllByRole("listitem");
+    expect(rows).toHaveLength(4);
+    expect(rows[3]).toHaveTextContent("Zero Balance Ltd.");
+  });
+
   it("opens Record Payment for the chosen shipper in their currency", async () => {
     render(<TmsOverdueBar />);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
@@ -124,7 +171,7 @@ describe("TmsOverdueBar", () => {
     };
     render(<TmsOverdueBar />);
     expect(bar()).toHaveTextContent(
-      "Payment overdue in the TMS: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
+      "Demo data · Payment overdue in the TMS: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
     );
     expect(screen.queryByRole("button", { name: "View All" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();

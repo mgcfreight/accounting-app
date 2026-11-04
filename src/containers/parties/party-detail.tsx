@@ -40,6 +40,7 @@ import {
   AgreementFormModal,
   ContactFormModal,
 } from "./party-modals";
+import { ContactsState } from "./automation-rules";
 import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -184,7 +185,12 @@ export default function PartyDetail({ type }: { type: PartyType }) {
         )}
       </BaseCardWrapper>
 
-      <PartyAutomationContacts partyId={data.id} type={type} />
+      <PartyAutomationContacts
+        partyId={data.id}
+        type={type}
+        agreement={current}
+        canEdit={can(Permission.PartiesEdit)}
+      />
 
       {can(
         isShipper
@@ -473,16 +479,35 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
   );
 }
 
-// Loads contacts then renders the automation card.
-function PartyAutomationContacts({ partyId, type }: { partyId: string; type: PartyType }) {
+// Loads contacts then renders the automation card, seeded from the agreement
+// in force; a different agreement re-seeds it.
+function PartyAutomationContacts({
+  partyId,
+  type,
+  agreement,
+  canEdit,
+}: {
+  partyId: string;
+  type: PartyType;
+  agreement: AgreementView | undefined;
+  canEdit: boolean;
+}) {
   const contacts = useQuery({
     queryKey: ["parties", "contacts", partyId],
     queryFn: ({ signal }) => listContacts(partyId, signal),
   });
+  const contactsState: ContactsState = contacts.isError
+    ? { status: "error", retry: () => void contacts.refetch() }
+    : contacts.isPending
+      ? { status: "pending" }
+      : { status: "success", contacts: contacts.data.filter((c) => c.isActive) };
   return (
     <PartyAutomationCard
+      key={agreement?.id ?? "none"}
       type={type}
-      contacts={(contacts.data ?? []).filter((c) => c.isActive)}
+      agreement={agreement}
+      canEdit={canEdit}
+      contacts={contactsState}
     />
   );
 }

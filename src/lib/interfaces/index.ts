@@ -840,7 +840,11 @@ export interface AutomationRule {
 }
 
 export interface PartyAutomation {
-  // Calendar date the pause ends on (inclusive); null when not paused.
+  // Whether a pause has been set. Read it through isPaused, which also
+  // honours pausedUntil.
+  paused: boolean;
+  // Calendar date the pause ends on (inclusive); null for an indefinite
+  // pause. Ignored while paused is false.
   pausedUntil: string | null;
   pauseReason: string;
   // Hour of the day, Toronto time, that messages go out (0–23).
