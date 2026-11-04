@@ -3,6 +3,7 @@ import {
   AdjustmentMode,
   BillingTrigger,
   CarrierInvoiceStatus,
+  CreditStatus,
   Currency,
   CustomerInvoiceStatus,
   InvoiceKind,
@@ -325,6 +326,10 @@ export const agreementSchema: z.ZodType<AgreementView> = z.object({
   partyId: z.string(),
   paymentTerms: z.enum(PaymentTerms),
   currency: z.enum(Currency),
+  // Optional until the Accounts API sends them; when it does, a malformed
+  // one still fails the record.
+  creditStatus: z.enum(CreditStatus).nullable().optional(),
+  creditLimit: money.nullable().optional(),
   taxTreatment: z.enum(TaxTreatment),
   taxBasis: z.enum(TaxBasis),
   billingTrigger: z.enum(BillingTrigger).nullable(),

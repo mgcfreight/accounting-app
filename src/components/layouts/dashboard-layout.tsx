@@ -7,8 +7,15 @@ import { Sidebar } from "../sidebar";
 import Header from "../header/header";
 
 // mokal-app's DashboardLayout: sidebar on the left, header and page on the
-// right, on the same off-white background.
-export function DashboardLayout({ children }: { children: ReactNode }) {
+// right, on the same off-white background. `topBar` is a strip above the
+// header, on every page.
+export function DashboardLayout({
+  children,
+  topBar,
+}: {
+  children: ReactNode;
+  topBar?: ReactNode;
+}) {
   const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(true);
   const { pathname } = useLocation();
@@ -48,8 +55,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           )}
           <div
             ref={columnRef}
-            className="overflow-auto h-full flex flex-col w-full min-w-0 pt-5"
+            className="overflow-auto h-full flex flex-col w-full min-w-0"
           >
+            {topBar}
+            {/* The gap above the header, below the bar. */}
+            <div aria-hidden className="h-5 shrink-0" />
             <Header user={user} onOpenSidebar={() => setCollapsed(false)} />
             <main
               ref={mainRef}

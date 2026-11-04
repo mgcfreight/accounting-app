@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { BaseInput, BaseSelect, FormModal } from "@/components/common";
@@ -42,9 +42,12 @@ const AMOUNT = /^\d{1,9}\.\d{2}$/;
 export default function RecordPaymentModal({
   isOpen,
   onClose,
+  shipper,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  // Opens on money in from this shipper, in their currency.
+  shipper?: { id: string; currency: string };
 }) {
   // Only the sides the role may record (the header button needs either).
   const { can } = useCan();
@@ -52,11 +55,12 @@ export default function RecordPaymentModal({
     can(option.permission)
   );
   const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
+    // Read once, on mount: render this with `shipper` already set.
     defaultValues: {
-      direction: directionOptions[0]?.value ?? "IN",
-      party: "",
+      direction: shipper ? "IN" : (directionOptions[0]?.value ?? "IN"),
+      party: shipper?.id ?? "",
       method: "",
-      currency: "CAD",
+      currency: shipper?.currency ?? "CAD",
       amount: "",
       bankFee: "",
       paidOn: "",
@@ -70,8 +74,12 @@ export default function RecordPaymentModal({
   }, [isOpen, reset]);
 
   // A shipper chosen before switching to "Money out" is not a carrier, so the
-  // choice is cleared rather than submitted against the wrong list.
+  // choice is cleared rather than submitted against the wrong list. Only on a
+  // real change, so a shipper passed in survives the first render.
+  const shownDirection = useRef(direction);
   useEffect(() => {
+    if (shownDirection.current === direction) return;
+    shownDirection.current = direction;
     setValue("party", "");
   }, [direction, setValue]);
 

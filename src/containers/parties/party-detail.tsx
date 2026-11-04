@@ -9,6 +9,7 @@ import {
   DetailRow,
   ErrorState,
   InfoStrip,
+  Money,
   StatusChip,
   TableSkeleton,
 } from "@/components/common";
@@ -17,11 +18,12 @@ import { useCan } from "@/components/providers/user-provider";
 import { useServerPaging } from "@/hooks";
 import {
   billingTriggerLabels,
+  creditStatusLabels,
   paymentTermsLabels,
   taxBasisLabels,
   taxTreatmentLabels,
 } from "@/lib/constants";
-import { InvoiceDirection, PartyType, Permission } from "@/lib/enums";
+import { CreditStatus, InvoiceDirection, PartyType, Permission } from "@/lib/enums";
 import { AgreementView, ContactView, Paginated, PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
@@ -36,9 +38,10 @@ import {
 import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
 import {
   AgreementFormModal,
-  AgreementSettingsModal,
   ContactFormModal,
 } from "./party-modals";
+import { ContactsState } from "./automation-rules";
+import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
@@ -72,7 +75,6 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   const id = searchParams.get("id");
   const { can } = useCan();
   const [addingAgreement, setAddingAgreement] = useState(false);
-  const [editingSettings, setEditingSettings] = useState(false);
   const isShipper = type === PartyType.Shipper;
   const what = isShipper ? "Shipper" : "Carrier";
   const listHref = isShipper ? "/shippers/" : "/carriers/";
@@ -179,12 +181,16 @@ export default function PartyDetail({ type }: { type: PartyType }) {
             current={current}
             today={today}
             isShipper={isShipper}
-            onEditSettings={
-              can(Permission.PartiesEdit) ? () => setEditingSettings(true) : undefined
-            }
           />
         )}
       </BaseCardWrapper>
+
+      <PartyAutomationContacts
+        partyId={data.id}
+        type={type}
+        agreement={current}
+        canEdit={can(Permission.PartiesEdit)}
+      />
 
       {can(
         isShipper
@@ -194,13 +200,6 @@ export default function PartyDetail({ type }: { type: PartyType }) {
 
       {addingAgreement && (
         <AgreementFormModal party={data} onClose={() => setAddingAgreement(false)} />
-      )}
-      {editingSettings && current && (
-        <AgreementSettingsModal
-          agreement={current}
-          isShipper={isShipper}
-          onClose={() => setEditingSettings(false)}
-        />
       )}
     </div>
   );
@@ -248,6 +247,27 @@ function AgreementTerms({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
         <DetailRow label="Payment terms" value={paymentTermsLabels[agreement.paymentTerms]} />
         <DetailRow label="Currency" value={agreement.currency} />
+        {isShipper && (
+          <DetailRow
+            label="Credit"
+            value={
+              // Undefined until the Accounts API sends credit settings.
+              agreement.creditStatus ? creditStatusLabels[agreement.creditStatus] : "Not saved yet"
+            }
+          />
+        )}
+        {isShipper && agreement.creditStatus === CreditStatus.Allowed && (
+          <DetailRow
+            label="Credit limit"
+            value={
+              agreement.creditLimit === null ? (
+                "No limit"
+              ) : (
+                <Money amount={agreement.creditLimit} currency={agreement.currency} />
+              )
+            }
+          />
+        )}
         <DetailRow label="Tax treatment" value={taxTreatmentLabels[agreement.taxTreatment]} />
         <DetailRow label="Tax rate from" value={taxBasisLabels[agreement.taxBasis]} />
         {!isShipper && (
@@ -291,14 +311,11 @@ function Agreements({
   current,
   today,
   isShipper,
-  onEditSettings,
 }: {
   agreements: AgreementView[];
   current: AgreementView | undefined;
   today: string;
   isShipper: boolean;
-  // Unset when the user can't edit parties.
-  onEditSettings?: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const next = agreements.findLast((a) => agreementState(a, today) === "upcoming");
@@ -323,14 +340,6 @@ function Agreements({
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <AgreementStateChip state="current" />
             <span className="font-semibold text-[#343A40]">{agreementPeriod(current)}</span>
-            {onEditSettings && (
-              <BaseButton
-                varient="bordered"
-                className="ml-auto h-8 px-3 text-base-primary"
-                text="Edit settings"
-                onPress={onEditSettings}
-              />
-            )}
           </div>
           <AgreementTerms agreement={current} isShipper={isShipper} />
         </section>
@@ -467,6 +476,39 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
         />
       )}
     </>
+  );
+}
+
+// Loads contacts then renders the automation card, seeded from the agreement
+// in force; a different agreement re-seeds it.
+function PartyAutomationContacts({
+  partyId,
+  type,
+  agreement,
+  canEdit,
+}: {
+  partyId: string;
+  type: PartyType;
+  agreement: AgreementView | undefined;
+  canEdit: boolean;
+}) {
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", partyId],
+    queryFn: ({ signal }) => listContacts(partyId, signal),
+  });
+  const contactsState: ContactsState = contacts.isError
+    ? { status: "error", retry: () => void contacts.refetch() }
+    : contacts.isPending
+      ? { status: "pending" }
+      : { status: "success", contacts: contacts.data.filter((c) => c.isActive) };
+  return (
+    <PartyAutomationCard
+      key={agreement?.id ?? "none"}
+      type={type}
+      agreement={agreement}
+      canEdit={canEdit}
+      contacts={contactsState}
+    />
   );
 }
 

@@ -6,3 +6,4 @@ export * from "./operations";
 export * from "./reports";
 export * from "./accounts";
 export * from "./documents";
+export * from "./automation";

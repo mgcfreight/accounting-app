@@ -153,6 +153,16 @@ export enum PaymentTerms {
   Net15 = "NET_15",
   Net30 = "NET_30",
   Net60 = "NET_60",
+  Net90 = "NET_90",
+}
+
+// Whether a shipper may buy on credit. Carriers have none.
+export enum CreditStatus {
+  Allowed = "ALLOWED",
+  // Had credit, stopped for now (e.g. overdue).
+  Blocked = "BLOCKED",
+  // Never given credit.
+  NotAllowed = "NOT_ALLOWED",
 }
 
 export enum TaxTreatment {
@@ -281,4 +291,41 @@ export enum InstallmentStatus {
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",
+}
+
+// The automated messages a shipper or carrier can have, each set up on the
+// party's Notifications & Automation card. Provisional: the Accounts API
+// stores only the agreement's on/off switches so far.
+export enum AutomationKind {
+  // Shippers
+  InvoiceDelivery = "INVOICE_DELIVERY",
+  BeforeDue = "BEFORE_DUE",
+  Overdue = "OVERDUE",
+  Statement = "STATEMENT",
+  BillingNotice = "BILLING_NOTICE",
+  CreditLimit = "CREDIT_LIMIT",
+  // Carriers
+  CarrierBillDue = "CARRIER_BILL_DUE",
+  MissingCarrierBill = "MISSING_CARRIER_BILL",
+  Remittance = "REMITTANCE",
+  OverduePayable = "OVERDUE_PAYABLE",
+}
+
+export enum InvoiceDeliveryMode {
+  Manual = "MANUAL",
+  Auto = "AUTO",
+}
+
+export enum StatementFrequency {
+  // What the statement job does today: every Friday and the last weekday
+  // of the month.
+  WeeklyAndMonthEnd = "WEEKLY_AND_MONTH_END",
+  Weekly = "WEEKLY",
+  Biweekly = "BIWEEKLY",
+  MonthEnd = "MONTH_END",
+}
+
+export enum StatementScope {
+  OpenInvoices = "OPEN_INVOICES",
+  AllActivity = "ALL_ACTIVITY",
 }
