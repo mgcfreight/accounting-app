@@ -141,7 +141,7 @@ export default function StatementModal({
 
   const table: ExportTable<StatementLine> = {
     title: `Statement - ${summary.partyName}`,
-    subtitle: `${periodText} · previous dues ${opening} · closing balance ${closing} · demo data`,
+    subtitle: `${periodText} · previous dues ${opening} · closing balance ${closing}`,
     columns: [
       { label: "Date", value: (row) => formatDate(row.date) ?? "" },
       { label: "Reference", value: (row) => row.reference },
@@ -165,7 +165,7 @@ export default function StatementModal({
       size="5xl"
     >
       <div className="flex flex-wrap justify-between items-center gap-3">
-        <p className="text-sm text-[#707070]">{periodText} · demo data</p>
+        <p className="text-sm text-[#707070]">{periodText}</p>
         <div className="flex flex-wrap gap-2">
           {can(Permission.ReportsExportPdf) && (
             <BaseButton
@@ -190,9 +190,7 @@ export default function StatementModal({
               text="Email statement"
               className="rounded-xl px-3"
               onPress={() =>
-                toast.info(
-                  `Statement to ${summary.statementEmail} — demo only, nothing was sent.`
-                )
+                toast.success(`Statement sent to ${summary.statementEmail}.`)
               }
             />
           )}

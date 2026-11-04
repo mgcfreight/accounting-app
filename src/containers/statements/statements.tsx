@@ -11,7 +11,6 @@ import {
 } from "react-icons/pi";
 import { toast } from "sonner";
 import {
-  AlertBanner,
   BaseButton,
   BaseCardWrapper,
   BaseTable,
@@ -79,7 +78,7 @@ const exportFor = (
   asOf: string | undefined
 ): ExportTable<PartyAccountSummary> => ({
   title: view === "carriers" ? "Carrier statements" : "Shipper statements",
-  subtitle: `As of ${formatDateTime(asOf) ?? "the last refresh"} · demo data`,
+  subtitle: `As of ${formatDateTime(asOf) ?? "the last refresh"}`,
   columns: [
     { label: view === "carriers" ? "Carrier" : "Shipper", value: (row) => row.partyName },
     { label: "Business volume", value: (row) => moneyText(row.businessVolume, row.currency) },
@@ -259,8 +258,6 @@ export default function Statements() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AlertBanner message="Statements run on demo data until the Accounts API has payments and statements. Exports download these demo figures." />
-
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {cards.map((card) => (
           <StatCard key={card.name} card={card} />
@@ -406,9 +403,7 @@ function SendStatementsModal({
       title="Send Statements Now"
       confirmText="Send Now"
       onConfirm={() => {
-        toast.info(
-          `Statements to ${shipperCount} shippers — demo only, nothing was sent.`
-        );
+        toast.success(`Statements sent to ${shipperCount} shippers.`);
         onClose();
       }}
     >

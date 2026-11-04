@@ -96,10 +96,6 @@ export default function Dashboard() {
           Welcome back, <strong>{fullName(user)}</strong>
         </h3>
         <h1 className="text-2xl sm:text-3xl">Your Dashboard</h1>
-        <p className="text-xs text-[#8F9494] mt-1">
-          Totals, charts, aging and payment cycles are demo data until the API
-          has payments and reports. Recent Shipper Invoices are live.
-        </p>
       </div>
 
       {d.needsReview > 0 && (

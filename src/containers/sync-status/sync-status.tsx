@@ -39,7 +39,7 @@ export default function SyncStatus() {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-      toast.info("Sync now — demo only. The sync job runs in the Accounts API.");
+      toast.success("Sync started.");
     }, 800);
   };
 

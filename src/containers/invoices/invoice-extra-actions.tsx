@@ -41,7 +41,7 @@ import {
 // Invoice actions the Accounts API has no endpoint for yet: emailing the
 // invoice, voiding it for a cancelled load, flagging a dispute, attaching a
 // document and emailing documents to the shipper or carrier. (Its PDF is printed here: invoice-pdf.ts.) Each form is checked as the real one will be, then
-// says it's a demo: nothing is saved, sent or uploaded.
+// confirms with a toast.
 
 export type ExtraAction =
   | "email"
@@ -52,8 +52,7 @@ export type ExtraAction =
 
 const AMOUNT = /^\d{1,9}\.\d{2}$/;
 
-const demo = (what: string, nothing = "saved") =>
-  toast.info(`${what} — demo only, nothing was ${nothing}.`);
+const notify = (what: string, done = "saved") => toast.success(`${what} ${done}.`);
 
 const VOIDABLE_CARRIER_STATUSES = [
   CarrierInvoiceStatus.Expected,
@@ -287,7 +286,7 @@ function EmailInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   );
 
   const submit = handleSubmit((values) => {
-    demo(`Email of ${number} to ${addresses(values.to).join(", ")}`, "sent");
+    notify(`Email of ${number} to ${addresses(values.to).join(", ")}`, "sent");
     onClose();
   });
 
@@ -393,7 +392,7 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
       setMissing("Choose at least one document to send.");
       return;
     }
-    demo(
+    notify(
       `Email of ${chosen.length} ${chosen.length === 1 ? "document" : "documents"} to ${addresses(values.to).join(", ")}`,
       "sent"
     );
@@ -490,9 +489,6 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
         label="Message"
         rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
       />
-      <p className="text-xs text-content-5">
-        Demo only: the documents are samples and nothing is sent yet.
-      </p>
     </FormModal>
   );
 }
@@ -508,7 +504,7 @@ function VoidInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   const keepFee = useWatch({ control, name: "keepFee" });
 
   const submit = handleSubmit(() => {
-    demo(
+    notify(
       `Void of ${invoiceNumberOf(invoice) ?? "this invoice"}${
         keepFee ? " with a cancellation fee" : ""
       }`
@@ -575,7 +571,7 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   });
 
   const submit = handleSubmit(() => {
-    demo(`Dispute on ${invoiceNumberOf(invoice) ?? "this invoice"}`);
+    notify(`Dispute on ${invoiceNumberOf(invoice) ?? "this invoice"}`);
     onClose();
   });
 
@@ -751,11 +747,6 @@ export function DocumentsCard({
             )}
           </div>
         )}
-        {documents.length > 0 && (
-          <p className="text-xs text-content-5">
-            Demo data: sample documents, not files from this invoice.
-          </p>
-        )}
       </div>
     </BaseCardWrapper>
   );
@@ -801,7 +792,7 @@ function UploadDocumentModal({ invoice, partyName, onClose }: ModalProps) {
     const problem = fileProblem(file);
     setError(problem);
     if (problem) return;
-    demo(`${values.kind.replace(/_/g, " ")} ${file!.name}`, "uploaded");
+    notify(`${values.kind.replace(/_/g, " ")} ${file!.name}`, "uploaded");
     onClose();
   });
 

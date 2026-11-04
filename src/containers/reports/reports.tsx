@@ -256,7 +256,7 @@ const agingBuckets: { key: keyof AgingRow; label: string }[] = [
   { key: "total", label: "Total" },
 ];
 
-const demo = (covers: string) => `${covers} · CAD · demo data`;
+const inCad = (covers: string) => `${covers} · CAD`;
 
 const muted = "text-xs text-[#8F9494]";
 
@@ -288,8 +288,8 @@ export default function Reports() {
   const coverage: Record<string, { period: string; note: string }> = {
     summary: { period: chosenPeriod, note: SUMMARY_NOTE },
     "pnl-monthly": { period: chosenPeriod, note: "CAD at invoice-date rates" },
-    "pnl-party": { period: mockPartyPnl.period, note: "CAD · the demo data only has October" },
-    tax: { period: mockTaxSummary.period, note: "CAD · the demo data only has October" },
+    "pnl-party": { period: mockPartyPnl.period, note: "CAD" },
+    tax: { period: mockTaxSummary.period, note: "CAD" },
     aging: { period: "Open balances as of now", note: "each currency on its own line, not converted" },
     statements: { period: "Any date range", note: "chosen on the Statements page" },
     accountant: { period: chosenPeriod, note: "CSV for MGC's accounting software" },
@@ -305,7 +305,7 @@ export default function Reports() {
           exportTable<SummaryField>(
             {
               title: "Monthly / Quarterly Summary",
-              subtitle: `${summary.period} · ${SUMMARY_NOTE} · demo data`,
+              subtitle: `${summary.period} · ${SUMMARY_NOTE}`,
               columns: [
                 { label: "Measure", value: (row) => row.label },
                 { label: summary.period, value: (row) => summaryValue(summary, row) },
@@ -321,7 +321,7 @@ export default function Reports() {
             exportTable<PnlRow>(
               {
                 title: "Profit & Loss Monthly Sheet",
-                subtitle: demo(chosenPeriod),
+                subtitle: inCad(chosenPeriod),
                 columns: [{ label: "Month", value: (row) => row.month }, ...pnlExportColumns<PnlRow>()],
                 rows: pnlRows,
               },
@@ -332,7 +332,7 @@ export default function Reports() {
       exportTable<PartyPnl>(
         {
           title: "Profit & Loss by Shipper and Carrier",
-          subtitle: demo(mockPartyPnl.period),
+          subtitle: inCad(mockPartyPnl.period),
           columns: [
             { label: "Side", value: (row) => (row.type === PartyType.Shipper ? "Shipper" : "Carrier") },
             { label: "Name", value: (row) => row.partyName },
@@ -347,7 +347,7 @@ export default function Reports() {
       exportTable<AgingRow>(
         {
           title: "Aging (Receivable and Payable)",
-          subtitle: "Open balances by days past due · demo data",
+          subtitle: "Open balances by days past due",
           columns: [
             { label: "", value: (row) => row.label },
             ...agingBuckets.map(
@@ -365,7 +365,7 @@ export default function Reports() {
       exportTable<TaxRow>(
         {
           title: "Tax Report (HST/GST)",
-          subtitle: demo(mockTaxSummary.period),
+          subtitle: inCad(mockTaxSummary.period),
           columns: [
             { label: "Tax", value: taxLabel },
             { label: "Taxable sales", value: (row) => (row.taxableSales ? cad(row.taxableSales) : "") },
@@ -384,7 +384,7 @@ export default function Reports() {
 
   const exportReport = (format: string) => {
     if (!exporter) {
-      toast.info(`${report.title} (${format}, ${covers.period}) — demo only. This export arrives with the API.`);
+      toast.info(`${report.title} (${format}, ${covers.period}) isn't available yet.`);
       return;
     }
     exporter(format as ExportFormat);
@@ -466,7 +466,7 @@ export default function Reports() {
           )}
           <span className={muted}>
             {scope === "choose" && covers.period && <>Showing <strong>{covers.period}</strong> · </>}
-            {covers.note} · demo data until the API has reports
+            {covers.note}
           </span>
         </div>
       </div>

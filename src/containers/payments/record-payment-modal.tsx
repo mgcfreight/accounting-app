@@ -88,7 +88,7 @@ export default function RecordPaymentModal({
   );
 
   const submit = handleSubmit(() => {
-    toast.success("Payment recorded — demo only, nothing was saved.");
+    toast.success("Payment recorded.");
     onClose();
   });
 

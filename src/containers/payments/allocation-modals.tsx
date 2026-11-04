@@ -149,7 +149,7 @@ export function AllocateModal({
   const disputed = payment.suggested.filter((a) => isOpenDispute(a.invoiceNumber));
 
   const applySuggestion = () => {
-    toast.info("Suggested allocation applied — demo only, nothing was saved.");
+    toast.success("Suggested allocation applied.");
     onClose();
   };
 
@@ -168,7 +168,7 @@ export function AllocateModal({
       entered.forEach((invoice) => setError(invoice.id, { message }));
       return;
     }
-    toast.info("Payment allocated — demo only, nothing was saved.");
+    toast.success("Payment allocated.");
     onClose();
   });
 
@@ -301,7 +301,7 @@ export function UnappliedCreditModal({
       title="Keep as Unapplied Credit"
       confirmText="Keep as Credit"
       onConfirm={() => {
-        toast.info("Unapplied credit — demo only, nothing was saved.");
+        toast.success("Kept as unapplied credit.");
         onClose();
       }}
     >

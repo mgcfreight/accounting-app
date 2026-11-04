@@ -32,7 +32,6 @@ import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils"
 import { ApiError, errorMessage, getNoticeSettings, getParty } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import { fetchInvoice, fetchInvoiceVersions, isDemoInvoice } from "./demo-invoices";
-import { DemoInvoicesBanner } from "./demo-invoices-banner";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import InvoiceExtraActionModal, {
   canBeVoided,
@@ -219,8 +218,6 @@ export default function InvoiceDetail({
           <MoreActions actions={menuActions} />
         </div>
       </div>
-
-      {demo && <DemoInvoicesBanner />}
 
       {loadCancelled && (
         <CancelledLoadBanner

@@ -41,7 +41,6 @@ import {
   CustomerInvoiceListParams,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
-import { DemoInvoicesBanner } from "./demo-invoices-banner";
 import { fetchInvoicePage, isDemoInvoice } from "./demo-invoices";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { availableActions } from "./invoice-row-actions";
@@ -224,7 +223,6 @@ export default function InvoiceList({
     placeholderData: keepPreviousData,
   });
   const rows = invoices.data?.items ?? [];
-  const demo = rows.some(isDemoInvoice);
   const carriers = usePartyNames(carrierIdsOf(rows));
 
   const renderCell = (invoice: InvoiceView, key: string) => {
@@ -294,7 +292,6 @@ export default function InvoiceList({
         />
         <ClearFiltersButton active={filtered} onClear={() => reset(BLANK)} />
       </FilterBar>
-      {demo && <DemoInvoicesBanner list />}
       <Card>
         {/* A failed refetch keeps the last page beside the error; amounts
             that may be out of date are not shown as current. */}

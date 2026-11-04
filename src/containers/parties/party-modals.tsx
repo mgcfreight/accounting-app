@@ -483,12 +483,6 @@ export function ContactFormModal({
   );
 }
 
-const DemoNote = () => (
-  <p className="text-xs text-content-5">
-    Demo only: these settings aren&apos;t saved yet.
-  </p>
-);
-
 type AgreementValues = {
   effectiveFrom: string;
   currency: string;
@@ -561,14 +555,8 @@ export function AgreementFormModal({
       };
       return createAgreement(body);
     },
-    onSuccess: (_, values) => {
+    onSuccess: () => {
       toast.success("Agreement added.");
-      if (
-        !isCarrier &&
-        (values.creditStatus !== CreditStatus.Allowed || values.creditLimit.trim())
-      ) {
-        toast.info("Credit settings — demo only, nothing was saved.");
-      }
       void queryClient.invalidateQueries({ queryKey: ["parties"] });
       onClose();
     },
@@ -674,10 +662,7 @@ export function AgreementFormModal({
       />
       {!isCarrier && (
         <div className="flex flex-col gap-3 border-t border-content-3 pt-4">
-          <div>
-            <p className="text-sm font-semibold text-base-primary-900">Credit</p>
-            <DemoNote />
-          </div>
+          <p className="text-sm font-semibold text-base-primary-900">Credit</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <BaseSelect
               name="creditStatus"

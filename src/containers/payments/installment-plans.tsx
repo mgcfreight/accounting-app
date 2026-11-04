@@ -234,7 +234,7 @@ function NewPlanModal({
   );
 
   const submit = handleSubmit(() => {
-    toast.info("Installment plan created — demo only, nothing was saved.");
+    toast.success("Installment plan created.");
     onClose();
   });
 

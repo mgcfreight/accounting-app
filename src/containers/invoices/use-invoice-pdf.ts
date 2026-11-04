@@ -59,14 +59,12 @@ export default function useInvoicePdf() {
           .catch((error: unknown) => error as Error),
       ]);
       const demo = isDemoInvoice(full);
-      // A real invoice isn't printed without MGC's details; a demo one,
-      // stamped DEMO, can be.
+      // A real invoice isn't printed without MGC's details; a sample one can be.
       if (company instanceof Error && !demo) throw company;
       printInto(
         view,
         toInvoicePdfHtml({
           invoice: full,
-          demo,
           partyName,
           company: company instanceof Error ? NO_COMPANY : company,
           versionCount: versions?.length,

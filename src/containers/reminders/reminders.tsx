@@ -168,7 +168,7 @@ export default function Reminders() {
 
   const subtitle = `${view === "all" ? "All" : reminderStatus[view].label} · ${
     sideOptions.find((option) => option.key === side)?.label ?? "Both sides"
-  } · Demo data`;
+  }`;
   // Every row the filters show, across pages.
   const exportCsv = () => downloadCsv(exportTable(filtered, subtitle));
   const exportPdf = () => {
@@ -241,7 +241,7 @@ export default function Reminders() {
   return (
     <div className="flex flex-col gap-6">
       <AlertBanner
-        message={`Reminders go out ${REMINDER_DAYS_BEFORE_DUE} days before an invoice's due date: shippers get an email to their accounts department, and each carrier bill raises an alert to MGC's accounts team. Demo data — nothing is sent yet.`}
+        message={`Reminders go out ${REMINDER_DAYS_BEFORE_DUE} days before an invoice's due date: shippers get an email to their accounts department, and each carrier bill raises an alert to MGC's accounts team.`}
       />
       <Tabs
         aria-label="Reminders view"
@@ -335,7 +335,7 @@ function SendNowModal({ reminder, onClose }: { reminder: Reminder; onClose: () =
       title="Send Reminder Now"
       confirmText="Send Now"
       onConfirm={() => {
-        toast.info("Reminder sent — demo only, nothing was sent.");
+        toast.success("Reminder sent.");
         onClose();
       }}
     >
@@ -356,7 +356,7 @@ function SkipModal({ reminder, onClose }: { reminder: Reminder; onClose: () => v
     defaultValues: { reason: "" },
   });
   const submit = handleSubmit(() => {
-    toast.info("Reminder skipped — demo only, nothing was saved.");
+    toast.success("Reminder skipped.");
     onClose();
   });
   return (

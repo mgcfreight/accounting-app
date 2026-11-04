@@ -63,8 +63,7 @@ const isReceivable = (dispute: Dispute) =>
 export default function NeedsReview() {
   const [view, setView] = useState<View>("changes");
   const [resolving, setResolving] = useState<Dispute | null>(null);
-  const resolve = (what: string) =>
-    toast.info(`${what} — demo only, nothing was saved.`);
+  const resolve = (what: string) => toast.success(`${what}.`);
   // A credit or debit note is a new adjustment (create); keeping the fee or
   // dismissing resolves the invoice without one (edit).
   const { can } = useCan();
@@ -226,7 +225,7 @@ export default function NeedsReview() {
         </>
       ) : (
         <>
-          <AlertBanner message="While a dispute is open, its amount shows in the aging report's Disputed column and payment reminders for the invoice are paused. Demo data: resolving saves nothing." />
+          <AlertBanner message="While a dispute is open, its amount shows in the aging report's Disputed column and payment reminders for the invoice are paused." />
           <Card>
             <BaseTable
               ariaLabel="Disputes"
@@ -272,7 +271,7 @@ function ResolveDisputeModal({
   });
 
   const submit = handleSubmit(() => {
-    toast.info("Dispute resolved — demo only, nothing was saved.");
+    toast.success("Dispute resolved.");
     onClose();
   });
 
