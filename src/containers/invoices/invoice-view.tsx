@@ -13,6 +13,7 @@ import {
   CarrierInvoiceStatus,
   CustomerInvoiceStatus,
   InvoiceDirection,
+  InvoiceReviewFlag,
 } from "@/lib/enums";
 import {
   CarrierInvoiceView,
@@ -118,6 +119,24 @@ export const awaitsReview = (invoice: InvoiceView) =>
       invoice.status === CarrierInvoiceStatus.Received ||
       invoice.status === CarrierInvoiceStatus.OnHold);
 
+// MGC (the TMS) changed or cancelled the shipment. Unlike the other flags
+// this matters after the invoice is issued or approved too: staff revise,
+// credit or void it. A void or replaced version needs nothing more.
+const MGC_CHANGE_FLAGS = [
+  InvoiceReviewFlag.TmsChanged,
+  InvoiceReviewFlag.TmsCancelled,
+];
+
+export const hasMgcChanges = (invoice: InvoiceView) =>
+  !isVoid(invoice) &&
+  !isSuperseded(invoice) &&
+  invoice.reviewFlags.some((flag) => MGC_CHANGE_FLAGS.includes(flag));
+
+// "Needs review" for the other flags only: MGC's get their own chip.
+const awaitsOtherReview = (invoice: InvoiceView) =>
+  awaitsReview(invoice) &&
+  invoice.reviewFlags.some((flag) => !MGC_CHANGE_FLAGS.includes(flag));
+
 // The statuses in which an invoice is owed: issued to the customer, or the
 // carrier's bill entered.
 const OWED_CARRIER_STATUSES = [
@@ -158,7 +177,13 @@ export function InvoiceStatusCell({ invoice }: { invoice: InvoiceView }) {
       {overdueDays > 0 && (
         <StatusChip text={`Overdue ${overdueDays}d`} tone="danger" />
       )}
-      {awaitsReview(invoice) && <StatusChip text="Needs review" tone="warning" />}
+      {invoice.disputed && <StatusChip text="Disputed" tone="warning" />}
+      {hasMgcChanges(invoice) && (
+        <StatusChip text="MGC changes required" tone="danger" />
+      )}
+      {awaitsOtherReview(invoice) && (
+        <StatusChip text="Needs review" tone="warning" />
+      )}
     </div>
   );
 }

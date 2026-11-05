@@ -97,6 +97,7 @@ const baseOf = (invoice: Invoice): InvoiceViewBase => ({
   balanceDue: invoice.balance,
   notes: null,
   reviewFlags: [],
+  disputed: invoice.disputed,
   parentInvoiceId: invoice.replacesId ?? null,
   revision: invoice.revision ?? 0,
   revisionReason: invoice.revisionReason ?? null,

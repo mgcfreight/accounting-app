@@ -558,6 +558,9 @@ export interface InvoiceViewBase extends ReferenceNumbers {
   balanceDue: string;
   notes: string | null;
   reviewFlags: InvoiceReviewFlag[];
+  // It has an open dispute. Sent by the list and single-invoice endpoints
+  // only, so missing elsewhere (e.g. the invoices POST /shipment returns).
+  disputed?: boolean;
   // The version this one replaced (230 for 230a); null on the first.
   parentInvoiceId: string | null;
   // 0 on the first version, then 1, 2… Not `version`, the edit counter.

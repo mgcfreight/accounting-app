@@ -487,6 +487,7 @@ const invoiceBaseFields = {
   balanceDue: money,
   notes: z.string().nullable(),
   reviewFlags: z.array(z.enum(InvoiceReviewFlag)),
+  disputed: z.boolean().optional(),
   parentInvoiceId: z.string().nullable(),
   revision: z.number().int().nonnegative(),
   revisionReason: z.string().nullable(),
