@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { BaseInput, BaseSelect, FormModal } from "@/components/common";
@@ -6,6 +6,7 @@ import { useCan } from "@/components/providers/user-provider";
 import { currencyOptions, paymentMethodOptions } from "@/lib/constants";
 import { Permission } from "@/lib/enums";
 import { mockCarriers, mockShippers } from "@/lib/mock";
+import { isZeroMoney } from "@/lib/money";
 
 type FormValues = {
   direction: string;
@@ -41,9 +42,12 @@ const AMOUNT = /^\d{1,9}\.\d{2}$/;
 export default function RecordPaymentModal({
   isOpen,
   onClose,
+  shipper,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  // Opens on money in from this shipper, in their currency.
+  shipper?: { id: string; currency: string };
 }) {
   // Only the sides the role may record (the header button needs either).
   const { can } = useCan();
@@ -51,11 +55,12 @@ export default function RecordPaymentModal({
     can(option.permission)
   );
   const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
+    // Read once, on mount: render this with `shipper` already set.
     defaultValues: {
-      direction: directionOptions[0]?.value ?? "IN",
-      party: "",
+      direction: shipper ? "IN" : (directionOptions[0]?.value ?? "IN"),
+      party: shipper?.id ?? "",
       method: "",
-      currency: "CAD",
+      currency: shipper?.currency ?? "CAD",
       amount: "",
       bankFee: "",
       paidOn: "",
@@ -69,8 +74,12 @@ export default function RecordPaymentModal({
   }, [isOpen, reset]);
 
   // A shipper chosen before switching to "Money out" is not a carrier, so the
-  // choice is cleared rather than submitted against the wrong list.
+  // choice is cleared rather than submitted against the wrong list. Only on a
+  // real change, so a shipper passed in survives the first render.
+  const shownDirection = useRef(direction);
   useEffect(() => {
+    if (shownDirection.current === direction) return;
+    shownDirection.current = direction;
     setValue("party", "");
   }, [direction, setValue]);
 
@@ -129,9 +138,11 @@ export default function RecordPaymentModal({
           control={control}
           label="Amount"
           placeholder="0.00"
+          inputMode="decimal"
           rules={{
             required: "Enter the amount",
             pattern: { value: AMOUNT, message: "Enter the amount with cents, e.g. 1500.00" },
+            validate: (value) => !isZeroMoney(value) || "Enter more than 0.00",
           }}
         />
         <BaseInput
@@ -139,6 +150,7 @@ export default function RecordPaymentModal({
           control={control}
           label="Bank fee (optional)"
           placeholder="0.00"
+          inputMode="decimal"
           rules={{
             validate: (value) =>
               !value || AMOUNT.test(value) || "Enter the fee with cents, e.g. 15.00",

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 // mokal-app's useLocalStorage, for per-viewer UI state such as which sidebar
 // group is open. Storage can be unavailable (private mode, blocked site data),
@@ -49,14 +49,18 @@ export default function useLocalStorage<T>(
     }
   }
 
-  const update = (next: T) => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      // Not persisted.
-    }
-    window.dispatchEvent(new Event(CHANGE_EVENT));
-  };
+  // Stable for a key, so callers can list it as an effect dependency.
+  const update = useCallback(
+    (next: T) => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // Not persisted.
+      }
+      window.dispatchEvent(new Event(CHANGE_EVENT));
+    },
+    [key]
+  );
 
   return [value, update];
 }

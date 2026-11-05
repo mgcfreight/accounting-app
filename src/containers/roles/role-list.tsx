@@ -32,7 +32,7 @@ const columns: BaseTableColumn[] = [
   { key: "description", label: "Description" },
   { key: "userCount", label: "Users" },
   { key: "permissions", label: "Permissions" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 // Staff roles and what each may do (Admin only: routes.config, and the API
@@ -122,7 +122,7 @@ export default function RoleList() {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       {roles.isError && (
         <AlertBanner
           message={`Couldn't load roles: ${errorMessage(roles.error)}`}
@@ -137,12 +137,13 @@ export default function RoleList() {
           }
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<Role>
           ariaLabel="Roles"
           columns={columns}
           data={roles.isError ? [] : (roles.data?.items ?? [])}
           loading={roles.isPending}
+          refreshing={roles.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(roles.data?.meta)}
@@ -166,6 +167,7 @@ export default function RoleList() {
           onOpenChange={(open) => !open && setDeleting(null)}
           title={`Delete ${deleting.name}?`}
           confirmText="Delete"
+          confirmColor="danger"
           isConfirming={remove.isPending}
           onConfirm={() => remove.mutate(deleting)}
         >
@@ -174,6 +176,6 @@ export default function RoleList() {
           </p>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

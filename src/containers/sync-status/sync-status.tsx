@@ -170,7 +170,7 @@ export default function SyncStatus() {
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-5">
+    <div className="flex flex-col gap-6">
       {s && !s.enabled && (
         <AlertBanner message="The TMS sync is turned off on this server, so nothing new comes in from the TMS. An administrator turns it on with MGC_SYNC_ENABLED and the TMS keys." />
       )}

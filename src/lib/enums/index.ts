@@ -172,6 +172,16 @@ export enum PaymentTerms {
   Net15 = "NET_15",
   Net30 = "NET_30",
   Net60 = "NET_60",
+  Net90 = "NET_90",
+}
+
+// Whether a shipper may buy on credit. Carriers have none.
+export enum CreditStatus {
+  Allowed = "ALLOWED",
+  // Had credit, stopped for now (e.g. overdue).
+  Blocked = "BLOCKED",
+  // Never given credit.
+  NotAllowed = "NOT_ALLOWED",
 }
 
 export enum TaxTreatment {
@@ -241,6 +251,7 @@ export enum InvoiceReviewFlag {
   NoReferenceNumber = "NO_REFERENCE_NUMBER",
   NoTmsCode = "NO_TMS_CODE",
   NoFxRate = "NO_FX_RATE",
+  // Set by the Accounts API's TMS sync.
   TmsChanged = "TMS_CHANGED",
   TmsCancelled = "TMS_CANCELLED",
   UnknownCharge = "UNKNOWN_CHARGE",
@@ -258,4 +269,82 @@ export enum InvoiceSortBy {
 export enum SortOrder {
   Asc = "ASC",
   Desc = "DESC",
+}
+
+// Statements, reminders, allocation, installments and disputes: no API yet;
+// the screens read lib/mock.
+
+export enum StatementRunKind {
+  DailyRefresh = "DAILY_REFRESH",
+  // Shipper statements every Friday, and on the last weekday of each month.
+  WeeklyEmail = "WEEKLY_EMAIL",
+  MonthEndEmail = "MONTH_END_EMAIL",
+}
+
+export enum ReminderChannel {
+  // Emailed to the shipper's accounts department.
+  CustomerEmail = "CUSTOMER_EMAIL",
+  // An alert to MGC's accounts team that a carrier bill falls due.
+  TeamAlert = "TEAM_ALERT",
+}
+
+export enum ReminderStatus {
+  Scheduled = "SCHEDULED",
+  Sent = "SENT",
+  Skipped = "SKIPPED",
+}
+
+export enum AllocationRule {
+  InvoiceNumber = "INVOICE_NUMBER",
+  ExactAmount = "EXACT_AMOUNT",
+  OldestOpen = "OLDEST_OPEN",
+  Manual = "MANUAL",
+}
+
+export enum InstallmentStatus {
+  Paid = "PAID",
+  Due = "DUE",
+  Late = "LATE",
+}
+
+export enum DisputeStatus {
+  Open = "OPEN",
+  Resolved = "RESOLVED",
+}
+
+// The automated messages a shipper or carrier can have, each set up on the
+// party's Notifications & Automation card. Provisional: the Accounts API
+// stores only the agreement's on/off switches so far.
+export enum AutomationKind {
+  // Shippers
+  InvoiceDelivery = "INVOICE_DELIVERY",
+  BeforeDue = "BEFORE_DUE",
+  Overdue = "OVERDUE",
+  Statement = "STATEMENT",
+  BillingNotice = "BILLING_NOTICE",
+  CreditLimit = "CREDIT_LIMIT",
+  // Carriers
+  CarrierBillDue = "CARRIER_BILL_DUE",
+  MissingCarrierBill = "MISSING_CARRIER_BILL",
+  Remittance = "REMITTANCE",
+  OverduePayable = "OVERDUE_PAYABLE",
+}
+
+export enum InvoiceDeliveryMode {
+  Manual = "MANUAL",
+  Auto = "AUTO",
+}
+
+export enum StatementFrequency {
+  // What the statement job does today: every Friday and the last weekday
+  // of the month.
+  WeeklyAndMonthEnd = "WEEKLY_AND_MONTH_END",
+  Weekly = "WEEKLY",
+  Biweekly = "BIWEEKLY",
+  MonthEnd = "MONTH_END",
+}
+
+export enum StatementScope {
+  OpenInvoices = "OPEN_INVOICES",
+  AllActivity = "ALL_ACTIVITY",
 }

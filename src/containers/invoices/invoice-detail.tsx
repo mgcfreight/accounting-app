@@ -11,9 +11,11 @@ import {
   ErrorState,
   InfoStrip,
   Money,
+  MoreActions,
   TableSkeleton,
 } from "@/components/common";
 import { ArrowRight, Send } from "@/components/icons";
+import { useHeaderDetail } from "@/components/providers/header-detail-provider";
 import { useCan } from "@/components/providers/user-provider";
 import {
   billingTriggerLabels,
@@ -25,6 +27,7 @@ import { documentLinks } from "@/lib/documents";
 import {
   CarrierInvoiceStatus,
   InvoiceDirection,
+  InvoiceReviewFlag,
   Permission,
   TmsDocumentKind,
 } from "@/lib/enums";
@@ -35,24 +38,32 @@ import {
 } from "@/lib/interfaces";
 import { isZeroMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDate, formatDateTime, humanize } from "@/lib/utils";
+import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
-  getCarrierInvoice,
-  getCarrierInvoiceByNumber,
-  getCarrierInvoiceVersions,
-  getCustomerInvoice,
-  getCustomerInvoiceByNumber,
-  getCustomerInvoiceVersions,
+  getNoticeSettings,
+  getParty,
   getShipment,
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import { shipmentHref } from "../shipments/shipment-list";
+import { fetchInvoice, fetchInvoiceVersions, isDemoInvoice } from "./demo-invoices";
+import { DemoInvoicesBanner } from "./demo-invoices-banner";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
+import InvoiceExtraActionModal, {
+  canBeVoided,
+  CancelledLoadBanner,
+  DocumentsCard,
+  ExtraAction,
+  extraActionsFor,
+} from "./invoice-extra-actions";
+import InvoiceHistory from "./invoice-history";
+import { versionLabel } from "./invoice-pdf";
 import { availableActions } from "./invoice-row-actions";
+import InvoiceVersions, { VersionSwitcher } from "./invoice-versions";
 import InvoiceViewCell, {
   apiInvoiceHref,
   awaitsReview,
@@ -64,11 +75,12 @@ import InvoiceViewCell, {
   InvoiceTotal,
   InvoiceView,
   isCustomerInvoice,
-  isInvoiceNumber,
+  isOwed,
   isSuperseded,
   partyOf,
   referencesOf,
 } from "./invoice-view";
+import { paymentReminder } from "./payment-reminder";
 
 // The shipment documents each side's invoice page lists, in this order.
 const CUSTOMER_DOCUMENTS = [
@@ -104,44 +116,57 @@ export default function InvoiceDetail({
   const navigate = useNavigate();
   const { can } = useCan();
   const [action, setAction] = useState<InvoiceAction | null>(null);
+  const [extraAction, setExtraAction] = useState<ExtraAction | null>(null);
   const isReceivable = direction === InvoiceDirection.Receivable;
   const listHref = invoiceListHref(direction);
 
   // `id` is the invoice number, or the internal id of a draft without one.
-  const byNumber = !!id && isInvoiceNumber(id);
   const invoice = useQuery({
     queryKey: ["invoices", direction, "detail", id],
-    queryFn: ({ signal }): Promise<InvoiceView> => {
-      if (isReceivable) {
-        return byNumber
-          ? getCustomerInvoiceByNumber(id!, signal)
-          : getCustomerInvoice(id!, signal);
-      }
-      return byNumber
-        ? getCarrierInvoiceByNumber(id!, signal)
-        : getCarrierInvoice(id!, signal);
-    },
+    queryFn: ({ signal }) => fetchInvoice(direction, id!, signal),
     enabled: !!id,
   });
   // Every version of this invoice's number, oldest first.
   const invoiceId = invoice.data?.id;
   const versions = useQuery({
     queryKey: ["invoices", direction, "versions", invoiceId],
-    queryFn: ({ signal }): Promise<InvoiceView[]> =>
-      isReceivable
-        ? getCustomerInvoiceVersions(invoiceId!, signal)
-        : getCarrierInvoiceVersions(invoiceId!, signal),
+    queryFn: ({ signal }) => fetchInvoiceVersions(direction, invoiceId!, signal),
     enabled: !!invoiceId,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
-  // The shipment's TMS documents, for those who may read shipments.
-  const shipmentId = invoice.data?.shipmentId ?? null;
+  // The shipment's TMS documents, for those who may read shipments. A demo
+  // invoice's shipment isn't in the API.
+  const shipmentId =
+    invoice.data && !isDemoInvoice(invoice.data) ? invoice.data.shipmentId : null;
   const canSeeShipment = can(Permission.ShipmentsView);
   const shipment = useQuery({
     queryKey: ["shipments", "detail", shipmentId],
     queryFn: ({ signal }) => getShipment(shipmentId!, signal),
     enabled: !!shipmentId && canSeeShipment,
   });
+  // What sets an owed invoice's payment reminder: its party's agreement (the
+  // same query and key as the party page; needs parties.view) and Settings.
+  // A demo invoice's party isn't in the API.
+  const remindable =
+    !!invoice.data &&
+    !isDemoInvoice(invoice.data) &&
+    isOwed(invoice.data) &&
+    !!invoice.data.dueDate;
+  const partyId = invoice.data ? partyOf(invoice.data).id : null;
+  const reminderParty = useQuery({
+    queryKey: ["parties", "detail", partyId],
+    queryFn: ({ signal }) => getParty(partyId!, signal),
+    staleTime: 5 * 60_000,
+    enabled: remindable && can(Permission.PartiesView),
+  });
+  const noticeSettings = useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
+    enabled: remindable,
+  });
+  // The header shows the invoice number, not the record id in the URL.
+  const headerNumber = invoice.data ? invoiceNumberOf(invoice.data) : null;
+  useHeaderDetail(headerNumber ? `#${headerNumber}` : null);
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
@@ -163,10 +188,39 @@ export default function InvoiceDetail({
   }
 
   const data = invoice.data;
+  const demo = isDemoInvoice(data);
   const number = invoiceNumberOf(data);
   const party = partyOf(data, carriers);
-  const actions = availableActions(data, can);
+  // A demo invoice isn't in the API: nothing that writes is offered.
+  const actions = demo ? [] : availableActions(data, can);
+  const extraActions = demo ? [] : extraActionsFor(data, can, setExtraAction);
+  const canVoid = extraActions.some((item) => item.key === "void");
+  // Emailing the invoice is a button of its own; the rest stay under "More".
+  const emailAction = extraActions.find((item) => item.key === "email");
+  const menuActions = extraActions.filter((item) => item.key !== "email");
+  // The Documents card offers what the "More" menu does, no more.
+  const openIfOffered = (key: ExtraAction) =>
+    extraActions.some((item) => item.key === key)
+      ? () => setExtraAction(key)
+      : undefined;
   const references = referencesOf(data);
+  // The TMS cancelled the load: until the invoice is void, point to voiding.
+  const loadCancelled =
+    data.reviewFlags.includes(InvoiceReviewFlag.TmsCancelled) &&
+    canBeVoided(data);
+  const agreement = reminderParty.data?.agreements?.find(
+    (item) => item.id === data.agreementId
+  );
+  const reminder =
+    agreement && noticeSettings.data
+      ? paymentReminder(data, agreement, noticeSettings.data, torontoToday())
+      : null;
+  // Say so rather than drop the line: a missing line reads as "no reminder".
+  const reminderUnknown =
+    remindable &&
+    (reminderParty.isError ||
+      noticeSettings.isError ||
+      (!!reminderParty.data && !agreement));
   const replacedBy = isSuperseded(data)
     ? versions.data?.find((version) => version.parentInvoiceId === data.id)
     : undefined;
@@ -182,6 +236,9 @@ export default function InvoiceDetail({
           <span className="text-base-primary-600 text-sm">
             {number ? `#${number}` : "No number yet"}
           </span>
+          {versions.data && versions.data.length > 1 && (
+            <VersionSwitcher current={data} versions={versions.data} />
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {actions.map((item, index) => (
@@ -194,14 +251,35 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
+          {emailAction && (
+            <BaseButton
+              text="Email invoice"
+              varient={actions.length === 0 ? "solid" : "bordered"}
+              className={`rounded-xl px-4 ${actions.length === 0 ? "" : "text-base-primary"}`}
+              // The icon is drawn white: it shows on a solid button only.
+              startContent={actions.length === 0 ? <Send /> : undefined}
+              onPress={() => setExtraAction("email")}
+            />
+          )}
+          <MoreActions actions={menuActions} />
         </div>
       </div>
+
+      {demo && <DemoInvoicesBanner />}
+
+      {loadCancelled && (
+        <CancelledLoadBanner
+          canVoid={canVoid}
+          onVoid={() => setExtraAction("void")}
+        />
+      )}
 
       {isSuperseded(data) && (
         <AlertBanner
           message={
             <>
-              This version was replaced
+              You are viewing an old version ({versionLabel(data)}). It was
+              replaced
               {replacedBy && (
                 <>
                   {" "}by{" "}
@@ -209,13 +287,14 @@ export default function InvoiceDetail({
                     to={apiInvoiceHref(replacedBy)}
                     className="text-base-primary-300 hover:underline"
                   >
-                    {invoiceNumberOf(replacedBy) ?? "the new version"}
+                    {invoiceNumberOf(replacedBy) ?? "the new version"} (
+                    {versionLabel(replacedBy)})
                   </Link>
                 </>
               )}
               {data.supersededAt && ` on ${formatDateTime(data.supersededAt)}`}
-              . It is kept exactly as it was; what it owed moved to the new
-              version.
+              . It is kept exactly as it was sent; what it owed moved to the
+              new version. Its PDF is marked &ldquo;Replaced&rdquo;.
             </>
           }
         />
@@ -242,6 +321,26 @@ export default function InvoiceDetail({
         ]}
       />
 
+      {versions.isError ? (
+        <BaseCardWrapper heading="Versions">
+          <p className="text-sm text-base-danger">
+            Couldn&apos;t load this invoice&apos;s versions.{" "}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => void versions.refetch()}
+            >
+              Try again
+            </button>
+          </p>
+        </BaseCardWrapper>
+      ) : (
+        versions.data &&
+        versions.data.length > 0 && (
+          <InvoiceVersions current={data} versions={versions.data} />
+        )
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {isCustomerInvoice(data) ? (
           <BillToCard invoice={data} href={party.href} />
@@ -255,6 +354,42 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
+            {reminderUnknown && (
+              <Field label="Payment reminder">
+                <span className="text-base-danger">
+                  Couldn&apos;t check this invoice&apos;s reminder settings.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      void reminderParty.refetch();
+                      void noticeSettings.refetch();
+                    }}
+                  >
+                    Try again
+                  </button>
+                </span>
+              </Field>
+            )}
+            {reminder && (
+              <Field label="Payment reminder">
+                {formatDate(reminder.remindOn)} ({reminder.daysBefore}{" "}
+                {reminder.daysBefore === 1 ? "day" : "days"} before due
+                {isReceivable
+                  ? ", emailed to the shipper's accounts department"
+                  : ", an alert to the accounts team"}
+                ).{" "}
+                <span className="text-content-5">
+                  Not sent yet: reminders aren&apos;t built.{" "}
+                  <Link
+                    to="/reminders/"
+                    className="text-base-primary-300 hover:underline"
+                  >
+                    All reminders
+                  </Link>
+                </span>
+              </Field>
+            )}
             {/* Carrier invoices print no tax (decided 2026-10-27). */}
             {isCustomerInvoice(data) && (
               <Field label="Tax">
@@ -265,12 +400,12 @@ export default function InvoiceDetail({
             <Field label="Kind">{humanize(data.kind)}</Field>
             <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
             <Field label="Shipment">
-              {data.shipmentId && canSeeShipment ? (
+              {shipmentId && canSeeShipment ? (
                 <Link
-                  to={shipmentHref({ id: data.shipmentId })}
+                  to={shipmentHref({ id: shipmentId })}
                   className="text-base-primary-300 hover:underline"
                 >
-                  {shipment.data ? `Load ${shipment.data.loadNumber}` : data.shipmentId}
+                  {shipment.data ? `Load ${shipment.data.loadNumber}` : shipmentId}
                 </Link>
               ) : (
                 data.shipmentId ?? "—"
@@ -287,7 +422,7 @@ export default function InvoiceDetail({
 
       <ChargesCard invoice={data} />
 
-      {data.shipmentId &&
+      {shipmentId &&
         can(
           isReceivable
             ? Permission.CarrierInvoicesView
@@ -297,11 +432,11 @@ export default function InvoiceDetail({
             direction={
               isReceivable ? InvoiceDirection.Payable : InvoiceDirection.Receivable
             }
-            shipmentId={data.shipmentId}
+            shipmentId={shipmentId}
           />
         )}
 
-      {canSeeShipment && data.shipmentId && (
+      {canSeeShipment && shipmentId && (
         <BaseCardWrapper heading="Documents">
           {shipment.isError ? (
             <p className="text-sm text-base-danger">
@@ -327,57 +462,18 @@ export default function InvoiceDetail({
         </BaseCardWrapper>
       )}
 
-      {versions.isError ? (
-        <BaseCardWrapper heading="Versions">
-          <p className="text-sm text-base-danger">
-            Couldn&apos;t load this invoice&apos;s versions.{" "}
-            <button
-              type="button"
-              className="underline"
-              onClick={() => void versions.refetch()}
-            >
-              Try again
-            </button>
-          </p>
-        </BaseCardWrapper>
-      ) : (
-        versions.data &&
-        versions.data.length > 1 && (
-          <BaseCardWrapper heading="Versions">
-            <ol className="flex flex-col gap-3">
-              {versions.data.map((version) => (
-                <li
-                  key={version.id}
-                  className="flex flex-wrap justify-between items-start gap-3"
-                >
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      {version.id === data.id ? (
-                        <strong>{invoiceNumberOf(version) ?? "This version"}</strong>
-                      ) : (
-                        <Link
-                          to={apiInvoiceHref(version)}
-                          className="text-base-primary-300 hover:underline"
-                        >
-                          {invoiceNumberOf(version) ?? "No number yet"}
-                        </Link>
-                      )}
-                      <InvoiceStatusCell invoice={version} />
-                    </div>
-                    <span className="text-xs text-content-5">
-                      {version.revisionReason ?? "First version"}
-                    </span>
-                  </div>
-                  <InvoiceTotal invoice={version} />
-                </li>
-              ))}
-            </ol>
-          </BaseCardWrapper>
-        )
+      {!demo && (
+        <DocumentsCard
+          invoice={data}
+          onUpload={openIfOffered("upload")}
+          onEmail={openIfOffered("email-documents")}
+        />
       )}
 
+      {!demo && <InvoiceHistory invoice={data} />}
+
       {data.notes && (
-        <BaseCardWrapper heading="Notes" className="mb-5">
+        <BaseCardWrapper heading="Notes">
           {/* Rendered as text by React, so a note can't inject markup. */}
           <p className="text-sm text-[#343A40] whitespace-pre-wrap">{data.notes}</p>
         </BaseCardWrapper>
@@ -388,7 +484,15 @@ export default function InvoiceDetail({
         invoice={data}
         partyName={party.name}
         onClose={() => setAction(null)}
-        onRevised={(revised) => navigate(apiInvoiceHref(revised))}
+        // The new version takes the replaced one's place in history, so Back
+        // returns to where the user came from, not to the replaced version.
+        onRevised={(revised) => navigate(apiInvoiceHref(revised), { replace: true })}
+      />
+      <InvoiceExtraActionModal
+        action={extraAction}
+        invoice={data}
+        partyName={party.name}
+        onClose={() => setExtraAction(null)}
       />
     </div>
   );

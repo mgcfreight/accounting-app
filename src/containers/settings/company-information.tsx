@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseButton, BaseInput, ErrorState, TableSkeleton } from "@/components/common";
+import {
+  BaseButton,
+  BaseInput,
+  ErrorState,
+  TableSkeleton,
+} from "@/components/common";
 import { DownArrow } from "@/components/icons";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import { CompanySettings } from "@/lib/interfaces";
@@ -40,17 +46,30 @@ export const SETTINGS_QUERY = { company: ["settings", "company"] } as const;
 
 // Printed on every invoice PDF and email (settings key `company`). Until an
 // Admin saves it, every field is empty — the API invents nothing.
-export default function CompanyInformation() {
+// The Settings page asks before leaving with unsaved edits; this section
+// reports them through `onDirtyChange`.
+export default function CompanyInformation({
+  onDirtyChange,
+}: {
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const company = useQuery({
     queryKey: SETTINGS_QUERY.company,
     queryFn: ({ signal }) => getCompanySettings(signal),
   });
   // `values`: the form follows the saved settings whenever they (re)load.
-  const { control, handleSubmit } = useForm<Company>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { dirtyFields },
+  } = useForm<Company>({
     mode: "all",
     values: company.data && toForm(company.data),
   });
+  const isDirty = Object.keys(dirtyFields).length > 0;
+  useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
   const save = useMutation({
     mutationFn: (values: Company) =>
@@ -67,6 +86,10 @@ export default function CompanyInformation() {
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(SETTINGS_QUERY.company, saved);
+      // Reset here, not through `values`: that resets only when the saved
+      // settings differ from the last ones, so an edit the API normalises
+      // back (on → ON) would leave the form dirty.
+      reset(toForm(saved));
       toast.success("Company information saved.");
     },
     onError: (error) => toast.error(errorMessage(error)),

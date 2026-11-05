@@ -24,8 +24,6 @@ export type HeaderButton = {
 export type RouteConfig = {
   header: string;
   previousRoute?: string;
-  // Append "#<id>" from the ?id= query param to the title.
-  includeIdInHeader?: boolean;
   createNewButton?: HeaderButton;
   // Who may open the route. A child route without its own takes its
   // parent's; a top-level route without one is refused. Presentation only —
@@ -44,8 +42,7 @@ export const routeConfig: Record<string, RouteConfig> = {
     access: { allOf: [Permission.CustomerInvoicesView] },
     childRoutes: {
       view: {
-        header: "Invoice",
-        includeIdInHeader: true,
+        header: "Shipper Invoice",
         previousRoute: "/shipper-invoices/",
       },
     },
@@ -56,7 +53,6 @@ export const routeConfig: Record<string, RouteConfig> = {
     childRoutes: {
       view: {
         header: "Carrier Invoice",
-        includeIdInHeader: true,
         previousRoute: "/carrier-invoices/",
       },
     },
@@ -126,9 +122,21 @@ export const routeConfig: Record<string, RouteConfig> = {
       },
     },
   },
+  // Statements are filed under reports in the API's permission catalog.
+  statements: {
+    header: "Statements",
+    access: { allOf: [Permission.ReportsView] },
+  },
   reports: { header: "Reports", access: { allOf: [Permission.ReportsView] } },
   "needs-review": {
     header: "Needs Review",
+    access: {
+      anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
+    },
+  },
+  // Payment reminders on either side; open with either invoice view.
+  reminders: {
+    header: "Payment Reminders",
     access: {
       anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
     },
@@ -175,7 +183,7 @@ export const getRouteConfig = (pathname: string): RouteConfig | undefined => {
 type AccessHolder = Pick<Me, "isAdmin" | "permissions">;
 
 // Deny by default: a path missing from the table, or a route with no access
-// rule of its own or from its parent, is refused — so a route added to app.tsx
+// rule of its own or from its parent, is refused — so a route added to routes.tsx
 // without an entry here shows "No access" rather than opening to everyone.
 export const canAccessRoute = (pathname: string, me: AccessHolder): boolean => {
   const config = getRouteConfig(pathname);

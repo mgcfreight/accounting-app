@@ -150,9 +150,9 @@ export default function LoginForm() {
       )}
       <BaseButton
         type="submit"
-        text="Login"
+        text="Sign In"
         isLoading={loading}
-        className="my-8 w-full"
+        className="my-6 w-full"
       />
     </form>
   );

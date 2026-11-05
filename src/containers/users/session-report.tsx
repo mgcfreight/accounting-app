@@ -7,12 +7,14 @@ import {
 } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { LuLogOut } from "react-icons/lu";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   AlertBanner,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   FilterBar,
   FormModal,
   PartyAvatar,
@@ -77,9 +79,9 @@ export default function SessionReport() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAdmin = me.isAdmin;
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const linkedUser = searchParams.get("userId") ?? "";
-  const { control } = useForm<Filters>({
+  const { control, reset } = useForm<Filters>({
     defaultValues: {
       userId: isAdmin && USER_ID_SHAPE.test(linkedUser) ? linkedUser : ALL,
       status: ALL,
@@ -88,6 +90,9 @@ export default function SessionReport() {
   const userId = useWatch({ control, name: "userId" });
   const status = useWatch({ control, name: "status" });
   const paging = useServerPaging(JSON.stringify([userId, status]));
+  // Measured against "everyone, any status" rather than the form's defaults:
+  // a link from a user's row starts filtered to them, and clearing shows all.
+  const filtered = userId !== ALL || status !== ALL;
 
   // The user picker, for Admins only (other roles can't list users).
   const users = useQuery({
@@ -135,7 +140,7 @@ export default function SessionReport() {
     { key: "end", label: "Ended / Expires" },
     { key: "duration", label: "Duration" },
     { key: "status", label: "Status" },
-    { key: "actions", label: "" },
+    { key: "actions", label: "Actions", align: "center" },
   ];
 
   const renderCell = (row: UserSession, key: string) => {
@@ -196,6 +201,7 @@ export default function SessionReport() {
               {
                 key: "end",
                 label: row.isCurrent ? "End (signs you out)" : "End session",
+                icon: <LuLogOut />,
                 danger: true,
                 onPress: () => setEnding(row),
               },
@@ -221,7 +227,7 @@ export default function SessionReport() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         {isAdmin && (
           <BaseSelect
@@ -244,6 +250,20 @@ export default function SessionReport() {
           aria-label="Status"
           disallowEmptySelection
         />
+        <ClearFiltersButton
+          active={filtered}
+          onClear={() => {
+            reset({ userId: ALL, status: ALL });
+            // Or a reload or Back filters to the linked user again.
+            setSearchParams(
+              (params) => {
+                params.delete("userId");
+                return params;
+              },
+              { replace: true }
+            );
+          }}
+        />
         {!isAdmin && (
           <p className="text-sm text-content-6">Showing your own sign-ins.</p>
         )}
@@ -262,12 +282,13 @@ export default function SessionReport() {
           }
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<UserSession>
           ariaLabel="Sessions"
           columns={columns}
           data={sessions.isError ? [] : (sessions.data?.items ?? [])}
           loading={sessions.isPending}
+          refreshing={sessions.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(sessions.data?.meta)}
@@ -284,6 +305,7 @@ export default function SessionReport() {
           onOpenChange={(open) => !open && setEnding(null)}
           title="End Session"
           confirmText="End Session"
+          confirmColor="danger"
           isConfirming={end.isPending}
           onConfirm={() => end.mutate(ending)}
         >
@@ -294,6 +316,6 @@ export default function SessionReport() {
           </p>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

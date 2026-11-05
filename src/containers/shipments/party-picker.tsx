@@ -33,7 +33,11 @@ export default function PartyPicker<T extends FieldValues>({
     rules: isRequired ? { required: `Choose a ${what}` } : undefined,
   });
   const [input, setInput] = useState("");
-  const search = useDebouncedValue(input.trim());
+  const [pickedName, setPickedName] = useState("");
+  // Picking a party fills the box with its name; that isn't a new search, so
+  // the list stays as it was rather than asking the API for that one name.
+  const typed = input.trim();
+  const search = useDebouncedValue(typed === pickedName ? "" : typed);
 
   const params = {
     page: 1,
@@ -57,7 +61,12 @@ export default function PartyPicker<T extends FieldValues>({
       inputValue={input}
       onInputChange={setInput}
       selectedKey={value || null}
-      onSelectionChange={(key) => onChange(key ? String(key) : "")}
+      onSelectionChange={(key) => {
+        const id = key ? String(key) : "";
+        const picked = parties.data?.items.find((party) => party.id === id);
+        setPickedName(picked?.name.trim() ?? "");
+        onChange(id);
+      }}
       onBlur={onBlur}
       // The API has already filtered by what was typed.
       defaultFilter={() => true}

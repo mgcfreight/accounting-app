@@ -1,4 +1,4 @@
-import { Checkbox } from "@heroui/react";
+import { BaseCheckbox } from "@/components/common";
 import { Permission } from "@/lib/enums";
 import { PermissionCatalog } from "@/lib/interfaces";
 
@@ -93,7 +93,7 @@ export default function PermissionMatrix({
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{column.label}</span>
-                    <Checkbox
+                    <BaseCheckbox
                       size="sm"
                       aria-label={`All: ${column.label}`}
                       isDisabled={isReadOnly || cells.length === 0}
@@ -114,7 +114,7 @@ export default function PermissionMatrix({
               <tr key={row.module} className="border-t">
                 <td className="p-3">
                   <div className="flex items-start gap-2">
-                    <Checkbox
+                    <BaseCheckbox
                       size="sm"
                       aria-label={`All in ${row.label}`}
                       isDisabled={isReadOnly}
@@ -137,7 +137,7 @@ export default function PermissionMatrix({
                   return (
                     <td key={column.action} className="p-3 text-center">
                       {cell && (
-                        <Checkbox
+                        <BaseCheckbox
                           size="sm"
                           aria-label={`${row.label}: ${cell.label}`}
                           isDisabled={isReadOnly}

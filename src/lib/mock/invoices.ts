@@ -163,7 +163,7 @@ export const mockShipperInvoices: Invoice[] = [
     history: [
       created("INV-10424", "2026-08-28T15:00:00Z"),
       { id: "INV-10424-h2", at: "2026-08-28T16:30:00Z", user: "Sam Patel", action: "Issued and emailed to billing@greatlakes.example.com" },
-      { id: "INV-10424-h3", at: "2026-09-30T14:05:00Z", user: "Sam Patel", action: "Flagged as disputed: customer says liftgate was not used" },
+      { id: "INV-10424-h3", at: "2026-09-30T14:05:00Z", user: "Sam Patel", action: "Flagged as disputed: shipper says liftgate was not used" },
     ],
   },
   {

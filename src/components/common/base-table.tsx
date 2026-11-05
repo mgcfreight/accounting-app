@@ -32,6 +32,10 @@ type BaseTableProps<T> = {
   onSelectionChange?: (keys: Selection) => void;
   emptyContent?: ReactNode;
   ariaLabel?: string;
+  // True while the rows shown are the previous page's or filter's, kept on
+  // screen until the new ones arrive (keepPreviousData). They are dimmed so
+  // they are not read as the answer to the new filter.
+  refreshing?: boolean;
 };
 
 export default function BaseTable<T>({
@@ -49,6 +53,7 @@ export default function BaseTable<T>({
   onSelectionChange,
   emptyContent = "No Data Found",
   ariaLabel = "Table",
+  refreshing = false,
 }: BaseTableProps<T>) {
   if (loading) return <TableSkeleton />;
 
@@ -60,13 +65,18 @@ export default function BaseTable<T>({
   return (
     <Table
       aria-label={ariaLabel}
-      bottomContentPlacement="inside"
+      aria-busy={refreshing}
+      // The pager sits outside the scrolling wrapper, so wide rows scroll
+      // sideways with the scrollbar above the pager and the pager stays put.
+      // The card's padding and background move from wrapper to base.
+      bottomContentPlacement="outside"
       selectionMode={selectMode}
       onSelectionChange={onSelectionChange}
       sortDescriptor={toSortDescriptor(sort)}
       onSortChange={handleSortChange}
       classNames={{
-        wrapper: "shadow-none",
+        base: "gap-2 p-4 bg-content1 rounded-large",
+        wrapper: "p-0 shadow-none rounded-none",
         th: [
           "bg-transparent",
           "text-default-500",
@@ -75,7 +85,9 @@ export default function BaseTable<T>({
           "text-xs",
         ],
         td: ["text-xs"],
-        table: "overflow-auto",
+        table: `overflow-auto transition-opacity ${
+          refreshing ? "opacity-50" : ""
+        }`,
       }}
       bottomContent={
         meta && setMeta ? (
@@ -96,6 +108,7 @@ export default function BaseTable<T>({
         {(column) => (
           <TableColumn
             key={column.key}
+            align={column.align}
             allowsSorting={!!onSortChange && !!column.sortable}
           >
             {column.label}

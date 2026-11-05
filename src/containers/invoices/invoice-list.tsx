@@ -3,17 +3,28 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   ErrorState,
   FilterBar,
   RowActions,
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import {
+  limitParam,
+  oneOf,
+  pageParam,
+  searchParam,
+  useDebouncedValue,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import {
   CarrierInvoiceStatus,
   CustomerInvoiceStatus,
@@ -28,10 +39,10 @@ import { humanize } from "@/lib/utils";
 import {
   CarrierInvoiceListParams,
   CustomerInvoiceListParams,
-  listCarrierInvoices,
-  listCustomerInvoices,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
+import { DemoInvoicesBanner } from "./demo-invoices-banner";
+import { fetchInvoicePage, isDemoInvoice } from "./demo-invoices";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { availableActions } from "./invoice-row-actions";
 import InvoiceViewCell, {
@@ -90,13 +101,55 @@ const columnsFor = (direction: InvoiceDirection): BaseTableColumn[] => [
     : []),
   { key: "invoiceDate", label: "Invoice Date", sortable: true, sortKey: InvoiceSortBy.InvoiceDate },
   { key: "dueDate", label: "Due Date", sortable: true, sortKey: InvoiceSortBy.DueDate },
-  { key: "total", label: "Total", sortable: true, sortKey: InvoiceSortBy.Total },
-  { key: "balance", label: "Balance", sortable: true, sortKey: InvoiceSortBy.BalanceDue },
+  { key: "total", label: "Total", sortable: true, sortKey: InvoiceSortBy.Total, align: "end" },
+  { key: "balance", label: "Balance", sortable: true, sortKey: InvoiceSortBy.BalanceDue, align: "end" },
   { key: "status", label: "Status" },
-  { key: "actions", label: "" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const filterTrigger = { trigger: "bg-white border-none h-12 rounded-lg" };
+
+const BLANK: Filters = { search: "", status: ALL, payment: ALL };
+const URL_DEFAULTS = { ...BLANK, sort: "", order: "", page: "1", limit: "10" };
+
+// The filters, sort and page as kept in the URL (see useListUrlState): only
+// the values this list offers are read.
+const urlSchemaFor = (direction: InvoiceDirection) =>
+  z.object({
+    search: searchParam(64),
+    status: oneOf(
+      statusOptionsFor(direction).map((option) => option.value),
+      ALL
+    ),
+    payment: oneOf(
+      paymentOptions.map((option) => option.value),
+      ALL
+    ),
+    sort: oneOf(
+      columnsFor(direction).flatMap((column) =>
+        column.sortable && column.sortKey ? [column.sortKey] : []
+      ),
+      ""
+    ),
+    order: oneOf(["asc", "desc"], "asc"),
+    page: pageParam,
+    limit: limitParam(),
+  });
+
+const sortFrom = (
+  direction: InvoiceDirection,
+  sortKey: string,
+  order: string
+): TableSort | null => {
+  const column = columnsFor(direction).find((c) => c.sortKey === sortKey);
+  return column
+    ? {
+        column: column.key,
+        sortKey,
+        direction: order === "desc" ? "desc" : "asc",
+      }
+    : null;
+};
 
 // The shipper (AR) and carrier (AP) invoice lists share one container, as
 // they share one design (§9: "Carrier invoices: same as above"). Filtered,
@@ -113,16 +166,41 @@ export default function InvoiceList({
     action: InvoiceAction;
     invoice: InvoiceView;
   } | null>(null);
-  const [sort, setSort] = useState<TableSort | null>(null);
-  const { control } = useForm<Filters>({
-    defaultValues: { search: "", status: ALL, payment: ALL },
+  const fromUrl = useListUrlState(urlSchemaFor(direction));
+  const [sort, setSort] = useState<TableSort | null>(() =>
+    sortFrom(direction, fromUrl.sort, fromUrl.order)
+  );
+  const { control, reset } = useForm<Filters>({
+    defaultValues: {
+      search: fromUrl.search,
+      status: fromUrl.status,
+      payment: fromUrl.payment,
+    },
   });
-  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
+  const typed = useWatch({ control, name: "search" });
+  const search = useDebouncedValue(typed.trim());
   const status = useWatch({ control, name: "status" });
   const payment = useWatch({ control, name: "payment" });
+  // Against the blank filters, not the form's defaults: a list opened with
+  // filters from the URL can still clear them.
+  const filtered = typed !== "" || status !== ALL || payment !== ALL;
 
   const paging = useServerPaging(
-    JSON.stringify([direction, search, status, payment, sort])
+    JSON.stringify([direction, search, status, payment, sort]),
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    {
+      search,
+      status,
+      payment,
+      sort: sort?.sortKey ?? "",
+      order: sort ? sort.direction : "",
+      page: String(paging.page),
+      limit: String(paging.limit),
+    },
+    URL_DEFAULTS
   );
   const params = {
     page: paging.page,
@@ -138,12 +216,15 @@ export default function InvoiceList({
   const invoices = useQuery({
     queryKey: ["invoices", direction, "list", params],
     queryFn: ({ signal }): Promise<Paginated<InvoiceView>> =>
-      isReceivable
-        ? listCustomerInvoices(params as CustomerInvoiceListParams, signal)
-        : listCarrierInvoices(params as CarrierInvoiceListParams, signal),
+      fetchInvoicePage(
+        direction,
+        params as CustomerInvoiceListParams | CarrierInvoiceListParams,
+        signal
+      ),
     placeholderData: keepPreviousData,
   });
   const rows = invoices.data?.items ?? [];
+  const demo = rows.some(isDemoInvoice);
   const carriers = usePartyNames(carrierIdsOf(rows));
 
   const renderCell = (invoice: InvoiceView, key: string) => {
@@ -161,9 +242,10 @@ export default function InvoiceList({
             icon: <EyeIcon />,
             onPress: () => navigate(apiInvoiceHref(invoice)),
           },
-          // A new version replaces the invoice's lines, which only the
-          // invoice page shows: it's offered there.
-          ...availableActions(invoice, can)
+          // A new version starts from the invoice's lines, which only the
+          // invoice page has: it's offered there. A demo invoice offers
+          // nothing that would write to the API.
+          ...(isDemoInvoice(invoice) ? [] : availableActions(invoice, can))
             .filter((action) => action.key !== "revise")
             .map((action) => ({
               ...action,
@@ -175,7 +257,7 @@ export default function InvoiceList({
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         <BaseInput
           name="search"
@@ -189,6 +271,7 @@ export default function InvoiceList({
               ? "Invoice # (start of it) or exact BOL, PO, PRO…"
               : "Reference #, carrier bill # or exact BOL, PO, PRO…"
           }
+          aria-label="Search invoices"
           endContent={<SearchNormalSm />}
         />
         <BaseSelect
@@ -209,8 +292,10 @@ export default function InvoiceList({
           aria-label="Payment"
           disallowEmptySelection
         />
+        <ClearFiltersButton active={filtered} onClear={() => reset(BLANK)} />
       </FilterBar>
-      <Card className="mt-4">
+      {demo && <DemoInvoicesBanner list />}
+      <Card>
         {/* A failed refetch keeps the last page beside the error; amounts
             that may be out of date are not shown as current. */}
         {invoices.isError ? (
@@ -224,6 +309,7 @@ export default function InvoiceList({
             columns={columnsFor(direction)}
             data={rows}
             loading={invoices.isPending}
+            refreshing={invoices.isPlaceholderData}
             rowKey={(row) => row.id}
             renderCell={renderCell}
             meta={paging.tableMeta(invoices.data?.meta)}
@@ -243,6 +329,6 @@ export default function InvoiceList({
           onClose={() => setActive(null)}
         />
       )}
-    </>
+    </div>
   );
 }

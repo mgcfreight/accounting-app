@@ -22,7 +22,7 @@ totals, tax, or currency as high-stakes work.
 
 ```
 src/
-├── app/                 route table (app.tsx), layouts, providers, global CSS
+├── app/                 route table (routes.tsx), layouts, providers, global CSS
 ├── containers/          page composition and page state
 ├── components/          reusable presentation (common/ = mokal-app's kit)
 ├── hooks/               reusable client behaviour

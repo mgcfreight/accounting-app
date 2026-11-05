@@ -6,13 +6,20 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "@/lib/enums";
+import { z } from "zod";
 import { apiClient, parseBody } from "./api-client";
-import { agreementSchema, envelope, paginated, partySchema } from "./schemas";
+import {
+  agreementSchema,
+  contactSchema,
+  envelope,
+  paginated,
+  partySchema,
+} from "./schemas";
 
-// Customers (SHIPPER) and carriers (CARRIER), and their agreed terms (/party).
-// Reading needs parties.view, adding a party parties.create, and new terms
-// parties.edit; the API answers 403 otherwise. `partyId` travels as a query
-// param.
+// Customers (SHIPPER) and carriers (CARRIER), their agreed terms and their
+// contacts (/party). Reading needs parties.view, adding a party
+// parties.create, and new terms or contacts parties.edit; the API answers
+// 403 otherwise. `partyId` and `contactId` travel as query params.
 
 export type PartyListParams = {
   page: number;
@@ -61,6 +68,22 @@ export type NewAgreement = {
   notes?: string;
 };
 
+// A person at the party. The email is unique per party (409 otherwise).
+export type NewContact = {
+  partyId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  receivesInvoices?: boolean;
+  receivesReminders?: boolean;
+  receivesStatements?: boolean;
+};
+
+// Only what changes. phone "" clears it; isActive false retires the contact.
+export type ContactChanges = Partial<Omit<NewContact, "partyId">> & {
+  isActive?: boolean;
+};
+
 export const listParties = (params: PartyListParams, signal?: AbortSignal) =>
   apiClient
     .get("/party/all", {
@@ -92,3 +115,19 @@ export const createAgreement = (agreement: NewAgreement) =>
   apiClient
     .post("/party/agreement", agreement)
     .then((res) => parseBody(envelope(agreementSchema), res.data).data);
+
+// Active ones first, then by name.
+export const listContacts = (partyId: string, signal?: AbortSignal) =>
+  apiClient
+    .get("/party/contacts", { params: { partyId }, signal })
+    .then((res) => parseBody(envelope(z.array(contactSchema)), res.data).data);
+
+export const createContact = (contact: NewContact) =>
+  apiClient
+    .post("/party/contact", contact)
+    .then((res) => parseBody(envelope(contactSchema), res.data).data);
+
+export const updateContact = (contactId: string, changes: ContactChanges) =>
+  apiClient
+    .put("/party/contact", changes, { params: { contactId } })
+    .then((res) => parseBody(envelope(contactSchema), res.data).data);

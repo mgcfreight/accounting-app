@@ -39,9 +39,13 @@ const UserContext = createContext<UserContextValue | null>(null);
 
 // A 401 here has already been through one refresh attempt (api-client), so
 // it means nobody is signed in: that is an answer, not a failure.
-const loadMe = async ({ signal }: { signal: AbortSignal }) => {
+//
+// No abort signal: this provider lives as long as the app, so there is
+// nothing to cancel. Reading `signal` would make TanStack abort the request
+// when StrictMode's dev-only unmount runs, and send it a second time.
+const loadMe = async () => {
   try {
-    return await getMe(signal);
+    return await getMe();
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return null;
     throw error;

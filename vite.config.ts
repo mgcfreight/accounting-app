@@ -13,7 +13,7 @@ import { routeConfig } from "./src/lib/routes.config";
 const root = fileURLToPath(new URL(".", import.meta.url));
 const outDir = resolve(root, "out");
 
-// Every path the router serves (src/app/app.tsx). routes.config.ts already
+// Every path the router serves (src/app/routes.tsx). routes.config.ts already
 // lists each screen for the header, so it is the source; the sign-in screens
 // are the only ones without a header.
 const routePaths = () => [

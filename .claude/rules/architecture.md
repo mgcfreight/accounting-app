@@ -49,7 +49,7 @@ A Vite + React Router single-page app. `vite build` writes plain files to
 no server of our own: everything renders in the browser, and all data comes
 from the API.
 
-- **Routes** are declared in `src/app/app.tsx`. Each one also needs an entry
+- **Routes** are declared in `src/app/routes.tsx`. Each one also needs an entry
   in `lib/routes.config.ts`: the header reads its title there, and the build
   writes `out/<route>/index.html` for every route listed there
   (`vite.config.ts`). The API serves files only, with no fallback to
@@ -86,6 +86,13 @@ BaseButton, BaseTable (+ pager), BaseCardWrapper, InfoStrip, DetailRow,
 FilterBar, StatCard, StatusChip and the status chips in `status.tsx`, Money,
 PartyAvatar, RowActions, FormModal, SuccessModal, AlertBanner, ErrorState,
 AgingTable, charts, and the form fields in `form/`.
+
+Spacing is one scale everywhere. A page's root is `flex flex-col gap-6`
+(24px between its sections — filters, banners, cards, tabs); cards pad
+`p-4`; groups inside a card are `gap-4`, lines in a list `gap-2`. Kit
+components carry no outer margin (FilterBar, AlertBanner, cards), so the
+parent's gap spaces them — don't add `mt-*`/`mb-*` to a page section, and
+don't add bottom padding to a page: the layout's padding already ends it.
 
 ## Layers
 

@@ -7,9 +7,14 @@ import { PaginationMeta } from "@/lib/types";
 //
 // `filterKey` is anything that identifies the current filters and sort: when
 // it changes the list is a different one, so paging starts again at page 1.
-export default function useServerPaging(filterKey = "", initialLimit = 10) {
+// `initialPage` is where it opens, e.g. the page kept in the URL.
+export default function useServerPaging(
+  filterKey = "",
+  initialLimit = 10,
+  initialPage = 1
+) {
   const [paging, setPaging] = useState({
-    currentPage: 1,
+    currentPage: initialPage,
     itemsPerPage: initialLimit,
   });
   const [lastFilterKey, setLastFilterKey] = useState(filterKey);
@@ -28,8 +33,14 @@ export default function useServerPaging(filterKey = "", initialLimit = 10) {
         : { currentPage: next.currentPage, itemsPerPage: next.itemsPerPage };
     });
 
-  const tableMeta = (meta: PaginationMeta | undefined): PaginationMeta =>
-    meta ?? { ...paging, itemCount: 0, totalItems: 0, totalPages: 1 };
+  // A page past the end (an old link, or the last row on it went) moves to
+  // the last page there is, rather than showing an empty table.
+  const tableMeta = (meta: PaginationMeta | undefined): PaginationMeta => {
+    if (meta && meta.totalPages >= 1 && paging.currentPage > meta.totalPages) {
+      setPaging((prev) => ({ ...prev, currentPage: meta.totalPages }));
+    }
+    return meta ?? { ...paging, itemCount: 0, totalItems: 0, totalPages: 1 };
+  };
 
   return {
     page: paging.currentPage,

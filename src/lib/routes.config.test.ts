@@ -82,8 +82,20 @@ describe("menuForUser", () => {
     expect(labels).not.toContain("Reports");
   });
 
-  it("shows a non-Admin only Sessions under Users", () => {
-    const users = menuForUser(nobody).find((item) => item.label === "Users");
-    expect(users?.children?.map((child) => child.label)).toEqual(["Sessions"]);
+  it("shows a non-Admin only Sessions from Users, as a link of its own", () => {
+    const menu = menuForUser(nobody);
+    expect(menu.find((item) => item.label === "Users")).toBeUndefined();
+    const sessions = menu.find((item) => item.label === "Sessions");
+    expect(sessions).toMatchObject({ route: "/users/sessions/", icon: "users" });
+    expect(sessions?.children).toBeUndefined();
+  });
+
+  it("keeps a group that still has several children", () => {
+    const users = menuForUser(admin).find((item) => item.label === "Users");
+    expect(users?.children?.map((child) => child.label)).toEqual([
+      "Users",
+      "Roles & Permissions",
+      "Sessions",
+    ]);
   });
 });

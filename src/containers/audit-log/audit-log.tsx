@@ -7,6 +7,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   DetailRow,
   FilterBar,
   FormModal,
@@ -54,9 +55,11 @@ const ACTIONS = [
   "shipment.created",
   "customer_invoice.updated",
   "customer_invoice.issued",
+  "customer_invoice.revised",
   "carrier_invoice.updated",
   "carrier_invoice.received",
   "carrier_invoice.approved",
+  "carrier_invoice.revised",
   "settings.updated",
   "tax_rate.created",
   "charge_type.created",
@@ -95,7 +98,11 @@ export default function AuditLog() {
   const me = useCurrentUser();
   const isAdmin = me.isAdmin;
   const [open, setOpen] = useState<AuditEvent | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" },
   });
   const filters = useWatch({ control }) as Filters;
@@ -130,7 +137,7 @@ export default function AuditLog() {
     { key: "action", label: "Action" },
     { key: "target", label: "Record" },
     { key: "ipAddress", label: "IP Address" },
-    { key: "actions", label: "" },
+    { key: "actions", label: "Actions", align: "center" },
   ];
 
   const renderCell = (event: AuditEvent, key: string) => {
@@ -176,7 +183,7 @@ export default function AuditLog() {
   const dateInput = { classNames: { inputWrapper: "bg-white h-12 border-none rounded-lg" }, className: "w-full sm:w-44" };
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <FilterBar>
         {isAdmin && (
           <BaseSelect
@@ -205,9 +212,10 @@ export default function AuditLog() {
           aria-label="Record type"
           {...filterSelect}
         />
-        <BaseInput name="from" control={control} type="date" aria-label="From date" {...dateInput} />
-        <BaseInput name="to" control={control} type="date" aria-label="To date" {...dateInput} />
+        <BaseInput name="from" control={control} type="date" aria-label="From date" startContent={<span className="text-xs text-content-5">From</span>} {...dateInput} />
+        <BaseInput name="to" control={control} type="date" aria-label="To date" startContent={<span className="text-xs text-content-5">To</span>} {...dateInput} />
         {!isAdmin && <p className="text-sm text-content-6">Showing your own activity.</p>}
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       {events.isError && (
         <AlertBanner
@@ -215,12 +223,13 @@ export default function AuditLog() {
           action={<button type="button" className="underline text-sm" onClick={() => void events.refetch()}>Retry</button>}
         />
       )}
-      <Card className="mt-4">
+      <Card>
         <BaseTable<AuditEvent>
           ariaLabel="Audit report"
           columns={columns}
           data={events.isError ? [] : (events.data?.items ?? [])}
           loading={events.isPending}
+          refreshing={events.isPlaceholderData}
           rowKey={(row) => row.id}
           renderCell={renderCell}
           meta={paging.tableMeta(events.data?.meta)}
@@ -234,8 +243,6 @@ export default function AuditLog() {
           isOpen
           onOpenChange={(isOpen) => !isOpen && setOpen(null)}
           title={open.action}
-          confirmText="Close"
-          onConfirm={() => setOpen(null)}
           size="2xl"
         >
           <div className="flex flex-col gap-2">
@@ -253,6 +260,6 @@ export default function AuditLog() {
           </pre>
         </FormModal>
       )}
-    </>
+    </div>
   );
 }

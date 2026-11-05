@@ -18,7 +18,7 @@ export default function TableBottomContent({
   const lastShown = Math.min(page * limit, total);
 
   return (
-    <div className="flex w-full flex-wrap justify-between items-center gap-3 p-5">
+    <div className="flex w-full flex-wrap justify-between items-center gap-3 px-2">
       <p className="text-[#6C757D] text-sm">
         Showing {firstShown}-{lastShown} of {total} {bottomContent}
       </p>

@@ -26,7 +26,11 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { InvoiceView, referencesOf } from "../invoices/invoice-view";
+import InvoiceViewCell, {
+  InvoiceView,
+  InvoiceViewAction,
+  referencesOf,
+} from "../invoices/invoice-view";
 import { partyHref } from "../parties/party-list";
 import usePartyNames from "../parties/use-party-names";
 import { place } from "./shipment-list";
@@ -36,9 +40,10 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "party", label: "Party" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total" },
-  { key: "balance", label: "Balance" },
+  { key: "total", label: "Total", align: "end" },
+  { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -228,10 +233,7 @@ function ShipmentInvoices({
   });
 
   return (
-    <BaseCardWrapper
-      heading={heading}
-      className={direction === InvoiceDirection.Payable || !shipment.carrierPartyId ? "mb-5" : ""}
-    >
+    <BaseCardWrapper heading={heading}>
       {invoices.isError ? (
         <ErrorState
           message="We couldn't load the invoices. Please try again."
@@ -244,9 +246,13 @@ function ShipmentInvoices({
           data={invoices.data?.items ?? []}
           loading={invoices.isPending}
           rowKey={(row) => row.id}
-          renderCell={(row, key) => (
-            <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />
-          )}
+          renderCell={(row, key) =>
+            key === "actions" ? (
+              <InvoiceViewAction invoice={row} />
+            ) : (
+              <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />
+            )
+          }
           emptyContent="No invoices"
         />
       )}

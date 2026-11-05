@@ -55,6 +55,19 @@
   --color-icon-lightRed: rgba(248, 113, 160, 0.21);
   --color-icon-lightGreen: rgba(116, 223, 162, 0.21);
   --color-icon-lightPurple: rgba(188, 142, 240, 0.21);
+
+  /* The overdue ticker above the header: each item slides up into place. */
+  --animate-ticker-in: ticker-in 350ms ease-out;
+  @keyframes ticker-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /* Tailwind v3 defaults that mokal-app's markup relies on. v4 changed them:

@@ -1,9 +1,11 @@
 import { Spinner } from "@heroui/react";
+import { Suspense } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ErrorBoundary, ErrorState } from "@/components/common";
 import { DashboardLayout } from "@/components/layouts";
 import { useUser } from "@/components/providers/user-provider";
 import { LOGIN_PATH } from "@/lib/constants";
+import TmsOverdueBar from "@/containers/payments/tms-overdue-bar";
 import RouteGuard from "./route-guard";
 
 // Signed-in pages render only once GET /auth/me (UserProvider) has returned a
@@ -12,6 +14,17 @@ import RouteGuard from "./route-guard";
 //
 // The error boundary sits inside the layout, so a page that throws keeps the
 // sidebar and header usable, and clears when another page is opened.
+//
+// Pages are lazy (routes.tsx): the first one opened shows a spinner in the
+// content area while its chunk loads. Router navigations are transitions, so
+// moving between pages keeps the current one on screen until the next is
+// ready.
+//
+// The overdue bar runs on lib/mock, so it is development only (`npm run dev`),
+// like the invoice pages' demo fallback: a build must never show demo figures
+// on every page as if they were real. It comes back here once it reads the API.
+const SHOW_TMS_OVERDUE_BAR = import.meta.env.DEV;
+
 export default function AppLayout() {
   const { pathname, search } = useLocation();
   const { user, loadError, retry } = useUser();
@@ -43,10 +56,18 @@ export default function AppLayout() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout topBar={SHOW_TMS_OVERDUE_BAR ? <TmsOverdueBar /> : undefined}>
       <ErrorBoundary resetKey={pathname}>
         <RouteGuard>
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex justify-center py-16">
+                <Spinner label="Loading" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </RouteGuard>
       </ErrorBoundary>
     </DashboardLayout>

@@ -1,10 +1,16 @@
 import {
   AdjustmentMode,
+  AllocationRule,
+  AutomationKind,
   BillingTrigger,
   CarrierInvoiceStatus,
+  CreditStatus,
   Currency,
   CustomerInvoiceStatus,
+  DisputeStatus,
+  InstallmentStatus,
   InvoiceDirection,
+  InvoiceDeliveryMode,
   InvoiceKind,
   InvoiceReviewFlag,
   InvoiceStatus,
@@ -14,10 +20,15 @@ import {
   PaymentMethod,
   PaymentStatus,
   PaymentTerms,
+  ReminderChannel,
+  ReminderStatus,
   ReviewKind,
   SessionEndReason,
   SessionStatus,
+  StatementFrequency,
+  StatementScope,
   ShipmentSource,
+  StatementRunKind,
   SyncInboxStatus,
   SyncTrigger,
   Permission,
@@ -88,6 +99,9 @@ export interface Role {
   permissionsEditable: boolean;
   // In catalog order. Every permission for the Admin role.
   permissions: Permission[];
+  // Granted, but newer than this build: not shown, and sent back on save so
+  // the role keeps them (a role's permissions are replaced as a whole set).
+  unknownPermissions: string[];
   userCount: number;
   createdAt: string;
   updatedAt: string;
@@ -180,6 +194,8 @@ export interface Attachment {
   id: string;
   kind: "BOL" | "POD" | "MGC_INVOICE" | "OTHER";
   fileName: string;
+  // Where the file opens, on this app's own origin. Unset when there's none.
+  url?: string;
 }
 
 export interface HistoryEntry {
@@ -229,6 +245,7 @@ export interface Payment {
   id: string;
   number: string;
   direction: PaymentDirection;
+  partyId: string;
   partyName: string;
   method: PaymentMethod;
   source: "MANUAL" | "MGC_STRIPE";
@@ -238,6 +255,11 @@ export interface Payment {
   amount: string;
   unapplied: string;
   match: MatchStatus;
+  // Where the payment went. Empty while unmatched.
+  allocations: Allocation[];
+  // For an unmatched payment: what auto-matching proposes, for staff to
+  // confirm. Empty when it found nothing.
+  suggested: Allocation[];
 }
 
 export interface ReviewItem {
@@ -395,6 +417,13 @@ export interface AgreementView {
   partyId: string;
   paymentTerms: PaymentTerms;
   currency: Currency;
+  // Shipper credit settings. The Accounts API doesn't send these yet
+  // (undefined until it does); then null for carriers. Recorded only — the
+  // TMS keeps its own credit settings for bookings.
+  creditStatus?: CreditStatus | null;
+  // Shippers with credit allowed: the most they may owe at once, in
+  // `currency`; null for no limit, undefined until the API sends it.
+  creditLimit?: string | null;
   taxTreatment: TaxTreatment;
   taxBasis: TaxBasis;
   billingTrigger: BillingTrigger | null;
@@ -440,6 +469,22 @@ export interface PartyView {
 
 // S3 keys of a shipment's TMS documents, by kind; a missing kind has none.
 export type TmsDocuments = Partial<Record<TmsDocumentKind, string>>;
+
+// A person at a shipper or carrier, and what they're sent. Never deleted:
+// isActive false retires one. Emails are stored lower-case, one per party.
+export interface ContactView {
+  id: string;
+  partyId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  receivesInvoices: boolean;
+  receivesReminders: boolean;
+  receivesStatements: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 // The seven numbers that tell a party which load an invoice is for.
 export interface ReferenceNumbers {
@@ -599,8 +644,11 @@ export interface AgingRow {
   currency: Currency;
 }
 
+// A statement sent to a shipper. The period runs from the 1st of the month to
+// the run date and never crosses a month.
 export interface Statement {
   id: string;
+  kind: StatementRunKind.WeeklyEmail | StatementRunKind.MonthEndEmail;
   periodFrom: string;
   periodTo: string;
   sentAt: string;
@@ -613,4 +661,228 @@ export interface MonthlyPnl {
   carrierCost: string;
   grossMargin: string;
   marginPercent: string;
+}
+
+// ---------------------------------------------------------------------------
+// Provisional shapes for the screens with no API yet (statements, reminders,
+// allocation, installment plans, disputes, report breakdowns), filled from
+// lib/mock. Every amount is already calculated, as the API will send it.
+
+// One shipper's overdue invoices as the TMS reports them.
+export interface TmsOverdueShipper {
+  partyId: string;
+  partyName: string;
+  currency: Currency;
+  // Total overdue, already summed by the sender.
+  amount: string;
+  invoiceCount: number;
+  // Days past due of the shipper's oldest overdue invoice.
+  oldestOverdueDays: number;
+}
+
+// Every shipper with a payment overdue in the TMS, for the "clear the
+// overdue payment" bar above the header. Demo only: no API sends this yet.
+export interface TmsOverdueSummary {
+  // Most days past due first.
+  shippers: TmsOverdueShipper[];
+  // One total per currency, already summed by the sender: CAD and USD are
+  // never added together.
+  totals: { currency: Currency; amount: string }[];
+  // Days past due of the oldest overdue invoice across all of them.
+  oldestOverdueDays: number;
+}
+
+// A shipper's or carrier's account at a glance (statements, requirement 2).
+export interface PartyAccountSummary {
+  partyId: string;
+  partyName: string;
+  type: PartyType;
+  currency: Currency;
+  // Invoiced this calendar year, and the number of shipments behind it.
+  businessVolume: string;
+  shipmentCount: number;
+  // Previous dues: the balance brought forward from last month's month-end
+  // statement, at the start of the current statement period.
+  openingBalance: string;
+  balance: string;
+  overdue: string;
+  // Days past due of the oldest overdue invoice; 0 when nothing is overdue.
+  oldestOverdueDays: number;
+  // Null when nothing has been paid yet. `invoiceRef` is null for a payment
+  // that isn't allocated to an invoice yet.
+  lastPayment: {
+    paidOn: string;
+    paymentNumber: string;
+    invoiceRef: string | null;
+    amount: string;
+  } | null;
+  // Average days from invoice date to full payment, over the last 12 months.
+  averagePaymentDays: number | null;
+  // Shippers only: emailed a statement every Friday and on the last weekday
+  // of each month (the agreement's weekly statement switch).
+  weeklyStatement: boolean;
+  statementEmail: string | null;
+}
+
+// One run of the statement jobs: the daily refresh of every balance, and the
+// Friday and month-end emails of shipper statements.
+export interface StatementRun {
+  id: string;
+  kind: StatementRunKind;
+  ranAt: string;
+  partyCount: number;
+  // Statement emails only.
+  sentCount: number | null;
+  failedCount: number | null;
+}
+
+// A payment reminder, 7 days before an invoice's due date.
+export interface Reminder {
+  id: string;
+  direction: InvoiceDirection;
+  invoiceNumber: string;
+  partyName: string;
+  dueDate: string;
+  remindOn: string;
+  currency: Currency;
+  balance: string;
+  channel: ReminderChannel;
+  recipient: string;
+  status: ReminderStatus;
+  sentAt: string | null;
+  // Why a reminder was skipped (paid in full, reminders off, disputed).
+  note: string | null;
+}
+
+// Part of a payment applied to one invoice, and how it was matched.
+export interface Allocation {
+  invoiceNumber: string;
+  invoiceBalanceBefore: string;
+  amount: string;
+  invoiceBalanceAfter: string;
+  rule: AllocationRule;
+}
+
+export interface Installment {
+  number: number;
+  dueDate: string;
+  amount: string;
+  status: InstallmentStatus;
+  paidOn: string | null;
+}
+
+// An agreed plan to pay one or more invoices in parts.
+export interface InstallmentPlan {
+  id: string;
+  direction: PaymentDirection;
+  partyName: string;
+  invoiceNumbers: string[];
+  currency: Currency;
+  total: string;
+  paid: string;
+  remaining: string;
+  agreedOn: string;
+  installments: Installment[];
+}
+
+// An invoice the shipper or carrier disputes. While open, its balance sits in
+// the aging report's Disputed column and reminders are paused.
+export interface Dispute {
+  id: string;
+  direction: InvoiceDirection;
+  invoiceNumber: string;
+  partyName: string;
+  currency: Currency;
+  disputedAmount: string;
+  reason: string;
+  openedOn: string;
+  openedBy: string;
+  status: DisputeStatus;
+  resolution: string | null;
+  resolvedOn: string | null;
+}
+
+// A month or quarter of the books, CAD at invoice-date rates. Money collected
+// and paid out are what moved, in each currency, not converted.
+export interface PeriodSummary {
+  key: string;
+  period: string;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  marginPercent: string;
+  taxCollected: string;
+  inputTaxCredits: string;
+  collected: Record<Currency, string>;
+  paidOut: Record<Currency, string>;
+}
+
+// Profit and loss for one shipper or carrier over a period, CAD.
+export interface PartyPnl {
+  partyId: string;
+  partyName: string;
+  type: PartyType;
+  shipmentCount: number;
+  revenue: string;
+  carrierCost: string;
+  grossMargin: string;
+  // Null when there is no revenue to take a percentage of.
+  marginPercent: string | null;
+}
+
+// One line of the HST/GST summary: tax charged on shipper invoices against
+// input tax credits on carrier bills, per tax and province.
+export interface TaxSummaryRow {
+  key: string;
+  jurisdiction: string;
+  taxCode: string;
+  ratePercent: string;
+  taxableSales: string;
+  taxCollected: string;
+  taxablePurchases: string;
+  inputTaxCredits: string;
+  netTax: string;
+}
+
+// One automated message for a shipper or carrier, as staff set it up.
+// `custom` false means the company default applies and the rest is ignored.
+// Fields a kind doesn't use are left at their defaults. Provisional: no API
+// stores these yet.
+export interface AutomationRule {
+  kind: AutomationKind;
+  enabled: boolean;
+  custom: boolean;
+  // Days: before the due date, past it, or after delivery, by kind.
+  steps: number[];
+  // The party's contacts it goes to; empty means "the contacts flagged to
+  // receive this kind" on the contact.
+  contactIds: string[];
+  // Also send it to MGC's accounts team inbox.
+  notifyTeam: boolean;
+  extraEmails: string[];
+  // Overdue only: copy the accounts team from this many days past due.
+  escalateFromDays: number | null;
+  deliveryMode: InvoiceDeliveryMode;
+  frequency: StatementFrequency;
+  // 1 (Monday) to 5 (Friday), for weekly and every-two-weeks statements.
+  weekday: number;
+  statementScope: StatementScope;
+  // Credit limit only: alert at this share of the limit.
+  thresholdPercent: number;
+  subject: string;
+  body: string;
+}
+
+export interface PartyAutomation {
+  // Whether a pause has been set. Read it through isPaused, which also
+  // honours pausedUntil.
+  paused: boolean;
+  // Calendar date the pause ends on (inclusive); null for an indefinite
+  // pause. Ignored while paused is false.
+  pausedUntil: string | null;
+  pauseReason: string;
+  // Hour of the day, Toronto time, that messages go out (0–23).
+  sendHour: number;
+  skipWeekends: boolean;
+  rules: AutomationRule[];
 }

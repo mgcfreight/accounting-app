@@ -7,13 +7,18 @@ export type InfoItem = { label: string; value: ReactNode };
 export default function InfoStrip({ items }: { items: InfoItem[] }) {
   return (
     <div className="bg-white rounded-lg shadow-md">
-      <div className="flex flex-wrap justify-between items-center py-5 px-3 gap-6">
+      <div className="flex flex-wrap justify-between items-center p-4 gap-6">
         {items.map((item) => (
           <div key={item.label}>
-            {/* mokal-app has `text-md`, which is not a Tailwind class and
-                renders at the base size — `text-base` is what it looks like. */}
-            <h6 className="mb-3 text-[#707070] text-base">{item.label}</h6>
-            <div className="text-base-primary-600 text-sm">{item.value}</div>
+            {/* mokal-app sets the label larger than the value. Here the value
+                is what the reader came for, so it leads and the label sits
+                small above it. */}
+            <h6 className="mb-1.5 text-[#707070] text-xs font-semibold uppercase tracking-wide">
+              {item.label}
+            </h6>
+            <div className="text-base-primary-600 text-base font-semibold">
+              {item.value}
+            </div>
           </div>
         ))}
       </div>

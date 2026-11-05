@@ -13,6 +13,15 @@ export default function useClientTable<T>(
   const [sort, setSort] = useState<TableSort | null>(initialSort);
   const [paging, setPaging] = useState({ currentPage: 1, itemsPerPage: 10 });
 
+  // A new search, filter or tab starts from page 1, so the first matches
+  // aren't hidden on a page the user has moved past. `rows` must be memoized
+  // by the caller, or every render would count as a new filter.
+  const [pagedRows, setPagedRows] = useState(rows);
+  if (rows !== pagedRows) {
+    setPagedRows(rows);
+    setPaging((prev) => ({ ...prev, currentPage: 1 }));
+  }
+
   const sorted = useMemo(() => {
     const column = sort && columns.find((c) => c.key === sort.column);
     return column && sort ? sortTableRows(rows, column, sort.direction) : rows;

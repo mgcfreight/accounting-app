@@ -46,7 +46,7 @@ Version pins that are deliberately below "latest":
 
 ```
 src/
-├── app/                 route table (app.tsx), layouts, providers, global CSS
+├── app/                 route table (routes.tsx), layouts, providers, global CSS
 ├── containers/          one folder per screen; shared ones take a prop
 ├── components/
 │   ├── common/          BaseButton, BaseTable, StatCard, FormModal, Money, …
@@ -72,7 +72,7 @@ src/
 | `/payments/`                   | Payments, Unmatched tab, Record Payment     | 2     |
 | `/shippers/`, `/carriers/`     | Parties with balance and overdue            | 2     |
 | `/shippers/view/?id=`, `/carriers/view/?id=` | Balance page and statements   | 2     |
-| `/reports/`                    | Reports with exports, P&L sheet, aging      | 3     |
+| `/reports/`                    | Reports with exports, Profit & Loss, aging  | 3     |
 | `/sync-status/`                | Last/next run, Sync now, checkpoints, runs  | 0     |
 | `/audit-log/`                  | Change history with before/after            | 0     |
 | `/settings/`                   | Company, tax rates, schedule, users (Admin) | 0     |
@@ -119,4 +119,4 @@ builds this app and serves `out/` from its image.
 
 The build writes `out/<route>/index.html` for every route (and `out/404.html`),
 so the API serves deep links and refreshes without an SPA fallback. A new route must be added to
-`src/lib/routes.config.ts` as well as `src/app/app.tsx` to get its file.
+`src/lib/routes.config.ts` as well as `src/app/routes.tsx` to get its file.
