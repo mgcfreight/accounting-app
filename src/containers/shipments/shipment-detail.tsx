@@ -12,6 +12,7 @@ import {
 } from "@/components/common";
 import { ArrowRight } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
+import { listReturnHref } from "@/hooks";
 import { paymentTermsLabels } from "@/lib/constants";
 import { InvoiceDirection, Permission, ShipmentSource } from "@/lib/enums";
 import { Paginated, PartyView, ShipmentView } from "@/lib/interfaces";
@@ -98,7 +99,7 @@ export default function ShipmentDetail() {
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="flex items-center gap-4">
-        <Link to="/shipments/" className="text-base text-[#71717A]">
+        <Link to={listReturnHref("/shipments/")} className="text-base text-[#71717A]">
           Shipments
         </Link>
         <ArrowRight />

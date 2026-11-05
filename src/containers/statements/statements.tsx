@@ -24,7 +24,7 @@ import {
 } from "@/components/common";
 import { EyeIcon } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useClientTable } from "@/hooks";
+import { useClientTable, useUrlTab } from "@/hooks";
 import { Currency, PartyType, Permission, StatementRunKind } from "@/lib/enums";
 import { ExportTable } from "@/lib/export";
 import { PartyAccountSummary } from "@/lib/interfaces";
@@ -109,7 +109,8 @@ const exportFor = (
 // emails. Demo data until the API has statements; the exports are real files
 // of these figures.
 export default function Statements() {
-  const [selected, setView] = useState<View>("carriers");
+  // In the URL (?view=shippers), so Back from an invoice keeps the side.
+  const [selected, setView] = useUrlTab<View>(["carriers", "shippers"], "carriers");
   const [open, setOpen] = useState<PartyAccountSummary | null>(null);
   const [confirmSend, setConfirmSend] = useState(false);
   const { can } = useCan();

@@ -17,7 +17,7 @@ import {
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
 import { useCan } from "@/components/providers/user-provider";
-import { useClientTable } from "@/hooks";
+import { useClientTable, useUrlTab } from "@/hooks";
 import { paymentMethodLabel, paymentMethodOptions } from "@/lib/constants";
 import { MatchStatus, PaymentDirection, Permission } from "@/lib/enums";
 import { Payment } from "@/lib/interfaces";
@@ -35,7 +35,8 @@ import InstallmentPlans from "./installment-plans";
 import RecordPaymentModal from "./record-payment-modal";
 
 type Filters = { search: string; method: string };
-type View = "all" | "in" | "out" | "unmatched" | "plans";
+const views = ["all", "in", "out", "unmatched", "plans"] as const;
+type View = (typeof views)[number];
 type OpenModal = { modal: "allocate" | "view" | "credit"; payment: Payment };
 
 const columns: BaseTableColumn[] = [
@@ -60,7 +61,7 @@ const methodOptions = [
 // Design §8.5 and §9: record payments, auto-match, manual allocation, the
 // "Unmatched" list, and installment plans.
 export default function Payments() {
-  const [view, setView] = useState<View>("all");
+  const [view, setView] = useUrlTab<View>(views, "all");
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<OpenModal | null>(null);
   const {

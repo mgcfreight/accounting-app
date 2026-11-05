@@ -18,10 +18,9 @@ import {
 } from "react-icons/lu";
 import { useLocation, useNavigate } from "react-router";
 import { useLocalStorage, useMediaQuery } from "@/hooks";
-import { LOGIN_PATH } from "@/lib/constants";
+import { LOGIN_PATH, SIGN_OUT_STATE } from "@/lib/constants";
 import { Me } from "@/lib/interfaces";
 import { menuForUser, MenuIconName } from "@/lib/navigation";
-import { useUser } from "../providers/user-provider";
 import SidebarItem, { isItemActive } from "./sidebar-item";
 
 // One icon per entry, so no two rows on the rail look alike.
@@ -61,7 +60,6 @@ export default function Sidebar({
   user: Me;
 }) {
   const navigate = useNavigate();
-  const { signOut } = useUser();
   const [openGroup, setOpenGroup] = useLocalStorage("selectedMenu", "");
   const [pinned, setPinned] = useLocalStorage("sidebarPinned", false);
   const drawer = useMediaQuery(DRAWER_QUERY);
@@ -250,12 +248,9 @@ export default function Sidebar({
           <button
             type="button"
             className="h-11 w-full flex items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-white/75 whitespace-nowrap transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white focus-visible:-outline-offset-2"
-            // Ends the session on the API (which clears its cookies), then
-            // the user here.
-            onClick={async () => {
-              await signOut();
-              navigate(LOGIN_PATH);
-            }}
+            // Goes to the login page, which ends the session there: a page
+            // with unsaved edits can still ask first (SIGN_OUT_STATE).
+            onClick={() => navigate(LOGIN_PATH, { state: SIGN_OUT_STATE })}
           >
             <LuLogOut className="shrink-0 text-xl" />
             <span
