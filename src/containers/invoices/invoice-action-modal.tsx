@@ -12,9 +12,9 @@ import {
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
 import {
-  BASE_PRICE_PATTERN,
   billingTriggerLabels,
   FX_RATE_PATTERN,
+  LINE_AMOUNT_PATTERN,
   reviewFlagLabels,
   TMS_INVOICE_CODE_PATTERN,
 } from "@/lib/constants";
@@ -22,6 +22,7 @@ import {
   BillingTrigger,
   CarrierInvoiceStatus,
   Currency,
+  CustomerInvoiceStatus,
   InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
@@ -41,7 +42,7 @@ import {
   errorMessage,
   InvoiceChanges,
   issueCustomerInvoice,
-  listCarrierInvoices,
+  listCustomerInvoices,
   receiveCarrierInvoice,
   reviseCarrierInvoice,
   reviseCustomerInvoice,
@@ -766,24 +767,25 @@ function ReviseInvoiceModal({
         />
       </Step>
 
-      {isCustomer ? (
-        <Step number={2} title="Commission" hint="A check on the margin. Shown only: nothing here is saved.">
-          <CommissionSummary invoice={invoice} control={control} />
-        </Step>
-      ) : (
-        <Step number={2} title="Carrier bill number">
-          <BaseInput
-            name="carrierInvoiceNumber"
-            control={control}
-            label="New carrier bill number"
-            placeholder={invoice.carrierInvoiceNumber ?? ""}
-            description="Only if the carrier sent a new bill. Leave blank to keep the current one."
-            rules={{ maxLength: { value: 64, message: "At most 64 characters" } }}
-          />
-        </Step>
+      {!isCustomer && (
+        <>
+          <Step number={2} title="Carrier bill number">
+            <BaseInput
+              name="carrierInvoiceNumber"
+              control={control}
+              label="New carrier bill number"
+              placeholder={invoice.carrierInvoiceNumber ?? ""}
+              description="Only if the carrier sent a new bill. Leave blank to keep the current one."
+              rules={{ maxLength: { value: 64, message: "At most 64 characters" } }}
+            />
+          </Step>
+          <Step number={3} title="Commission" hint="A check on the margin. Shown only: nothing here is saved.">
+            <CommissionSummary invoice={invoice} control={control} />
+          </Step>
+        </>
       )}
 
-      <Step number={3} title="Why it changed">
+      <Step number={isCustomer ? 2 : 4} title="Why it changed">
         <div className="flex flex-col gap-3">
           <BaseTextArea
             name="reason"
@@ -810,7 +812,7 @@ function ReviseInvoiceModal({
       </Step>
 
       {flags.length > 0 && (
-        <Step number={4} title="Check the flags">
+        <Step number={3} title="Check the flags">
           <div
             className={`flex flex-col gap-3 rounded-lg border p-4 ${
               missingAck ? "border-base-danger bg-danger-50" : "border-warning bg-warning-50"
@@ -978,10 +980,11 @@ function NewSubtotal({
   );
 }
 
-// mokal-app's commission, once for the whole new version: the base price
-// (what the carrier charges, before tax), the customer rate (every charge
-// above, added up) and the commission between them. Shown only: the charges
-// are what's sent, and nothing here changes them or is saved.
+// mokal-app's commission, once for a carrier invoice's new version: the base
+// price (every carrier charge above, added up, before tax), the customer rate
+// (what the shipper is charged, before tax) and the commission between them.
+// Shown only: the charges are what's sent, and nothing here changes them or
+// is saved.
 function CommissionSummary({
   invoice,
   control,
@@ -991,13 +994,13 @@ function CommissionSummary({
 }) {
   const { can } = useCan();
   const { currency, shipmentId } = invoice;
-  const canRead = !!shipmentId && can(Permission.CarrierInvoicesView);
-  // The shipment's one live standard carrier invoice (the API allows no
-  // second); null when it has none yet.
-  const carrierInvoice = useQuery({
-    queryKey: ["invoices", InvoiceDirection.Payable, "for-shipment", shipmentId],
+  const canRead = !!shipmentId && can(Permission.CustomerInvoicesView);
+  // The shipment's live standard shipper invoice (the list leaves out
+  // replaced versions); null when it has none yet.
+  const customerInvoice = useQuery({
+    queryKey: ["invoices", InvoiceDirection.Receivable, "for-shipment", shipmentId],
     queryFn: async ({ signal }) => {
-      const page = await listCarrierInvoices(
+      const page = await listCustomerInvoices(
         { page: 1, limit: 10, shipmentId: shipmentId! },
         signal
       );
@@ -1005,89 +1008,85 @@ function CommissionSummary({
         page.items.find(
           (item) =>
             item.kind === InvoiceKind.Standard &&
-            item.status !== CarrierInvoiceStatus.Void
+            item.status !== CustomerInvoiceStatus.Void
         ) ?? null
       );
     },
     enabled: canRead,
   });
-  const carrier = carrierInvoice.data;
-  // Before tax: the bill's subtotal, or the expected charges until it
-  // arrives. Never across currencies: a USD cost isn't a CAD one.
-  const carrierBase =
-    carrier && carrier.currency === currency
-      ? carrier.status === CarrierInvoiceStatus.Expected
-        ? carrier.expectedTotal
-        : carrier.subtotal
-      : undefined;
-  // Starts from the carrier invoice once it loads; a typed base is kept.
-  const { control: baseControl } = useForm({
-    values: { basePrice: carrierBase ?? "" },
+  const customer = customerInvoice.data;
+  // Before tax, and never across currencies: a USD rate isn't a CAD one.
+  const customerSubtotal =
+    customer && customer.currency === currency ? customer.subtotal : undefined;
+  // Starts from the shipper invoice once it loads; a typed rate is kept.
+  const { control: rateControl } = useForm({
+    values: { customerRate: customerSubtotal ?? "" },
     resetOptions: { keepDirtyValues: true },
   });
-  const basePrice = useWatch({ control: baseControl, name: "basePrice" }).trim();
+  const typedRate = useWatch({ control: rateControl, name: "customerRate" }).trim();
   const lines = useWatch({ control, name: "lines" });
 
   const amounts = lines.map((line) => toAmount(line.unitPrice.trim()));
-  const customerRate = amounts.every((amount): amount is string => amount !== null)
+  const base = amounts.every((amount): amount is string => amount !== null)
     ? sumMoney(amounts)
     : null;
-  const base = BASE_PRICE_PATTERN.test(basePrice) ? toAmount(basePrice) : null;
+  const customerRate = LINE_AMOUNT_PATTERN.test(typedRate) ? toAmount(typedRate) : null;
   const commission =
     customerRate && base ? sumMoney([customerRate, `-${base}`]) : null;
+  // commissionPercent is null for a zero base.
   const percent = customerRate && base ? commissionPercent(base, customerRate) : null;
-  const belowBase = !!percent?.startsWith("-");
+  const belowBase = !!commission && compareMoney(commission, "0.00") < 0;
 
   const source = !canRead ? (
-    "What the carrier charges, before tax."
-  ) : carrierInvoice.isPending ? (
-    "Loading the carrier invoice…"
-  ) : carrierInvoice.isError ? (
+    "What the shipper is charged, before tax."
+  ) : customerInvoice.isPending ? (
+    "Loading the shipper invoice…"
+  ) : customerInvoice.isError ? (
     <span className="text-base-danger">
-      Couldn&apos;t load the carrier invoice: enter it, or{" "}
+      Couldn&apos;t load the shipper invoice: enter it, or{" "}
       <button
         type="button"
         className="underline"
-        onClick={() => void carrierInvoice.refetch()}
+        onClick={() => void customerInvoice.refetch()}
       >
         try again
       </button>
       .
     </span>
-  ) : !carrier ? (
-    "The shipment has no carrier invoice: enter what the carrier charges, before tax."
-  ) : carrier.currency !== currency ? (
-    `The carrier invoice is in ${carrier.currency}: enter the carrier's charges in ${currency}, before tax.`
-  ) : carrier.status === CarrierInvoiceStatus.Expected ? (
-    "The carrier invoice's expected charges, before tax (the bill hasn't arrived)."
+  ) : !customer ? (
+    "The shipment has no shipper invoice: enter what the shipper is charged, before tax."
+  ) : customer.currency !== currency ? (
+    `The shipper invoice is in ${customer.currency}: enter the shipper's charges in ${currency}, before tax.`
+  ) : customer.status === CustomerInvoiceStatus.Draft ? (
+    "The shipper invoice's subtotal, before tax (not issued yet)."
   ) : (
-    "The carrier invoice's subtotal, before tax."
+    "The shipper invoice's subtotal, before tax."
   );
 
   return (
     <div className="flex flex-col gap-2">
+      <DetailRow
+        label="Base price (the charges above)"
+        value={
+          base ? (
+            <Money amount={base} currency={currency} />
+          ) : (
+            <span className="text-content-5">Enter every amount, up to 2 decimals</span>
+          )
+        }
+      />
       <BaseInput
-        name="basePrice"
-        control={baseControl}
-        label={`Base price (${currency})`}
+        name="customerRate"
+        control={rateControl}
+        label={`Customer rate (${currency})`}
         placeholder="0.00"
         description={source}
         rules={{
           validate: (value: string) =>
             value.trim() === "" ||
-            BASE_PRICE_PATTERN.test(value.trim()) ||
-            "Above 0, up to 2 decimals",
+            LINE_AMOUNT_PATTERN.test(value.trim()) ||
+            "0 or more, up to 2 decimals",
         }}
-      />
-      <DetailRow
-        label="Customer rate (the charges above)"
-        value={
-          customerRate ? (
-            <Money amount={customerRate} currency={currency} />
-          ) : (
-            <span className="text-content-5">Enter every amount, up to 2 decimals</span>
-          )
-        }
       />
       <DetailRow
         label="Commission"
@@ -1103,7 +1102,7 @@ function CommissionSummary({
       />
       {belowBase && (
         <p className="text-xs text-base-danger">
-          The charges are below the base price.
+          The carrier charges are above what the shipper is charged.
         </p>
       )}
     </div>
