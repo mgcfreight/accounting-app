@@ -52,8 +52,9 @@ type Pending = { action: "close" | "reopen"; period: string };
 
 // Month-end close (accounting_periods, v5). Admin only. A closed month can't
 // be changed; a month with no row here is open. Only a month that has ended
-// can be closed. Note: invoice and payment screens don't check closed months
-// yet — that comes with their API work.
+// can be closed. The API enforces it: an invoice, bill or payment dated in a
+// closed month can't be made, voided, revised or reversed (409) until an
+// Admin reopens the month.
 export default function AccountingPeriods() {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<Pending | null>(null);
@@ -187,13 +188,14 @@ export default function AccountingPeriods() {
           onOpenChange={(open) => !open && setPending(null)}
           title={`${pending.action === "close" ? "Close" : "Reopen"} ${monthLabel(pending.period)}`}
           confirmText={pending.action === "close" ? "Close Month" : "Reopen Month"}
+          confirmColor={pending.action === "reopen" ? "danger" : "primary"}
           isConfirming={act.isPending}
           onConfirm={() => act.mutate(pending)}
         >
           <p className="text-sm">
             {pending.action === "close"
-              ? "Nothing dated in this month can be changed once it is closed. This is recorded in the audit report."
-              : "Reopening lets records dated in this month be changed again. This is recorded in the audit report."}
+              ? "Once it is closed, no invoice, carrier bill or payment dated in this month can be created, voided, revised or reversed until an Admin reopens it. This is recorded in the audit report."
+              : "Reopening lets invoices, carrier bills and payments dated in this month be changed again, so its reports may no longer match what was filed. This is recorded in the audit report."}
           </p>
         </FormModal>
       )}
