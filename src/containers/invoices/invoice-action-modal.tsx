@@ -28,7 +28,13 @@ import {
   Permission,
 } from "@/lib/enums";
 import { CarrierInvoiceView, ReferenceNumbers } from "@/lib/interfaces";
-import { commissionPercent, compareMoney, sumMoney, toAmount } from "@/lib/money";
+import {
+  commissionPercent,
+  compareMoney,
+  exactLineAmount,
+  sumMoney,
+  toAmount,
+} from "@/lib/money";
 import {
   ApiError,
   approveCarrierInvoice,
@@ -54,6 +60,7 @@ import {
   InvoiceView,
   isCustomerInvoice,
   referenceLabels,
+  referencesOf,
 } from "./invoice-view";
 
 export type InvoiceAction = "edit" | "issue" | "receive" | "approve" | "revise";
@@ -128,10 +135,20 @@ const useInvoiceMutation = <T, R = unknown>(
       onDone?.(result);
     },
     onError: (error) => {
-      toast.error(errorMessage(error));
+      // A 409: someone else changed the invoice first. The form still holds
+      // what was read before their change, so sending it again would undo
+      // it (and from a list row would resend the old version and fail
+      // again). The modal closes instead, the invoice is read again, and the
+      // user reopens the action on what is there now.
       if (error instanceof ApiError && error.status === 409) {
+        toast.error(
+          "Someone else changed this invoice while you were working on it. It has been reloaded: check it, then try again."
+        );
         void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+        onClose();
+        return;
       }
+      toast.error(errorMessage(error));
     },
   });
 };
@@ -200,7 +217,11 @@ const changesFrom = (
 };
 
 function EditInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
-  const { control, handleSubmit } = useForm<EditValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<EditValues>({
     defaultValues: editDefaults(invoice),
   });
 
@@ -239,6 +260,7 @@ function EditInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       title="Edit Invoice Details"
       confirmText="Save"
       isConfirming={save.isPending}
+      isDirty={isDirty}
       onConfirm={submit}
       size="2xl"
     >
@@ -320,7 +342,14 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     defaultValues: { acknowledgeReview: false },
   });
   const [missingAck, setMissingAck] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
   const flags = invoice.reviewFlags;
+  // What the API needs before it will issue, checked here so the user is
+  // told up front rather than by an error after pressing Issue.
+  const missing = [
+    !invoice.tmsInvoiceCode && "a TMS invoice code",
+    referencesOf(invoice).length === 0 && "at least one reference number",
+  ].filter((item): item is string => !!item);
 
   const issue = useInvoiceMutation(
     ({ acknowledgeReview }: { acknowledgeReview: boolean }) =>
@@ -332,7 +361,13 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     onClose
   );
 
+  const acknowledged = useWatch({ control, name: "acknowledgeReview" });
+
   const submit = handleSubmit((values) => {
+    if (missing.length > 0) {
+      setShowMissing(true);
+      return;
+    }
     if (flags.length > 0 && !values.acknowledgeReview) {
       setMissingAck(true);
       return;
@@ -350,10 +385,34 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
       onConfirm={submit}
     >
       <InvoiceSummary invoice={invoice} partyName={partyName} />
+      {/* The amounts being fixed for good, so they're seen before issuing. */}
+      <dl className="grid grid-cols-3 gap-4 rounded-lg border border-content-10 bg-content-12 p-4">
+        {[
+          { label: "Subtotal", amount: invoice.subtotal },
+          { label: "Tax", amount: invoice.taxTotal },
+          { label: "Total", amount: invoice.total },
+        ].map((item) => (
+          <div key={item.label} className="flex flex-col gap-0.5">
+            <dt className="text-xs text-content-5">{item.label}</dt>
+            <dd className="text-base font-semibold text-base-primary-900">
+              <Money amount={item.amount} currency={invoice.currency} />
+            </dd>
+          </div>
+        ))}
+      </dl>
       <p className="text-sm">
         Once issued, the invoice&apos;s amounts never change. It needs a TMS
         invoice code and at least one reference number.
       </p>
+      {missing.length > 0 && (
+        <p
+          role={showMissing ? "alert" : undefined}
+          className={`text-sm ${showMissing ? "text-base-danger" : "text-[#343A40]"}`}
+        >
+          This invoice still needs {missing.join(" and ")}. Close this and use
+          Edit Details to add {missing.length > 1 ? "them" : "it"}.
+        </p>
+      )}
       {flags.length > 0 && (
         <>
           <p className="text-sm font-semibold">This invoice is flagged:</p>
@@ -361,7 +420,7 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
           <BaseSwitch name="acknowledgeReview" control={control}>
             I&apos;ve checked these. (Recorded in the audit log.)
           </BaseSwitch>
-          {missingAck && (
+          {missingAck && !acknowledged && (
             <p className="text-xs text-base-danger">
               Confirm you&apos;ve checked the flags to issue it.
             </p>
@@ -385,7 +444,11 @@ function ReceiveBillModal({
   partyName,
   onClose,
 }: ModalProps<CarrierInvoiceView>) {
-  const { control, handleSubmit } = useForm<BillValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<BillValues>({
     defaultValues: {
       carrierInvoiceNumber: "",
       invoiceDate: "",
@@ -412,6 +475,7 @@ function ReceiveBillModal({
       title="Enter Carrier Bill"
       confirmText="Save Bill"
       isConfirming={receive.isPending}
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => receive.mutate(values))}
       size="2xl"
     >
@@ -452,8 +516,69 @@ function ReceiveBillModal({
         control={control}
         name="lines"
         priceLabel={`Unit price (${invoice.currency})`}
+        footer={<BillSubtotal invoice={invoice} control={control} />}
       />
     </FormModal>
+  );
+}
+
+// The bill's charges added up, before tax, beside what was expected: a
+// preview while typing, so a bill that will go on hold is seen before
+// saving. Shown only when every line multiplies out to whole cents; a line
+// that needs rounding is left to the API, which works out the amounts.
+function BillSubtotal({
+  invoice,
+  control,
+}: {
+  invoice: CarrierInvoiceView;
+  control: Control<BillValues>;
+}) {
+  const lines = useWatch({ control, name: "lines" });
+  const amounts = lines.map((line) =>
+    exactLineAmount(line.quantity.trim(), line.unitPrice.trim())
+  );
+  const subtotal = amounts.every((amount): amount is string => amount !== null)
+    ? sumMoney(amounts)
+    : null;
+  const difference =
+    subtotal && !invoice.expectedTotal.startsWith("-")
+      ? sumMoney([subtotal, `-${invoice.expectedTotal}`])
+      : null;
+  const direction = difference ? compareMoney(difference, "0.00") : 0;
+
+  return (
+    <div className="flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-right">
+      <span className="text-sm text-[#343A40]">
+        Bill subtotal <span className="text-content-5">(before tax)</span>
+      </span>
+      {subtotal ? (
+        <span className="flex flex-col items-end">
+          <span className="text-base font-semibold tabular-nums text-base-primary-900">
+            <Money amount={subtotal} currency={invoice.currency} />
+          </span>
+          {difference && (
+            <span
+              className={`text-xs ${direction === 0 ? "text-base-success" : "text-base-danger"}`}
+            >
+              {direction === 0 ? (
+                "matches expected"
+              ) : (
+                <>
+                  {direction > 0 ? "+" : ""}
+                  <Money amount={difference} currency={invoice.currency} /> vs
+                  expected: will go on hold
+                </>
+              )}
+            </span>
+          )}
+        </span>
+      ) : (
+        <span className="text-xs text-content-5">
+          Shown once every line has a quantity and price (lines that need
+          rounding are worked out on save)
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -563,7 +688,11 @@ function ReviseInvoiceModal({
   onRevised,
 }: ModalProps & { onRevised?: (newInvoiceId: string) => void }) {
   const isCustomer = isCustomerInvoice(invoice);
-  const { control, handleSubmit } = useForm<ReviseValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<ReviseValues>({
     defaultValues: {
       lines: amountChargesFrom(invoice.lines ?? []),
       reason: "",
@@ -618,6 +747,7 @@ function ReviseInvoiceModal({
       title={isCustomer ? "Issue New Version" : "Enter Changed Carrier Bill"}
       confirmText={isCustomer ? "Issue New Version" : "Save New Version"}
       isConfirming={revise.isPending}
+      isDirty={isDirty}
       onConfirm={submit}
       size="3xl"
       className="xl:max-w-4xl 2xl:max-w-5xl"
