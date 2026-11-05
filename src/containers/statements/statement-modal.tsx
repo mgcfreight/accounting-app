@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PiFilePdf, PiFileXls } from "react-icons/pi";
 import { toast } from "sonner";
 import {
@@ -131,6 +132,7 @@ export default function StatementModal({
   onClose: () => void;
 }) {
   const { can } = useCan();
+  const [confirmingEmail, setConfirmingEmail] = useState(false);
   const invoices = statementInvoices(summary);
   const payments = statementPayments(summary);
   const history = findStatements(summary.partyId);
@@ -189,15 +191,32 @@ export default function StatementModal({
             <BaseButton
               text="Email statement"
               className="rounded-xl px-3"
-              onPress={() =>
-                toast.info(
-                  `Statement to ${summary.statementEmail} — demo only, nothing was sent.`
-                )
-              }
+              onPress={() => setConfirmingEmail(true)}
             />
           )}
         </div>
       </div>
+      {/* Emailing reaches the customer, so it asks first and names who gets
+          it, as the bulk "Send statements now" does. */}
+      <FormModal
+        isOpen={confirmingEmail}
+        onOpenChange={(open) => !open && setConfirmingEmail(false)}
+        title="Email this statement?"
+        confirmText="Email Statement"
+        onConfirm={() => {
+          toast.info(
+            `Statement to ${summary.statementEmail} — demo only, nothing was sent.`
+          );
+          setConfirmingEmail(false);
+        }}
+        size="sm"
+      >
+        <p className="text-sm">
+          The statement for {summary.partyName} ({periodText}) will be emailed
+          to{" "}
+          <strong className="break-all">{summary.statementEmail}</strong>.
+        </p>
+      </FormModal>
 
       <DetailRow
         label="Previous dues (opening balance)"

@@ -1,6 +1,7 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useSearchParams } from "react-router";
 import { LuCircleCheck } from "react-icons/lu";
 import { toast } from "sonner";
 import {
@@ -60,11 +61,22 @@ const isReceivable = (dispute: Dispute) =>
 // invoice is never edited; the accountant resolves each with a note. And the
 // invoices a shipper or carrier disputes (requirement 3). Mock data: every
 // action is a demo.
+// A resolution of an MGC change, waiting for the user to confirm it.
+type PendingResolution = { item: ReviewItem; action: string; done: string };
+
 export default function NeedsReview() {
-  const [view, setView] = useState<View>("changes");
+  // The tab is in the URL (?view=disputes), so it can be linked to and Back
+  // from an invoice returns to it. Anything else shows the changes.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: View = searchParams.get("view") === "disputes" ? "disputes" : "changes";
+  const setView = (next: View) =>
+    setSearchParams(next === "changes" ? {} : { view: next }, { replace: true });
   const [resolving, setResolving] = useState<Dispute | null>(null);
-  const resolve = (what: string) =>
-    toast.info(`${what} — demo only, nothing was saved.`);
+  // Once wired, each resolution issues or settles something for good, so it
+  // asks first, showing the amounts, rather than acting on one click.
+  const [pending, setPending] = useState<PendingResolution | null>(null);
+  const resolve = (item: ReviewItem, action: string, done: string) =>
+    setPending({ item, action, done });
   // A credit or debit note is a new adjustment (create); keeping the fee or
   // dismissing resolves the invoice without one (edit).
   const { can } = useCan();
@@ -108,13 +120,13 @@ export default function NeedsReview() {
       case "actions":
         return item.kind === ReviewKind.Cancellation ? (
           <div className="flex gap-2">
-            {canNote && <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve("Credit note approved")} />}
-            {canResolve && <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Cancellation fee kept")} />}
+            {canNote && <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve(item, "Approve Credit Note", "Credit note approved")} />}
+            {canResolve && <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve(item, "Keep Cancellation Fee", "Cancellation fee kept")} />}
           </div>
         ) : (
           <div className="flex gap-2">
-            {canNote && <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve("Debit note issued")} />}
-            {canResolve && <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Dismissed")} />}
+            {canNote && <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve(item, "Issue Debit Note", "Debit note issued")} />}
+            {canResolve && <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve(item, "Dismiss", "Dismissed")} />}
           </div>
         );
       default:
@@ -241,6 +253,42 @@ export default function NeedsReview() {
       )}
       {resolving && (
         <ResolveDisputeModal dispute={resolving} onClose={() => setResolving(null)} />
+      )}
+      {pending && (
+        <FormModal
+          isOpen
+          onOpenChange={(open) => !open && setPending(null)}
+          title={`${pending.action}?`}
+          confirmText={pending.action}
+          onConfirm={() => {
+            toast.info(`${pending.done} — demo only, nothing was saved.`);
+            setPending(null);
+          }}
+        >
+          <p className="text-sm text-[#707070]">
+            {pending.item.invoiceNumber} · {pending.item.partyName} · shipment{" "}
+            {pending.item.shipmentId}
+          </p>
+          <dl className="grid grid-cols-2 gap-4 rounded-lg border border-content-10 bg-content-12 p-4">
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs text-content-5">Amount before</dt>
+              <dd className="font-semibold">
+                <Money amount={pending.item.previousAmount} currency={pending.item.currency} />
+              </dd>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs text-content-5">Amount now</dt>
+              <dd className="font-semibold">
+                <Money amount={pending.item.newAmount} currency={pending.item.currency} />
+              </dd>
+            </div>
+          </dl>
+          <p className="text-sm">
+            The issued invoice isn&apos;t changed. This is recorded in the audit
+            trail
+            {pending.action.includes("Note") && ", and the note is emailed with the invoice"}.
+          </p>
+        </FormModal>
       )}
     </div>
   );
