@@ -96,7 +96,13 @@ export function PartyFormModal({
   // Adding a contact is parties.edit, which adding a party doesn't imply.
   const { can } = useCan();
   const canAddContact = can(Permission.PartiesEdit);
-  const { control, handleSubmit, setValue, getValues } = useForm<PartyValues>({
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    getValues,
+    formState: { isDirty },
+  } = useForm<PartyValues>({
     defaultValues: {
       contactName: "",
       contactEmail: "",
@@ -176,6 +182,7 @@ export function PartyFormModal({
       title={`Add ${what}`}
       confirmText={`Add ${what}`}
       isConfirming={save.isPending}
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => save.mutate(values))}
       size="2xl"
     >
@@ -364,9 +371,17 @@ export function ContactFormModal({
 }) {
   const queryClient = useQueryClient();
   const isShipper = party.type === PartyType.Shipper;
-  const { control, handleSubmit } = useForm<ContactValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<ContactValues>({
     defaultValues: contactDefaults(contact),
   });
+  // Turning Active off retires the contact: the button says so, in red, so
+  // it isn't saved by mistake as an ordinary edit.
+  const isActive = useWatch({ control, name: "isActive" });
+  const retiring = !!contact?.isActive && !isActive;
 
   const save = useMutation({
     mutationFn: (values: ContactValues) => {
@@ -410,8 +425,10 @@ export function ContactFormModal({
       isOpen
       onOpenChange={(open) => !open && onClose()}
       title={contact ? "Edit Contact" : `Add Contact for ${party.name}`}
-      confirmText={contact ? "Save Contact" : "Add Contact"}
+      confirmText={retiring ? "Retire Contact" : contact ? "Save Contact" : "Add Contact"}
+      confirmColor={retiring ? "danger" : "primary"}
       isConfirming={save.isPending}
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => save.mutate(values))}
       size="xl"
     >
@@ -478,6 +495,13 @@ export function ContactFormModal({
             </span>
           </BaseSwitch>
         )}
+        {retiring && (
+          <p role="alert" className="text-sm text-base-danger">
+            {contact?.name} will stop receiving invoices, reminders
+            {isShipper && " and statements"}. You can turn them back on later
+            from the retired contacts.
+          </p>
+        )}
       </div>
     </FormModal>
   );
@@ -517,21 +541,33 @@ export function AgreementFormModal({
   const queryClient = useQueryClient();
   const isCarrier = party.type === PartyType.Carrier;
   // The new terms replace the open-ended agreement, so its settings carry
-  // over unless changed.
+  // over unless changed: new terms for one reason mustn't quietly reset the
+  // others (a zero-rated or exempt party back to Standard tax, say). Notes
+  // belong to the agreement they were written for and start empty.
   const replacing = party.agreements?.find((a) => a.effectiveTo === null);
-  const { control, handleSubmit } = useForm<AgreementValues>({
+  const replacingDays = isCarrier
+    ? replacing?.alertDaysBefore
+    : replacing?.noticeDaysBefore;
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<AgreementValues>({
     defaultValues: {
       effectiveFrom: "",
       currency: party.agreements?.[0]?.currency ?? party.defaultCurrency,
-      paymentTerms: PaymentTerms.Net30,
+      paymentTerms: replacing?.paymentTerms ?? PaymentTerms.Net30,
       // Carried over once the API sends them, so new terms for another
       // reason don't drop the shipper's credit settings.
       creditStatus: replacing?.creditStatus ?? CreditStatus.Allowed,
       creditLimit: replacing?.creditLimit ?? "",
-      taxTreatment: TaxTreatment.Standard,
-      taxBasis: TaxBasis.BillTo,
-      billingTrigger: "",
-      daysBefore: "",
+      taxTreatment: replacing?.taxTreatment ?? TaxTreatment.Standard,
+      taxBasis: replacing?.taxBasis ?? TaxBasis.BillTo,
+      billingTrigger: (isCarrier && replacing?.billingTrigger) || "",
+      daysBefore:
+        replacingDays === null || replacingDays === undefined
+          ? ""
+          : String(replacingDays),
       notes: "",
     },
   });
@@ -582,6 +618,7 @@ export function AgreementFormModal({
       title={`Add Agreement for ${party.name}`}
       confirmText="Add Agreement"
       isConfirming={save.isPending}
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => save.mutate(values))}
       size="3xl"
       className="xl:max-w-4xl"
@@ -589,6 +626,7 @@ export function AgreementFormModal({
       <p className="text-xs text-content-5">
         The current open-ended agreement, if any, ends the day before this one
         starts.
+        {replacing && " Its terms are filled in below: change only what's new."}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <BaseInput

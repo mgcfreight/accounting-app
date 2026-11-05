@@ -91,13 +91,24 @@ export const sortTableRows = <T>(
       ? (column.sortValue as (row: T) => unknown)(row)
       : readPath(row, sortKey);
   const sign = direction === "asc" ? 1 : -1;
+  // USD 10,000.00 and CAD 10,000.00 aren't the same amount, so a money
+  // column groups rows by their currency (the row's `currency`, or
+  // `currencyKey`) before comparing amounts within each.
+  const currencyOf = (row: T): string | undefined => {
+    if (column.sortType !== "money") return undefined;
+    const currency = readPath(row, column.currencyKey ?? "currency");
+    return typeof currency === "string" ? currency : undefined;
+  };
 
   return rows
-    .map((row) => ({ row, value: read(row) }))
+    .map((row) => ({ row, value: read(row), currency: currencyOf(row) }))
     .sort((a, b) => {
       if (isEmpty(a.value) || isEmpty(b.value)) {
         if (isEmpty(a.value) && isEmpty(b.value)) return 0;
         return isEmpty(a.value) ? 1 : -1;
+      }
+      if (a.currency && b.currency && a.currency !== b.currency) {
+        return collator.compare(a.currency, b.currency);
       }
       return compareValues(a.value, b.value, column.sortType) * sign;
     })

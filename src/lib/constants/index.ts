@@ -14,6 +14,13 @@ export const FORGOT_PASSWORD_PATH = "/forgot-password/";
 export const RESET_PASSWORD_PATH = "/reset-password/";
 export const ACCOUNT_PATH = "/account/";
 
+// Navigation state for Sign Out: the app goes to the login page first, so a
+// page with unsaved edits can ask before it's left, and the login page then
+// ends the session (PublicLayout).
+export const SIGN_OUT_STATE = { signOut: true } as const;
+export const isSignOutState = (state: unknown) =>
+  (state as { signOut?: unknown } | null)?.signOut === true;
+
 // The API's password rule (users.password): shown and checked before sending,
 // so the form can say what's wrong; the API checks it again.
 export const PASSWORD_RULE =

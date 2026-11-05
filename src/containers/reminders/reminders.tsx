@@ -20,7 +20,7 @@ import {
 } from "@/components/common";
 import { RowAction } from "@/components/common/row-actions";
 import { useCan } from "@/components/providers/user-provider";
-import { useClientTable } from "@/hooks";
+import { useClientTable, useUrlTab } from "@/hooks";
 import {
   InvoiceDirection,
   Permission,
@@ -36,6 +36,7 @@ import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { moneyText } from "../reports/export-table";
 
 type View = "all" | ReminderStatus;
+const views: View[] = ["all", ...Object.values(ReminderStatus)];
 type Filters = { side: string };
 type OpenModal = { modal: "send" | "skip"; reminder: Reminder };
 
@@ -102,7 +103,7 @@ const exportTable = (rows: Reminder[], subtitle: string): ExportTable<Reminder> 
 // that a carrier bill falls due. Mock data: nothing is sent yet, and "Send
 // now" and "Skip" are demos.
 export default function Reminders() {
-  const [view, setView] = useState<View>("all");
+  const [view, setView] = useUrlTab<View>(views, "all");
   const [open, setOpen] = useState<OpenModal | null>(null);
   const { can } = useCan();
   const canViewShipper = can(Permission.CustomerInvoicesView);

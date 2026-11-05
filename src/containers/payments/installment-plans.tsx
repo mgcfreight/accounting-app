@@ -213,7 +213,12 @@ function NewPlanModal({
   directions: PaymentDirection[];
   onClose: () => void;
 }) {
-  const { control, handleSubmit, setValue } = useForm<PlanValues>({
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    formState: { isDirty },
+  } = useForm<PlanValues>({
     defaultValues: {
       direction: directions[0],
       party: "",
@@ -245,6 +250,7 @@ function NewPlanModal({
       title="New Installment Plan"
       confirmText="Create Plan"
       onConfirm={submit}
+      isDirty={isDirty}
       size="xl"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

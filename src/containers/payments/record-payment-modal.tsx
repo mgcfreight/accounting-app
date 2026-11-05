@@ -54,7 +54,13 @@ export default function RecordPaymentModal({
   const directionOptions = allDirections.filter((option) =>
     can(option.permission)
   );
-  const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isDirty },
+  } = useForm<FormValues>({
     // Read once, on mount: render this with `shipper` already set.
     defaultValues: {
       direction: shipper ? "IN" : (directionOptions[0]?.value ?? "IN"),
@@ -83,9 +89,22 @@ export default function RecordPaymentModal({
     setValue("party", "");
   }, [direction, setValue]);
 
-  const parties = (direction === "OUT" ? mockCarriers : mockShippers).map(
-    (party) => ({ key: party.id, label: party.name, value: party.id })
-  );
+  const partyList = direction === "OUT" ? mockCarriers : mockShippers;
+  const parties = partyList.map((party) => ({
+    key: party.id,
+    label: party.name,
+    value: party.id,
+  }));
+
+  // A payment is recorded in its party's currency (version 1 records a
+  // payment in its invoice's currency, and a party bills in one), so the
+  // currency follows the party chosen and can't be set against it: a USD
+  // shipper's payment left on CAD would be recorded in the wrong currency.
+  const partyId = useWatch({ control, name: "party" });
+  const partyCurrency = partyList.find((party) => party.id === partyId)?.currency;
+  useEffect(() => {
+    if (partyCurrency) setValue("currency", partyCurrency);
+  }, [partyCurrency, setValue]);
 
   const submit = handleSubmit(() => {
     toast.success("Payment recorded — demo only, nothing was saved.");
@@ -99,6 +118,7 @@ export default function RecordPaymentModal({
       title="Record Payment"
       confirmText="Record Payment"
       onConfirm={submit}
+      isDirty={isDirty}
       size="xl"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -131,7 +151,12 @@ export default function RecordPaymentModal({
           label="Currency"
           options={currencyOptions}
           disallowEmptySelection
-          description="Version 1 records a payment in its invoice's currency."
+          isDisabled={!!partyCurrency}
+          description={
+            partyCurrency
+              ? "The party's currency: a payment is recorded in its invoices' currency."
+              : "Set from the party once you choose one."
+          }
         />
         <BaseInput
           name="amount"

@@ -15,6 +15,7 @@ import {
 import { ArrowRight, Send } from "@/components/icons";
 import { useHeaderDetail } from "@/components/providers/header-detail-provider";
 import { useCan } from "@/components/providers/user-provider";
+import { listReturnHref } from "@/hooks";
 import {
   billingTriggerLabels,
   paymentTermsLabels,
@@ -184,7 +185,7 @@ export default function InvoiceDetail({
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link to={listHref} className="text-base text-[#71717A]">
+          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A]">
             {isReceivable ? "Shipper Invoices" : "Carrier Invoices"}
           </Link>
           <ArrowRight />

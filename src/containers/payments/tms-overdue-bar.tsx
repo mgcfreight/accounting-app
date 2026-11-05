@@ -77,21 +77,28 @@ export default function TmsOverdueBar() {
     <>
       <section
         aria-label="Overdue payments"
-        className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 shrink-0 bg-base-warning text-base-primary-900 text-sm px-4 py-2 overflow-hidden"
+        className="flex items-center justify-center gap-x-4 shrink-0 bg-base-warning text-base-primary-900 text-sm px-4 py-2 overflow-hidden"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setFocused(true)}
         onBlur={leave}
       >
-        <p className="text-center" aria-live={rotating ? "off" : "polite"} aria-atomic>
-          <strong className="uppercase tracking-wide">Demo data</strong> ·{" "}
-          <strong>
+        {/* One line at every width: the labels keep their size, the shipper's
+            sentence ends in "…" when it runs out of room, and the secondary
+            text drops out on narrower screens. "Demo data" always shows. */}
+        <p
+          className="flex min-w-0 items-baseline gap-x-1 whitespace-nowrap"
+          aria-live={rotating ? "off" : "polite"}
+          aria-atomic
+        >
+          <strong className="shrink-0 uppercase tracking-wide">Demo data</strong> ·{" "}
+          <strong className="hidden shrink-0 md:block">
             Payment overdue in the TMS{count > 1 && ` · ${position + 1} of ${count}`}:
           </strong>{" "}
           {/* Keyed by shipper, so each one plays the slide-in. */}
           <span
             key={current.partyId}
-            className="inline-block animate-ticker-in motion-reduce:animate-none"
+            className="min-w-0 truncate animate-ticker-in motion-reduce:animate-none"
           >
             {current.partyName} owes{" "}
             <strong>
@@ -100,9 +107,9 @@ export default function TmsOverdueBar() {
             on {plural(current.invoiceCount, "invoice")}, the oldest{" "}
             {plural(current.oldestOverdueDays, "day")} past due.
           </span>{" "}
-          Clear the overdue payment.
+          <span className="hidden shrink-0 2xl:block">Clear the overdue payment.</span>
         </p>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {canRecord && (
             <button
               type="button"

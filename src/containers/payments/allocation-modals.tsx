@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { Control, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -143,7 +143,12 @@ export function AllocateModal({
   onClose: () => void;
 }) {
   const invoices = openInvoicesFor(payment);
-  const { control, handleSubmit, setError } = useForm<Amounts>({
+  const {
+    control,
+    handleSubmit,
+    setError,
+    formState: { isDirty },
+  } = useForm<Amounts>({
     defaultValues: Object.fromEntries(invoices.map((invoice) => [invoice.id, ""])),
   });
   const disputed = payment.suggested.filter((a) => isOpenDispute(a.invoiceNumber));
@@ -189,6 +194,7 @@ export function AllocateModal({
       title="Allocate Payment"
       confirmText="Allocate"
       onConfirm={submit}
+      isDirty={isDirty}
       size="2xl"
     >
       <PaymentSummary payment={payment} />
@@ -248,6 +254,7 @@ export function AllocateModal({
                 />
               </div>
             ))}
+            <AllocatedSoFar control={control} payment={payment} />
             <p className="text-xs text-content-5">
               Less than an invoice&apos;s balance leaves it part paid. The
               amounts must add up to no more than the payment&apos;s unapplied
@@ -257,6 +264,61 @@ export function AllocateModal({
         )}
       </div>
     </FormModal>
+  );
+}
+
+// The amounts typed so far against the payment's unapplied amount, while
+// typing, so going over is seen before pressing Allocate. Added exactly
+// (sumMoney); shown only once every typed amount is well formed.
+function AllocatedSoFar({
+  control,
+  payment,
+}: {
+  control: Control<Amounts>;
+  payment: Payment;
+}) {
+  const values = useWatch({ control });
+  const typed = Object.values(values)
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  const total = typed.every((value) => AMOUNT.test(value)) ? sumMoney(typed) : null;
+  const left = total ? sumMoney([payment.unapplied, `-${total}`]) : null;
+  const over = !!left && compareMoney(left, "0.00") < 0;
+
+  return (
+    <p
+      aria-live="polite"
+      className={`flex flex-wrap justify-end gap-x-2 text-sm ${over ? "text-base-danger" : "text-[#343A40]"}`}
+    >
+      {total && left ? (
+        <>
+          <span>
+            Allocated{" "}
+            <strong>
+              <Money amount={total} currency={payment.currency} />
+            </strong>{" "}
+            of <Money amount={payment.unapplied} currency={payment.currency} />
+          </span>
+          <span>
+            ·{" "}
+            {over ? (
+              <>
+                over by{" "}
+                <Money amount={left.replace(/^-/, "")} currency={payment.currency} />
+              </>
+            ) : (
+              <>
+                <Money amount={left} currency={payment.currency} /> left as credit
+              </>
+            )}
+          </span>
+        </>
+      ) : (
+        <span className="text-content-5">
+          Enter amounts with cents to see the total.
+        </span>
+      )}
+    </p>
   );
 }
 
