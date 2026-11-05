@@ -5,7 +5,7 @@ import {
   ModalFooter,
   ModalHeader,
 } from "@heroui/react";
-import { FormEvent, ReactNode } from "react";
+import { FormEvent, ReactNode, useState } from "react";
 import BaseButton from "./base-button";
 
 // The modal mokal-app builds by hand for each form (partial payment, card
@@ -22,6 +22,7 @@ export default function FormModal({
   requireConfirm = false,
   size = "md",
   className,
+  isDirty = false,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,13 +44,21 @@ export default function FormModal({
   // On the modal itself: e.g. responsive max-widths to widen it on wide
   // screens beyond `size`.
   className?: string;
+  // The form has unsaved edits: Cancel, Esc and the close button ask before
+  // throwing them away.
+  isDirty?: boolean;
 }) {
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   // While saving, the modal stays open — Cancel, Esc, the close button and a
   // click outside are all ignored — so the outcome is seen and the form can't
   // be reopened and sent twice.
   const locked = isConfirming || requireConfirm;
   const handleOpenChange = (open: boolean) => {
     if (!open && isConfirming) return;
+    if (!open && isDirty) {
+      setConfirmingDiscard(true);
+      return;
+    }
     onOpenChange(open);
   };
 
@@ -64,10 +73,12 @@ export default function FormModal({
   };
 
   return (
-    // `inside`: on a short phone a long form scrolls within the body, keeping
-    // the title and buttons on screen rather than pushing the top off it.
-    // A form ignores a click outside, so a stray click doesn't throw away
-    // what was typed; Cancel, Esc and the close button still close it.
+    <>
+    {/* `inside`: on a short phone a long form scrolls within the body, keeping
+        the title and buttons on screen rather than pushing the top off it.
+        A form ignores a click outside, so a stray click doesn't throw away
+        what was typed; Cancel, Esc and the close button close it, asking
+        first when it has unsaved edits. */}
     <Modal
       isOpen={isOpen}
       size={size}
@@ -128,5 +139,48 @@ export default function FormModal({
         }}
       </ModalContent>
     </Modal>
+    <Modal
+      isOpen={isOpen && confirmingDiscard}
+      size="sm"
+      onOpenChange={(open) => !open && setConfirmingDiscard(false)}
+    >
+      <ModalContent>
+        {(onKeepEditing) => (
+          <>
+            <ModalHeader>
+              <h2 className="text-2xl text-base-primary-500 font-bold">
+                Discard changes?
+              </h2>
+            </ModalHeader>
+            <ModalBody>
+              <p className="text-sm">
+                What you&apos;ve entered in &ldquo;{title}&rdquo; hasn&apos;t
+                been saved. If you close it now, it will be lost.
+              </p>
+            </ModalBody>
+            <ModalFooter>
+              <div className="flex gap-3">
+                <BaseButton
+                  text="Keep Editing"
+                  varient="bordered"
+                  className="text-base-primary px-6"
+                  onPress={onKeepEditing}
+                />
+                <BaseButton
+                  text="Discard"
+                  color="danger"
+                  className="px-6"
+                  onPress={() => {
+                    setConfirmingDiscard(false);
+                    onOpenChange(false);
+                  }}
+                />
+              </div>
+            </ModalFooter>
+          </>
+        )}
+      </ModalContent>
+    </Modal>
+    </>
   );
 }
