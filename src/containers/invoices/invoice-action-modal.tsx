@@ -37,10 +37,10 @@ import {
   toAmount,
 } from "@/lib/money";
 import {
-  ApiError,
   approveCarrierInvoice,
   errorMessage,
   InvoiceChanges,
+  isInvoiceEditConflict,
   issueCustomerInvoice,
   listCustomerInvoices,
   receiveCarrierInvoice,
@@ -75,8 +75,8 @@ type ModalProps<T extends InvoiceView = InvoiceView> = {
 
 // The forms behind an invoice's actions, each sending the invoice's
 // `version`. Each is mounted only while open, so its form starts from the
-// invoice as last read. After a change — or a 409, meaning someone else
-// changed it first — every invoice query is refetched. A new version opens
+// invoice as last read. After a change — or an edit conflict, meaning
+// someone else changed it first — every invoice query is refetched. A new version opens
 // in place of the one it replaced (`onRevised`).
 export default function InvoiceActionModal({
   action,
@@ -136,12 +136,12 @@ const useInvoiceMutation = <T, R = unknown>(
       onDone?.(result);
     },
     onError: (error) => {
-      // A 409: someone else changed the invoice first. The form still holds
-      // what was read before their change, so sending it again would undo
-      // it (and from a list row would resend the old version and fail
-      // again). The modal closes instead, the invoice is read again, and the
-      // user reopens the action on what is there now.
-      if (error instanceof ApiError && error.status === 409) {
+      // Someone else changed the invoice first. The form still holds what
+      // was read before their change, so sending it again would undo it
+      // (and from a list row would resend the old version and fail again).
+      // The modal closes instead, the invoice is read again, and the user
+      // reopens the action on what is there now.
+      if (isInvoiceEditConflict(error)) {
         toast.error(
           "Someone else changed this invoice while you were working on it. It has been reloaded: check it, then try again."
         );
@@ -149,6 +149,9 @@ const useInvoiceMutation = <T, R = unknown>(
         onClose();
         return;
       }
+      // Anything else — including a 409 that isn't an edit conflict, such
+      // as a date in a closed month — shows the API's message and keeps the
+      // form open with what was typed.
       toast.error(errorMessage(error));
     },
   });
