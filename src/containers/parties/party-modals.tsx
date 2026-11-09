@@ -13,12 +13,10 @@ import {
   billingTriggerOptions,
   CANADIAN_PROVINCES,
   COUNTRY_PATTERN,
-  allPaymentTermsOptions,
   CREDIT_LIMIT_PATTERN,
   creditStatusOptions,
   EMAIL_SHAPE,
   currencyOptions,
-  PAYMENT_TERMS_NOT_IN_API,
   paymentTermsOptions,
   REGION_PATTERN,
   taxBasisOptions,
@@ -613,13 +611,8 @@ export function AgreementFormModal({
           name="paymentTerms"
           control={control}
           label={isCarrier ? "Payment terms" : "Payment terms (credit period)"}
-          options={isCarrier ? paymentTermsOptions : allPaymentTermsOptions}
+          options={paymentTermsOptions}
           disallowEmptySelection
-          rules={{
-            validate: (value: string | boolean) =>
-              !PAYMENT_TERMS_NOT_IN_API.has(String(value)) ||
-              "Net 90 can't be saved yet: the Accounts API doesn't support it",
-          }}
         />
         <BaseSelect
           name="taxTreatment"

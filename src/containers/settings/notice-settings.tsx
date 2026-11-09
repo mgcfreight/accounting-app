@@ -14,7 +14,7 @@ import { NoticeSettings, NoticeTerms } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
 import { errorMessage, getNoticeSettings, saveNoticeSettings } from "@/services";
 
-const TERMS: NoticeTerms[] = ["NET_7", "NET_15", "NET_30", "NET_60"];
+const TERMS: NoticeTerms[] = ["NET_7", "NET_15", "NET_30", "NET_60", "NET_90"];
 
 // Text fields in the form; sent as whole numbers.
 type Values = Record<NoticeTerms, string> & { carrierAlertDaysBefore: string };
@@ -26,6 +26,7 @@ const toForm = (settings: NoticeSettings): Values => ({
   NET_15: String(settings.defaultNoticeDays.NET_15),
   NET_30: String(settings.defaultNoticeDays.NET_30),
   NET_60: String(settings.defaultNoticeDays.NET_60),
+  NET_90: String(settings.defaultNoticeDays.NET_90),
   carrierAlertDaysBefore:
     settings.carrierAlertDaysBefore === null
       ? ""
@@ -35,9 +36,9 @@ const toForm = (settings: NoticeSettings): Values => ({
 const wholeDays = (max: number) => (value: string) =>
   (/^\d+$/.test(value) && +value <= max) || `A whole number from 0 to ${max}`;
 
-// Default billing-period notice days by payment terms (v5: 2/4/7/7; COD and
-// PREPAID get no notice), and the default for the carrier "payment due soon"
-// alert to the accounts team. Each customer's or carrier's agreement can set
+// Default billing-period notice days by payment terms (v5: 2/4/7/7, and 7
+// for Net 90; COD and PREPAID get no notice), and the default for the
+// carrier "payment due soon" alert to the accounts team. Each customer's or carrier's agreement can set
 // its own. Saved only: nothing sends notices yet.
 // The Settings page asks before leaving with unsaved edits; this section
 // reports them through `onDirtyChange`.
@@ -72,6 +73,7 @@ export default function NoticeSettingsSection({
           NET_15: Number.parseInt(values.NET_15, 10),
           NET_30: Number.parseInt(values.NET_30, 10),
           NET_60: Number.parseInt(values.NET_60, 10),
+          NET_90: Number.parseInt(values.NET_90, 10),
         },
         carrierAlertDaysBefore: values.carrierAlertDaysBefore.trim()
           ? Number.parseInt(values.carrierAlertDaysBefore, 10)
