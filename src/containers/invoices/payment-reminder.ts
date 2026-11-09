@@ -24,10 +24,13 @@ export const paymentReminder = (
   if (!isOwed(invoice) || !invoice.dueDate || !agreement.remindersEnabled) {
     return null;
   }
-  const defaultDays: Partial<Record<PaymentTerms, number>> =
-    settings.defaultNoticeDays;
+  const terms = invoice.paymentTerms;
+  const defaultDays =
+    terms === PaymentTerms.COD || terms === PaymentTerms.Prepaid
+      ? null
+      : settings.defaultNoticeDays[terms];
   const daysBefore = isCustomerInvoice(invoice)
-    ? agreement.noticeDaysBefore ?? defaultDays[invoice.paymentTerms] ?? null
+    ? agreement.noticeDaysBefore ?? defaultDays
     : agreement.alertDaysBefore ?? settings.carrierAlertDaysBefore;
   if (daysBefore === null) return null;
   const remindOn = addDays(invoice.dueDate, -daysBefore);
