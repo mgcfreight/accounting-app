@@ -32,6 +32,7 @@ import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
 import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import { ApiError, errorMessage, getNoticeSettings, getParty } from "@/services";
 import usePartyNames from "../parties/use-party-names";
+import ShipmentLink from "../shipments/shipment-link";
 import { fetchInvoice, fetchInvoiceVersions } from "./invoice-reads";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import InvoiceExtraActionModal, {
@@ -260,6 +261,10 @@ export default function InvoiceDetail({
 
       <InfoStrip
         items={[
+          {
+            label: "Shipment",
+            value: <ShipmentLink shipmentId={data.shipmentId} variant="pill" />,
+          },
           { label: "Invoice Date", value: formatDate(data.invoiceDate ?? undefined) ?? "—" },
           { label: "Due Date", value: formatDate(data.dueDate ?? undefined) ?? "—" },
           { label: "Invoice Total", value: <InvoiceTotal invoice={data} /> },
@@ -346,7 +351,6 @@ export default function InvoiceDetail({
             )}
             <Field label="Kind">{humanize(data.kind)}</Field>
             <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
-            <Field label="Shipment">{data.shipmentId ?? "—"}</Field>
             <Field label="Reference numbers">
               {references.length > 0
                 ? references.map((ref) => `${ref.label} ${ref.value}`).join(" · ")

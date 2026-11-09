@@ -36,6 +36,7 @@ import {
   listCustomerInvoices,
 } from "@/services";
 import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
+import ShipmentLink from "../shipments/shipment-link";
 import {
   AgreementFormModal,
   ContactFormModal,
@@ -45,6 +46,7 @@ import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
+  { key: "shipment", label: "Shipment" },
   { key: "reference", label: "Load Ref" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
@@ -588,6 +590,8 @@ function PartyInvoices({ party }: { party: PartyView }) {
           renderCell={(row, key) =>
             key === "actions" ? (
               <InvoiceViewAction invoice={row} />
+            ) : key === "shipment" ? (
+              <ShipmentLink shipmentId={row.shipmentId} />
             ) : (
               <InvoiceViewCell invoice={row} columnKey={key} />
             )
