@@ -88,7 +88,7 @@ export default function ShipmentDetail() {
   const partyLink = (partyId: string) => {
     const party = parties.get(partyId);
     return party ? (
-      <Link to={partyHref(party)} className="text-base-primary-300 hover:underline">
+      <Link to={partyHref(party)} className="text-base-primary-300 underline">
         {party.name}
       </Link>
     ) : (
@@ -99,7 +99,7 @@ export default function ShipmentDetail() {
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="flex items-center gap-4">
-        <Link to={listReturnHref("/shipments/")} className="text-base text-[#71717A]">
+        <Link to={listReturnHref("/shipments/")} className="text-base text-[#71717A] underline">
           Shipments
         </Link>
         <ArrowRight />

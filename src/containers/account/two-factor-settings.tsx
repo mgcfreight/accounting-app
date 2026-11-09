@@ -322,7 +322,7 @@ export default function TwoFactorSettings() {
           {flow === "disable" && canEmail && (
             <button
               type="button"
-              className="text-xs text-base-primary-300 hover:underline self-start"
+              className="text-xs text-base-primary-300 underline self-start"
               disabled={sendDisableEmail.isPending}
               onClick={() => sendDisableEmail.mutate()}
             >

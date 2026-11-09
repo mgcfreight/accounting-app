@@ -46,7 +46,7 @@ export default function ResetPasswordForm() {
         </p>
         <Link
           to={FORGOT_PASSWORD_PATH}
-          className="text-xs text-base-primary-300 hover:underline"
+          className="text-xs text-base-primary-300 underline"
         >
           Ask for a new link
         </Link>
@@ -113,7 +113,7 @@ export default function ResetPasswordForm() {
       <div className="text-center">
         <Link
           to={LOGIN_PATH}
-          className="text-xs text-base-primary-300 hover:underline"
+          className="text-xs text-base-primary-300 underline"
         >
           Back to sign in
         </Link>

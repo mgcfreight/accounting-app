@@ -111,7 +111,7 @@ export default function PartyDetail({ type }: { type: PartyType }) {
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A]">
+          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A] underline">
             {isShipper ? "Shippers" : "Carriers"}
           </Link>
           <ArrowRight />

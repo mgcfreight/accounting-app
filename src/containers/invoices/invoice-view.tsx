@@ -244,7 +244,7 @@ export default function InvoiceViewCell({
         <div className="flex flex-col items-start gap-1">
           <Link
             to={apiInvoiceHref(invoice)}
-            className={`hover:underline whitespace-nowrap ${
+            className={`underline whitespace-nowrap ${
               number ? "font-bold text-base-primary-300" : "text-gray-500"
             }`}
           >
@@ -264,7 +264,7 @@ export default function InvoiceViewCell({
     case "party": {
       const party = partyOf(invoice, parties);
       return (
-        <Link to={party.href} className="hover:underline">
+        <Link to={party.href} className="underline">
           <PartyAvatar
             name={party.name}
             tone={isCustomerInvoice(invoice) ? "success" : "primary"}
