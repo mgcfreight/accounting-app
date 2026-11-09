@@ -13,6 +13,7 @@ import {
   DocumentKind,
   DocumentSource,
   FxRateSource,
+  InstallmentFrequency,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceDeliveryMode,
@@ -1301,18 +1302,24 @@ export interface Installment {
   paidOn: string | null;
 }
 
-// An agreed plan to pay one or more invoices in parts.
+// GET /installment-plan/all: an agreed plan to pay one or more invoices in
+// parts. `paid` is what its invoices came down since it was agreed (up to the
+// total); installments are paid in order. Every figure is the API's.
 export interface InstallmentPlan {
   id: string;
   direction: PaymentDirection;
+  partyId: string;
   partyName: string;
-  invoiceNumbers: string[];
+  // A revised invoice shows as its current version.
+  invoices: { id: string; number: string | null }[];
   currency: Currency;
   total: string;
   paid: string;
   remaining: string;
+  frequency: InstallmentFrequency;
   agreedOn: string;
   installments: Installment[];
+  createdAt: string;
 }
 
 // One automated message for a shipper or carrier, as staff set it up.

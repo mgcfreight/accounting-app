@@ -1,6 +1,6 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
   BaseInput,
@@ -30,11 +30,10 @@ import {
   SortOrder,
 } from "@/lib/enums";
 import { Payment } from "@/lib/interfaces";
-import { mockInstallmentPlans } from "@/lib/mock";
 import { isZeroMoney } from "@/lib/money";
 import { BaseTableColumn, TableSort } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
-import { listPayments, PaymentListParams } from "@/services";
+import { listInstallmentPlans, listPayments, PaymentListParams } from "@/services";
 import {
   AllocateModal,
   matchedBy,
@@ -97,7 +96,7 @@ const useTabCount = (
 
 // Design §8.5 and §9: record payments, auto-match, manual allocation, the
 // "Unmatched" list, and installment plans. Payments are listed, filtered,
-// sorted and paged by the API; installment plans are still a demo.
+// sorted and paged by the API; installment plans are read and made there too.
 export default function Payments() {
   const [view, setView] = useState<View>("all");
   const [recording, setRecording] = useState(false);
@@ -121,13 +120,11 @@ export default function Payments() {
   const { can } = useCan();
   const canViewIn = can(Permission.CustomerPaymentsView);
   const canViewOut = can(Permission.CarrierPaymentsView);
-  const plans = useMemo(
-    () =>
-      mockInstallmentPlans.filter((plan) =>
-        plan.direction === PaymentDirection.In ? canViewIn : canViewOut
-      ),
-    [canViewIn, canViewOut]
-  );
+  // The API lists only the sides the role may view, newest first.
+  const plansQuery = useQuery({
+    queryKey: ["installment-plans", "list"],
+    queryFn: ({ signal }) => listInstallmentPlans({ page: 1, limit: 100 }, signal),
+  });
   const isIn = (direction: PaymentDirection) => direction === PaymentDirection.In;
   const canRecord = (direction: PaymentDirection) =>
     can(isIn(direction) ? Permission.CustomerPaymentsCreate : Permission.CarrierPaymentsCreate);
@@ -279,10 +276,13 @@ export default function Payments() {
             </div>
           }
         />
-        <Tab key="plans" title={`Installment plans (${plans.length})`} />
+        <Tab
+          key="plans"
+          title={`Installment plans${plansQuery.data ? ` (${plansQuery.data.meta.totalItems})` : ""}`}
+        />
       </Tabs>
       {view === "plans" ? (
-        <InstallmentPlans plans={plans} directions={plannable} />
+        <InstallmentPlans query={plansQuery} directions={plannable} />
       ) : (
         <>
           <FilterBar>

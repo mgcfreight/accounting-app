@@ -371,6 +371,12 @@ export enum InstallmentStatus {
   Late = "LATE",
 }
 
+export enum InstallmentFrequency {
+  Weekly = "WEEKLY",
+  Biweekly = "BIWEEKLY",
+  Monthly = "MONTHLY",
+}
+
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",
