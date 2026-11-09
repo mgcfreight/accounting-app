@@ -404,8 +404,9 @@ const contactTags = (contact: ContactView, isShipper: boolean) =>
 const linkButton = "text-base-primary underline text-sm";
 
 // The party's contacts as Profile lines: who the invoice and document emails
-// go to. Those who may edit parties add and change them here; retired ones
-// are left out.
+// go to. Those who may edit parties add and change them here. Retired ones
+// sit behind a Show/Hide retired toggle, where they can be edited and
+// turned back on.
 function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolean }) {
   const isShipper = party.type === PartyType.Shipper;
   const [editing, setEditing] = useState<ContactView | "new" | null>(null);
