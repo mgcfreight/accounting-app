@@ -32,8 +32,7 @@ import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
 import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import { ApiError, errorMessage, getNoticeSettings, getParty } from "@/services";
 import usePartyNames from "../parties/use-party-names";
-import { fetchInvoice, fetchInvoiceVersions, isDemoInvoice } from "./demo-invoices";
-import { DemoInvoicesBanner } from "./demo-invoices-banner";
+import { fetchInvoice, fetchInvoiceVersions } from "./invoice-reads";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import InvoiceExtraActionModal, {
   canBeVoided,
@@ -102,12 +101,8 @@ export default function InvoiceDetail({
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
   // What sets an owed invoice's payment reminder: its party's agreement (the
   // same query and key as the party page; needs parties.view) and Settings.
-  // A demo invoice's party isn't in the API.
   const remindable =
-    !!invoice.data &&
-    !isDemoInvoice(invoice.data) &&
-    isOwed(invoice.data) &&
-    !!invoice.data.dueDate;
+    !!invoice.data && isOwed(invoice.data) && !!invoice.data.dueDate;
   const partyId = invoice.data ? partyOf(invoice.data).id : null;
   const reminderParty = useQuery({
     queryKey: ["parties", "detail", partyId],
@@ -144,12 +139,10 @@ export default function InvoiceDetail({
   }
 
   const data = invoice.data;
-  const demo = isDemoInvoice(data);
   const number = invoiceNumberOf(data);
   const party = partyOf(data, carriers);
-  // A demo invoice isn't in the API: nothing that writes is offered.
-  const actions = demo ? [] : availableActions(data, can);
-  const extraActions = demo ? [] : extraActionsFor(data, can, setExtraAction);
+  const actions = availableActions(data, can);
+  const extraActions = extraActionsFor(data, can, setExtraAction);
   const canVoid = extraActions.some((item) => item.key === "void");
   // Emailing the invoice is a button of its own; the rest stay under "More".
   const emailAction = extraActions.find((item) => item.key === "email");
@@ -185,7 +178,7 @@ export default function InvoiceDetail({
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A]">
+          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A] underline">
             {isReceivable ? "Shipper Invoices" : "Carrier Invoices"}
           </Link>
           <ArrowRight />
@@ -221,8 +214,6 @@ export default function InvoiceDetail({
         </div>
       </div>
 
-      {demo && <DemoInvoicesBanner />}
-
       {loadCancelled && (
         <CancelledLoadBanner
           canVoid={canVoid}
@@ -241,7 +232,7 @@ export default function InvoiceDetail({
                   {" "}by{" "}
                   <Link
                     to={apiInvoiceHref(replacedBy)}
-                    className="text-base-primary-300 hover:underline"
+                    className="text-base-primary-300 underline"
                   >
                     {invoiceNumberOf(replacedBy) ?? "the new version"} (
                     {versionLabel(replacedBy)})
@@ -339,7 +330,7 @@ export default function InvoiceDetail({
                   Not sent yet: reminders aren&apos;t built.{" "}
                   <Link
                     to="/reminders/"
-                    className="text-base-primary-300 hover:underline"
+                    className="text-base-primary-300 underline"
                   >
                     All reminders
                   </Link>
@@ -367,15 +358,13 @@ export default function InvoiceDetail({
 
       <ChargesCard invoice={data} />
 
-      {!demo && (
-        <DocumentsCard
-          invoice={data}
-          onUpload={openIfOffered("upload")}
-          onEmail={openIfOffered("email-documents")}
-        />
-      )}
+      <DocumentsCard
+        invoice={data}
+        onUpload={openIfOffered("upload")}
+        onEmail={openIfOffered("email-documents")}
+      />
 
-      {!demo && <InvoiceHistory invoice={data} />}
+      <InvoiceHistory invoice={data} />
 
       {data.notes && (
         <BaseCardWrapper heading="Notes">
@@ -417,7 +406,7 @@ function BillToCard({ invoice, href }: { invoice: CustomerInvoiceView; href: str
     <BaseCardWrapper heading="Bill To">
       <div className="text-sm text-[#343A40] space-y-1">
         <Field label="Name">
-          <Link to={href} className="text-base-primary-300 hover:underline">
+          <Link to={href} className="text-base-primary-300 underline">
             {billTo.name}
           </Link>
         </Field>
@@ -453,7 +442,7 @@ function CarrierCard({
     <BaseCardWrapper heading="Carrier">
       <div className="text-sm text-[#343A40] space-y-1">
         <Field label="Name">
-          <Link to={href} className="text-base-primary-300 hover:underline">
+          <Link to={href} className="text-base-primary-300 underline">
             {name}
           </Link>
         </Field>

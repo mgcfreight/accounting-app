@@ -28,7 +28,6 @@ import {
   Permission,
 } from "@/lib/enums";
 import { Attachment } from "@/lib/interfaces";
-import { demoCarrierDocuments, demoShipperDocuments } from "@/lib/mock";
 import { compareMoney, isZeroMoney } from "@/lib/money";
 import { listContacts } from "@/services";
 import {
@@ -491,7 +490,7 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
         rules={{ maxLength: { value: 2000, message: "At most 2000 characters" } }}
       />
       <p className="text-xs text-content-5">
-        Demo only: the documents are samples and nothing is sent yet.
+        Demo only: nothing is sent yet.
       </p>
     </FormModal>
   );
@@ -650,9 +649,8 @@ const documentKindLabel = (kind: string) =>
   documentKinds.find((item) => item.key === kind)?.label ?? kind;
 
 // The documents attached to an invoice. The API doesn't list them yet and
-// Upload Document stores nothing, so sample ones stand in until it does.
-const documentsOf = (invoice: InvoiceView) =>
-  isCustomerInvoice(invoice) ? demoShipperDocuments : demoCarrierDocuments;
+// Upload Document stores nothing, so there are none to show until it does.
+const documentsOf = (_invoice: InvoiceView): Attachment[] => [];
 
 // A document's icon, name and kind, as one line of a list.
 function DocumentLine({ document }: { document: Attachment }) {
@@ -750,11 +748,6 @@ export function DocumentsCard({
               />
             )}
           </div>
-        )}
-        {documents.length > 0 && (
-          <p className="text-xs text-content-5">
-            Demo data: sample documents, not files from this invoice.
-          </p>
         )}
       </div>
     </BaseCardWrapper>

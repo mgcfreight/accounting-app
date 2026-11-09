@@ -1,17 +1,9 @@
 import { Fragment } from "react";
-import { Link } from "react-router";
-import { useCurrentUser } from "@/components/providers/user-provider";
-import { findInvoiceByNumber } from "@/lib/mock";
-import { canAccessRoute } from "@/lib/routes.config";
-import { DEMO_FALLBACK } from "./demo-invoices";
-import { invoiceListHref } from "./invoice-view";
 
 // An invoice number on a page that still runs on lib/mock (payments,
-// reminders, Needs Review, statements), opening the invoice's page. The
-// number is looked up in lib/mock, and only development links it: there the
-// invoice page falls back to the same mock invoices, while a build would find
-// nothing in the API. Plain text, too, when the invoice isn't found or the
-// role can't open that side's invoices.
+// reminders, Needs Review, statements). Plain text: the number is a mock
+// one, and the invoice pages read the Accounts API, which doesn't have it.
+// Link it to its invoice page once the page that shows it reads the API.
 export function DemoInvoiceLink({
   number,
   className = "",
@@ -19,20 +11,7 @@ export function DemoInvoiceLink({
   number: string;
   className?: string;
 }) {
-  const user = useCurrentUser();
-  const invoice = DEMO_FALLBACK ? findInvoiceByNumber(number) : undefined;
-  const list = invoice && invoiceListHref(invoice.direction);
-  if (!invoice || !list || !canAccessRoute(`${list}view/`, user)) {
-    return <span className={`font-bold whitespace-nowrap ${className}`}>{number}</span>;
-  }
-  return (
-    <Link
-      to={`${list}view/?id=${encodeURIComponent(invoice.id)}`}
-      className={`font-bold text-base-primary-300 hover:underline whitespace-nowrap ${className}`}
-    >
-      {number}
-    </Link>
-  );
+  return <span className={`font-bold whitespace-nowrap ${className}`}>{number}</span>;
 }
 
 // Several invoice numbers, comma separated.

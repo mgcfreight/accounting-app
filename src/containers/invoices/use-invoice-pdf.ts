@@ -1,26 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { openPrintWindow, printInto } from "@/lib/export";
-import { CompanySettings } from "@/lib/interfaces";
 import { errorMessage, getCompanySettings } from "@/services";
 import { SETTINGS_QUERY } from "../settings/company-information";
-import { fetchInvoice, isDemoInvoice } from "./demo-invoices";
+import { fetchInvoice } from "./invoice-reads";
 import { MalformedAmountError, toInvoicePdfHtml } from "./invoice-pdf";
 import { directionOf, InvoiceView } from "./invoice-view";
-
-const NO_COMPANY: CompanySettings = {
-  legalName: null,
-  gstHstNumber: null,
-  addressLine1: null,
-  addressLine2: null,
-  city: null,
-  province: null,
-  postalCode: null,
-  country: null,
-  accountsNotificationEmail: null,
-  updatedAt: null,
-  updatedBy: null,
-};
 
 export type InvoicePdfRequest = {
   invoice: InvoiceView;
@@ -44,31 +29,26 @@ export default function useInvoicePdf() {
       return;
     }
     try {
+      // An invoice isn't printed without MGC's details: a failed read of
+      // either fails the PDF.
       const [full, company] = await Promise.all([
         queryClient.fetchQuery({
           queryKey: ["invoices", directionOf(invoice), "detail", invoice.id],
           queryFn: ({ signal }) =>
             fetchInvoice(directionOf(invoice), invoice.id, signal),
         }),
-        queryClient
-          .fetchQuery({
-            queryKey: SETTINGS_QUERY.company,
-            queryFn: ({ signal }) => getCompanySettings(signal),
-            staleTime: 5 * 60_000,
-          })
-          .catch((error: unknown) => error as Error),
+        queryClient.fetchQuery({
+          queryKey: SETTINGS_QUERY.company,
+          queryFn: ({ signal }) => getCompanySettings(signal),
+          staleTime: 5 * 60_000,
+        }),
       ]);
-      const demo = isDemoInvoice(full);
-      // A real invoice isn't printed without MGC's details; a demo one,
-      // stamped DEMO, can be.
-      if (company instanceof Error && !demo) throw company;
       printInto(
         view,
         toInvoicePdfHtml({
           invoice: full,
-          demo,
           partyName,
-          company: company instanceof Error ? NO_COMPANY : company,
+          company,
           versionCount: versions?.length,
           replaces: versions?.find((version) => version.id === full.parentInvoiceId),
           replacedBy: versions?.find((version) => version.parentInvoiceId === full.id),

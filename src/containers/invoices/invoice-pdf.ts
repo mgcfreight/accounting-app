@@ -76,8 +76,6 @@ export type InvoicePdfInput = {
   replacedBy?: InvoiceView;
   // The version this one replaced.
   replaces?: InvoiceView;
-  // Sample data from lib/mock, not the API's: stamped so it's never sent.
-  demo?: boolean;
 };
 
 // The page title is also the file name "Save as PDF" suggests.
@@ -98,11 +96,10 @@ export const toInvoicePdfHtml = ({
   versionCount,
   replacedBy,
   replaces,
-  demo = false,
 }: InvoicePdfInput): string => {
   const customer = isCustomerInvoice(invoice);
   const number = invoiceNumberOf(invoice);
-  const stamp = demo ? "DEMO" : stampOf(invoice);
+  const stamp = stampOf(invoice);
   const money = (amount: string) => moneyOf(amount, invoice);
 
   const from = lines(
@@ -149,9 +146,6 @@ export const toInvoicePdfHtml = ({
 
   // Why this version exists, or why it's no longer the one to pay.
   const notices: string[] = [];
-  if (demo) {
-    notices.push("Demo data: a sample invoice, not a real one. Do not send it.");
-  }
   if (replaces) {
     notices.push(
       `Revised invoice: replaces ${invoiceNumberOf(replaces) ?? "the earlier version"} (${versionLabel(replaces)}).`
