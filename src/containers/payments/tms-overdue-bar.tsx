@@ -85,7 +85,9 @@ export default function TmsOverdueBar() {
       >
         {/* One line at every width: the labels keep their size, the shipper's
             sentence ends in "…" when it runs out of room, and the secondary
-            text drops out on narrower screens. "Demo data" always shows. */}
+            text drops out on narrower screens. "Demo data" always shows, and
+            so does the amount: only the text around it truncates, the
+            trailing details first, then the shipper's name. */}
         <p
           className="flex min-w-0 items-baseline gap-x-1 whitespace-nowrap"
           aria-live={rotating ? "off" : "polite"}
@@ -98,14 +100,16 @@ export default function TmsOverdueBar() {
           {/* Keyed by shipper, so each one plays the slide-in. */}
           <span
             key={current.partyId}
-            className="min-w-0 truncate animate-ticker-in motion-reduce:animate-none"
+            className="flex min-w-0 items-baseline gap-x-1 animate-ticker-in motion-reduce:animate-none"
           >
-            {current.partyName} owes{" "}
-            <strong>
+            <span className="min-w-0 truncate">{current.partyName} owes</span>{" "}
+            <strong className="shrink-0">
               <Money amount={current.amount} currency={current.currency} />
             </strong>{" "}
-            on {plural(current.invoiceCount, "invoice")}, the oldest{" "}
-            {plural(current.oldestOverdueDays, "day")} past due.
+            <span className="min-w-0 shrink-100 truncate">
+              on {plural(current.invoiceCount, "invoice")}, the oldest{" "}
+              {plural(current.oldestOverdueDays, "day")} past due.
+            </span>
           </span>{" "}
           <span className="hidden shrink-0 2xl:block">Clear the overdue payment.</span>
         </p>
