@@ -9,6 +9,7 @@ import {
   useRef,
 } from "react";
 import { toast } from "sonner";
+import { clearListReturnHrefs } from "@/hooks/use-list-url-state";
 import { can, canAny } from "@/lib/access";
 import { Permission } from "@/lib/enums";
 import { Me } from "@/lib/interfaces";
@@ -62,8 +63,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   });
   const user = me.data;
 
-  // Every other cached response belongs to the user who just left.
+  // Every other cached response, and every list's remembered filters, belong
+  // to the user who just left.
   const clearSession = useCallback(() => {
+    clearListReturnHrefs();
     queryClient.removeQueries({
       predicate: (query) => query.queryKey[0] !== ME_QUERY_KEY[0],
     });

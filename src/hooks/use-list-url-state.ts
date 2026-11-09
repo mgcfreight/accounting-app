@@ -49,8 +49,12 @@ export function useListUrlState<S extends z.ZodType<Values>>(
 }
 
 // Each list's last query string, by path, so a detail page's breadcrumb can
-// go back to the list as it was left (listReturnHref). In memory only.
+// go back to the list as it was left (listReturnHref). In memory only, and
+// cleared at sign-out (UserProvider) so the next user on this tab doesn't
+// inherit the last one's filters.
 const lastListQuery = new Map<string, string>();
+
+export const clearListReturnHrefs = () => lastListQuery.clear();
 
 // `listPath` with the filters, sort and page it was last shown with in this
 // tab, or plain `listPath` if it hasn't been opened.
