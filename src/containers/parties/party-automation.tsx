@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -7,6 +8,7 @@ import { BaseInput, BaseSelect, BaseTextArea } from "@/components/common/form";
 import { AutomationKind, PartyType } from "@/lib/enums";
 import { AgreementView, AutomationRule, PartyAutomation } from "@/lib/interfaces";
 import { torontoToday } from "@/lib/utils";
+import { errorMessage, saveAutomation } from "@/services";
 import {
   AutomationSpec,
   automationSpecs,
@@ -258,59 +260,88 @@ function RuleRow({
 // ---------------------------------------------------------------------------
 // The card
 
-// Seeded once from the agreement in force; mount it with `key` set to that
-// agreement's id so a different agreement re-seeds it. Without `canEdit`
-// (parties.edit) the settings are shown read-only.
+// Starts from the settings saved on the API (`saved`), or, until there are
+// any, seeded from the agreement in force; mount it with `key` set to that
+// agreement's id so a different agreement re-seeds unsaved settings. Every
+// change saves the whole settings (PUT /party/automation); a save that fails
+// puts the card back as it was. Without `canEdit` (parties.edit) the
+// settings are shown read-only.
 export default function PartyAutomationCard({
+  partyId,
   type,
   agreement,
+  saved,
   contacts,
   canEdit,
 }: {
+  partyId: string;
   type: PartyType;
   agreement: AgreementView | undefined;
+  saved: PartyAutomation | null;
   contacts: ContactsState;
   canEdit: boolean;
 }) {
-  // Local state only — no API yet.
-  const [automation, setAutomation] = useState<PartyAutomation>(() =>
-    seedAutomation(type, agreement)
+  const queryClient = useQueryClient();
+  const [automation, setAutomation] = useState<PartyAutomation>(
+    () => saved ?? seedAutomation(type, agreement)
   );
 
   const [editingKind, setEditingKind] = useState<AutomationKind | null>(null);
 
-  // Every change says it wasn't saved, as on the other not-yet-wired screens.
-  const demoOnly = (what: string) =>
-    toast.info(`${what} — demo only, nothing was saved.`);
+  const save = useMutation({
+    mutationFn: ({ next }: { next: PartyAutomation; previous: PartyAutomation; what: string }) =>
+      saveAutomation(partyId, next),
+    onSuccess: (view, { what }) => {
+      queryClient.setQueryData(["parties", "automation", partyId], view);
+      toast.success(`${what} saved.`);
+    },
+    onError: (error, { previous }) => {
+      setAutomation(previous);
+      toast.error(errorMessage(error));
+    },
+  });
+
+  const commit = (next: PartyAutomation, what: string) => {
+    const previous = automation;
+    setAutomation(next);
+    save.mutate({ next, previous, what });
+  };
 
   const updateAutomation = (next: Partial<PartyAutomation>) => {
-    setAutomation((prev) => ({ ...prev, ...next }));
-    if ("paused" in next) {
-      demoOnly(next.paused ? "Notifications paused" : "Notifications resumed");
-    } else if ("sendHour" in next) {
-      demoOnly("Send time");
-    } else if ("skipWeekends" in next) {
-      demoOnly("Weekend setting");
-    }
+    const what =
+      "paused" in next
+        ? next.paused
+          ? "Notifications paused"
+          : "Notifications resumed"
+        : "sendHour" in next
+          ? "Send time"
+          : "Weekend setting";
+    commit({ ...automation, ...next }, what);
   };
 
   // Switching off is always allowed; switching on only when available.
   const toggleRule = (kind: AutomationKind) => {
     const rule = automation.rules.find((r) => r.kind === kind);
     if (!rule || (!rule.enabled && unavailableReason(kind, agreement))) return;
-    setAutomation((prev) => ({
-      ...prev,
-      rules: prev.rules.map((r) => (r.kind === kind ? { ...r, enabled: !r.enabled } : r)),
-    }));
-    demoOnly(`${automationSpecs[kind].label} ${rule.enabled ? "off" : "on"}`);
+    commit(
+      {
+        ...automation,
+        rules: automation.rules.map((r) =>
+          r.kind === kind ? { ...r, enabled: !r.enabled } : r
+        ),
+      },
+      `${automationSpecs[kind].label} ${rule.enabled ? "off" : "on"}`
+    );
   };
 
   const saveRule = (updated: AutomationRule) => {
-    setAutomation((prev) => ({
-      ...prev,
-      rules: prev.rules.map((r) => (r.kind === updated.kind ? updated : r)),
-    }));
-    demoOnly(automationSpecs[updated.kind].label);
+    commit(
+      {
+        ...automation,
+        rules: automation.rules.map((r) => (r.kind === updated.kind ? updated : r)),
+      },
+      automationSpecs[updated.kind].label
+    );
   };
 
   const editingRule = editingKind
@@ -321,7 +352,10 @@ export default function PartyAutomationCard({
     <BaseCardWrapper heading="Notifications & Automation">
       <div className="flex flex-col gap-4">
         <p className="text-xs text-content-5">
-          Demo only — settings are not saved yet.
+          {saved
+            ? "Saved for this party."
+            : "Company defaults: changing anything saves this party's own settings."}{" "}
+          Messages aren&apos;t sent from these settings yet.
         </p>
 
         <PauseSection automation={automation} canEdit={canEdit} onChange={updateAutomation} />

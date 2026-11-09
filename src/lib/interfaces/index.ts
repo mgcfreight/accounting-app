@@ -1357,3 +1357,12 @@ export interface PartyAutomation {
   skipWeekends: boolean;
   rules: AutomationRule[];
 }
+
+// GET /party/automation: null until staff save the party's settings (the
+// company defaults apply until then).
+export interface PartyAutomationView {
+  partyId: string;
+  automation: PartyAutomation | null;
+  updatedAt: string | null;
+  updatedBy: SettingsEditor | null;
+}

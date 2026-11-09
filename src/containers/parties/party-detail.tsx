@@ -30,6 +30,7 @@ import { formatDate, torontoToday } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
+  getAutomation,
   getParty,
   listCarrierInvoices,
   listContacts,
@@ -485,8 +486,9 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
   );
 }
 
-// Loads contacts then renders the automation card, seeded from the agreement
-// in force; a different agreement re-seeds it.
+// Loads the party's saved automation settings and its contacts, then renders
+// the automation card: from the saved settings, or seeded from the agreement
+// in force until there are any (a different agreement re-seeds it).
 function PartyAutomationContacts({
   partyId,
   type,
@@ -507,11 +509,36 @@ function PartyAutomationContacts({
     : contacts.isPending
       ? { status: "pending" }
       : { status: "success", contacts: contacts.data.filter((c) => c.isActive) };
+  const automation = useQuery({
+    queryKey: ["parties", "automation", partyId],
+    queryFn: ({ signal }) => getAutomation(partyId, signal),
+  });
+
+  // The card starts from what it's given, so it waits for the saved settings.
+  if (automation.isPending) {
+    return (
+      <BaseCardWrapper heading="Notifications & Automation">
+        <TableSkeleton />
+      </BaseCardWrapper>
+    );
+  }
+  if (automation.isError) {
+    return (
+      <BaseCardWrapper heading="Notifications & Automation">
+        <ErrorState
+          message={errorMessage(automation.error)}
+          onAction={() => void automation.refetch()}
+        />
+      </BaseCardWrapper>
+    );
+  }
   return (
     <PartyAutomationCard
-      key={agreement?.id ?? "none"}
+      key={`${agreement?.id ?? "none"}-${automation.data.updatedAt ?? "unsaved"}`}
+      partyId={partyId}
       type={type}
       agreement={agreement}
+      saved={automation.data.automation}
       canEdit={canEdit}
       contacts={contactsState}
     />

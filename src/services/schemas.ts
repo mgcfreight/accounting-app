@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AdjustmentMode,
   AllocationRule,
+  AutomationKind,
   BillingPeriodStatus,
   BillingTrigger,
   CarrierInvoiceStatus,
@@ -14,6 +15,7 @@ import {
   DocumentSource,
   EmailStatus,
   FxRateSource,
+  InvoiceDeliveryMode,
   InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
@@ -34,7 +36,9 @@ import {
   ShipmentSource,
   SignInStep,
   StatementEntryType,
+  StatementFrequency,
   StatementRunTrigger,
+  StatementScope,
   StatementTrigger,
   SyncInboxStatus,
   SyncTrigger,
@@ -50,6 +54,7 @@ import {
   Allocation,
   AllocationSuggestion,
   AuditEvent,
+  AutomationRule,
   BillingPeriod,
   BillingPeriodDetail,
   BillingPeriodInvoice,
@@ -83,6 +88,7 @@ import {
   PartyAccountSummary,
   PartyAgingReport,
   PartyAgingRow,
+  PartyAutomationView,
   PartyPnl,
   PartyPnlReport,
   PartyStatement,
@@ -277,6 +283,40 @@ const settingsEditorSchema: z.ZodType<SettingsEditor> = z.object({
   id: z.string(),
   firstName: z.string(),
   lastName: z.string(),
+});
+
+const automationRuleSchema: z.ZodType<AutomationRule> = z.object({
+  kind: z.enum(AutomationKind),
+  enabled: z.boolean(),
+  custom: z.boolean(),
+  steps: z.array(z.number().int().nonnegative()),
+  contactIds: z.array(z.string()),
+  notifyTeam: z.boolean(),
+  extraEmails: z.array(z.string()),
+  escalateFromDays: z.number().int().nonnegative().nullable(),
+  deliveryMode: z.enum(InvoiceDeliveryMode),
+  frequency: z.enum(StatementFrequency),
+  weekday: z.number().int().min(1).max(5),
+  statementScope: z.enum(StatementScope),
+  thresholdPercent: z.number().int().min(1).max(100),
+  subject: z.string(),
+  body: z.string(),
+});
+
+export const partyAutomationViewSchema: z.ZodType<PartyAutomationView> = z.object({
+  partyId: z.string(),
+  automation: z
+    .object({
+      paused: z.boolean(),
+      pausedUntil: calendarDate.nullable(),
+      pauseReason: z.string(),
+      sendHour: z.number().int().min(0).max(23),
+      skipWeekends: z.boolean(),
+      rules: z.array(automationRuleSchema),
+    })
+    .nullable(),
+  updatedAt: timestamp.nullable(),
+  updatedBy: settingsEditorSchema.nullable(),
 });
 
 export const companySettingsSchema: z.ZodType<CompanySettings> = z.object({
