@@ -17,10 +17,17 @@ export default function PublicLayout() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (!signingOut || started.current) return;
+    // Re-arm only once the sign-out state is gone. Resetting in the .then()
+    // below would race the navigate: clearSession changes `user`, which gives
+    // signOut a new identity and re-runs this effect while signingOut is
+    // still true, so logout() would run twice.
+    if (!signingOut) {
+      started.current = false;
+      return;
+    }
+    if (started.current) return;
     started.current = true;
     void signOut().then(() => {
-      started.current = false;
       // Drops the state, so Back or a reload doesn't sign out again.
       navigate(LOGIN_PATH, { replace: true, state: null });
     });
