@@ -38,7 +38,6 @@ import {
   ReviewKind,
 } from "@/lib/enums";
 import { Dispute, ReviewItem } from "@/lib/interfaces";
-import { mockReviewItems } from "@/lib/mock";
 import { formatMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -48,9 +47,10 @@ import {
   errorMessage,
   listCustomerInvoices,
   listDisputes,
+  listReviewItems,
   resolveDispute,
+  resolveReviewItem,
 } from "@/services";
-import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { invoiceListHref } from "../invoices/invoice-view";
 
 type View = "changes" | "disputes";
@@ -58,13 +58,14 @@ type Filters = { status: string; side: string; search: string };
 
 const ALL = "ALL";
 
+// The API lists changes newest first; nothing else sorts.
 const columns: BaseTableColumn[] = [
   { key: "kind", label: "Change" },
   { key: "shipment", label: "Shipment" },
   { key: "invoice", label: "Invoice" },
-  { key: "party", label: "Shipper" },
-  { key: "previous", label: "Amount Before", align: "end" },
-  { key: "next", label: "Amount Now", align: "end" },
+  { key: "party", label: "Party" },
+  { key: "previous", label: "On the Invoice", align: "end" },
+  { key: "next", label: "In MGC Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
   { key: "actions", label: "Actions" },
 ];
@@ -97,28 +98,38 @@ const outcomeLabels: Record<DisputeOutcome, string> = {
 const isReceivable = (dispute: Dispute) =>
   dispute.direction === InvoiceDirection.Receivable;
 
-const invoiceHref = (dispute: Dispute) =>
-  `${invoiceListHref(dispute.direction)}view/?id=${encodeURIComponent(dispute.invoiceId)}`;
+const invoiceHref = (item: { direction: InvoiceDirection; invoiceId: string }) =>
+  `${invoiceListHref(item.direction)}view/?id=${encodeURIComponent(item.invoiceId)}`;
 
 const invoiceLabel = (dispute: Dispute) =>
   dispute.invoiceNumber ?? "No number yet";
 
-// Design §6.2 steps 4–5: MGC changes that touch issued invoices, resolved
-// with a note. They arrive with the TMS sync, so that tab is still demo
-// data. And the invoices a shipper or carrier disputes (requirement 3),
-// listed and resolved through the API.
+// Design §6.2 steps 4–5: invoices the TMS changed or cancelled after they
+// were invoiced (the sync flags them; their amounts never change). Staff act
+// on the invoice -- revise it, a credit or debit note, void it -- then
+// resolve the change here with a note. And the invoices a shipper or carrier
+// disputes (requirement 3). Both run on the API.
 export default function NeedsReview() {
   const [view, setView] = useState<View>("disputes");
   const [resolving, setResolving] = useState<Dispute | null>(null);
-  const resolve = (what: string) =>
-    toast.info(`${what} — demo only, nothing was saved.`);
-  // A credit or debit note is a new adjustment (create); keeping the fee or
-  // dismissing resolves the invoice without one (edit).
+  const [resolvingChange, setResolvingChange] = useState<ReviewItem | null>(null);
   const { can } = useCan();
-  const canNote = can(Permission.CustomerInvoicesCreate);
-  const canResolveChange = can(Permission.CustomerInvoicesEdit);
+  const canResolveChange = (item: ReviewItem) =>
+    can(
+      item.direction === InvoiceDirection.Receivable
+        ? Permission.CustomerInvoicesEdit
+        : Permission.CarrierInvoicesEdit
+    );
   const canViewShipper = can(Permission.CustomerInvoicesView);
   const canViewCarrier = can(Permission.CarrierInvoicesView);
+
+  const changesPaging = useServerPaging("changes");
+  const changes = useQuery({
+    queryKey: ["reviews", "list", changesPaging.page, changesPaging.limit],
+    queryFn: ({ signal }) =>
+      listReviewItems({ page: changesPaging.page, limit: changesPaging.limit }, signal),
+    placeholderData: keepPreviousData,
+  });
 
   // Only the sides the role may view, and a side filter only when both.
   const sideOptions = [
@@ -167,29 +178,47 @@ export default function NeedsReview() {
           <StatusChip text="Amount changed" tone="warning" />
         );
       case "shipment":
-        return <span className="font-mono">{item.shipmentId}</span>;
-      // Demo invoices aren't in the API, so their numbers link only in
-      // development (DemoInvoiceLink).
+        return <span className="font-mono">{item.loadNumber}</span>;
       case "invoice":
-        return <DemoInvoiceLink number={item.invoiceNumber} />;
+        return (
+          <Link to={invoiceHref(item)} className="font-bold text-base-primary-300 whitespace-nowrap">
+            {item.invoiceNumber ?? "No number yet"}
+          </Link>
+        );
       case "party":
-        return <PartyAvatar name={item.partyName} tone="success" />;
+        return (
+          <div className="flex flex-col">
+            <PartyAvatar name={item.partyName} tone="success" />
+            <span className="text-xs text-content-5">
+              {item.direction === InvoiceDirection.Receivable ? "Shipper" : "Carrier"}
+            </span>
+          </div>
+        );
       case "previous":
         return <Money amount={item.previousAmount} currency={item.currency} />;
       case "next":
         return <Money amount={item.newAmount} currency={item.currency} className="font-semibold" />;
       case "detectedAt":
         return <span className="whitespace-nowrap">{formatDateTime(item.detectedAt)}</span>;
+      // The invoice page holds the fixes (revise, credit or debit note, void
+      // with or without a cancellation fee); Resolve records what was done.
       case "actions":
-        return item.kind === ReviewKind.Cancellation ? (
+        return (
           <div className="flex gap-2">
-            {canNote && <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve("Credit note approved")} />}
-            {canResolveChange && <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Cancellation fee kept")} />}
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            {canNote && <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve("Debit note issued")} />}
-            {canResolveChange && <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Dismissed")} />}
+            <Link
+              to={invoiceHref(item)}
+              className="rounded-full px-3 py-1.5 text-sm font-semibold bg-base-primary text-white whitespace-nowrap"
+            >
+              {item.kind === ReviewKind.Cancellation ? "Void or Credit" : "Revise or Note"}
+            </Link>
+            {canResolveChange(item) && (
+              <BaseButton
+                text="Resolve"
+                varient="bordered"
+                className="rounded-full px-3 text-base-primary"
+                onPress={() => setResolvingChange(item)}
+              />
+            )}
           </div>
         );
       default:
@@ -305,20 +334,46 @@ export default function NeedsReview() {
             </div>
           }
         />
-        <Tab key="changes" title={`MGC changes (${mockReviewItems.length})`} />
+        <Tab
+          key="changes"
+          title={
+            <div className="flex items-center gap-2">
+              MGC changes
+              {changes.data && (
+                <StatusChip
+                  text={`${changes.data.meta.totalItems}`}
+                  tone="warning"
+                  className="px-2 py-0"
+                />
+              )}
+            </div>
+          }
+        />
       </Tabs>
       {view === "changes" ? (
         <>
-          <AlertBanner message="Issued invoices are never changed. Each change below is resolved with a credit or debit note, which is emailed with the invoice and logged in the audit trail. Demo data: these arrive with the TMS sync." />
+          <AlertBanner message="These invoices' amounts are as issued: MGC Freight changed or cancelled the load afterwards. Fix the invoice from its page (revise it, a credit or debit note, or void it), then resolve the change here with a note. Both are in the audit trail." />
           <Card>
-            <BaseTable
-              ariaLabel="Needs review"
-              columns={columns}
-              data={mockReviewItems}
-              rowKey={(row) => row.id}
-              renderCell={renderCell}
-              emptyContent="Nothing needs review"
-            />
+            {changes.isError ? (
+              <ErrorState
+                message={errorMessage(changes.error)}
+                onAction={() => void changes.refetch()}
+              />
+            ) : (
+              <BaseTable<ReviewItem>
+                ariaLabel="Needs review"
+                columns={columns}
+                data={changes.data?.items ?? []}
+                loading={changes.isPending}
+                refreshing={changes.isPlaceholderData}
+                rowKey={(row) => `${row.direction}-${row.invoiceId}`}
+                renderCell={renderCell}
+                meta={changesPaging.tableMeta(changes.data?.meta)}
+                setMeta={changesPaging.setMeta}
+                bottomContent="Changes"
+                emptyContent="Nothing needs review"
+              />
+            )}
           </Card>
         </>
       ) : (
@@ -381,7 +436,74 @@ export default function NeedsReview() {
       {resolving && (
         <ResolveDisputeModal dispute={resolving} onClose={() => setResolving(null)} />
       )}
+      {resolvingChange && (
+        <ResolveChangeModal
+          item={resolvingChange}
+          onClose={() => setResolvingChange(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// Clears an invoice's MGC change with a note on what was done about it.
+function ResolveChangeModal({
+  item,
+  onClose,
+}: {
+  item: ReviewItem;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { control, handleSubmit } = useForm<{ note: string }>({
+    defaultValues: { note: "" },
+  });
+  const resolve = useMutation({
+    mutationFn: (note: string) => resolveReviewItem(item, note.trim()),
+    onSuccess: () => {
+      toast.success(`Change on ${item.invoiceNumber ?? "the invoice"} resolved.`);
+      void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      // Changed by someone else, or already resolved: show what is true now.
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+      }
+    },
+  });
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Resolve MGC Change"
+      confirmText="Resolve"
+      isConfirming={resolve.isPending}
+      onConfirm={handleSubmit((values) => resolve.mutate(values.note))}
+    >
+      <p className="text-sm text-[#707070]">
+        {item.invoiceNumber ?? "No number yet"} · {item.partyName} ·{" "}
+        {item.kind === ReviewKind.Cancellation ? "cancelled in MGC" : "MGC now"}{" "}
+        <Money amount={item.newAmount} currency={item.currency} />, invoice{" "}
+        <Money amount={item.previousAmount} currency={item.currency} />
+      </p>
+      <BaseTextArea
+        name="note"
+        control={control}
+        label="What was done"
+        placeholder="e.g. Credit note issued for the lower rate, or no change needed"
+        rules={{
+          validate: (value: string) => {
+            const note = value.trim();
+            if (!note) return "Say what was done";
+            return note.length <= 500 || "At most 500 characters";
+          },
+        }}
+      />
+    </FormModal>
   );
 }
 

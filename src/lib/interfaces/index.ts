@@ -340,11 +340,20 @@ export interface AllocationSuggestion {
   leftOver: string;
 }
 
+// GET /invoice/review: a live invoice the TMS changed or cancelled after it
+// was invoiced. Its amounts are as issued; newAmount is the TMS's figure now
+// (0.00 for a cancellation).
 export interface ReviewItem {
-  id: string;
+  invoiceId: string;
+  direction: InvoiceDirection;
   kind: ReviewKind;
+  // Null for a draft without a number yet.
+  invoiceNumber: string | null;
+  invoiceStatus: string;
+  version: number;
   shipmentId: string;
-  invoiceNumber: string;
+  loadNumber: string;
+  partyId: string;
   partyName: string;
   currency: Currency;
   previousAmount: string;

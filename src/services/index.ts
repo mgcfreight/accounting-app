@@ -24,6 +24,7 @@ export * from "./payments";
 export { queryClient } from "./query-client";
 export * from "./reminders";
 export * from "./reports";
+export * from "./reviews";
 export * from "./roles";
 export * from "./settings";
 export * from "./shipments";

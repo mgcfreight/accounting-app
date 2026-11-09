@@ -29,6 +29,7 @@ import {
   ReminderKind,
   ReminderSkipReason,
   ReminderStatus,
+  ReviewKind,
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
@@ -93,6 +94,7 @@ import {
   ReminderCounts,
   ReportPeriod,
   ReportSummary,
+  ReviewItem,
   Role,
   RoleRef,
   SettingsEditor,
@@ -803,6 +805,23 @@ export const disputeSchema: z.ZodType<Dispute> = z.object({
   resolvedBy: z.string().nullable(),
   creditNoteId: z.string().nullable(),
   creditNoteNumber: z.string().nullable(),
+});
+
+export const reviewItemSchema: z.ZodType<ReviewItem> = z.object({
+  invoiceId: z.string(),
+  direction: z.enum(InvoiceDirection),
+  kind: z.enum(ReviewKind),
+  invoiceNumber: z.string().nullable(),
+  invoiceStatus: z.string(),
+  version: z.number().int().positive(),
+  shipmentId: z.string(),
+  loadNumber: z.string(),
+  partyId: z.string(),
+  partyName: z.string(),
+  currency: z.enum(Currency),
+  previousAmount: money,
+  newAmount: money,
+  detectedAt: timestamp,
 });
 
 export const invoiceDocumentSchema: z.ZodType<InvoiceDocument> = z.object({
