@@ -5,6 +5,7 @@ import {
   BillingPeriodStatus,
   BillingTrigger,
   CarrierInvoiceStatus,
+  CreditStatus,
   Currency,
   CustomerInvoiceStatus,
   DisputeOutcome,
@@ -360,18 +361,30 @@ export const chargeTypeSchema: z.ZodType<ChargeType> = z.object({
   isActive: z.boolean(),
 });
 
-export const roleSchema: z.ZodType<Role> = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
-  isSystem: z.boolean(),
-  isAdmin: z.boolean(),
-  permissionsEditable: z.boolean(),
-  permissions: permissionsSchema,
-  userCount: z.number().int().nonnegative(),
-  createdAt: timestamp,
-  updatedAt: timestamp,
-});
+// Unlike a user's, a role's unknown permissions are kept apart, not dropped:
+// saving the role replaces its whole set, so they must go back with it.
+export const roleSchema: z.ZodType<Role> = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    isSystem: z.boolean(),
+    isAdmin: z.boolean(),
+    permissionsEditable: z.boolean(),
+    permissions: z.array(z.string()),
+    userCount: z.number().int().nonnegative(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  })
+  .transform(({ permissions, ...role }) => ({
+    ...role,
+    permissions: permissions.filter((value): value is Permission =>
+      KNOWN_PERMISSIONS.has(value)
+    ),
+    unknownPermissions: permissions.filter(
+      (value) => !KNOWN_PERMISSIONS.has(value)
+    ),
+  }));
 
 // A catalog entry for a permission this build doesn't know is dropped: it
 // couldn't gate anything here, and the API would still accept it unsent.
@@ -406,6 +419,10 @@ export const agreementSchema: z.ZodType<AgreementView> = z.object({
   partyId: z.string(),
   paymentTerms: z.enum(PaymentTerms),
   currency: z.enum(Currency),
+  // Optional until the Accounts API sends them; when it does, a malformed
+  // one still fails the record.
+  creditStatus: z.enum(CreditStatus).nullable().optional(),
+  creditLimit: money.nullable().optional(),
   taxTreatment: z.enum(TaxTreatment),
   taxBasis: z.enum(TaxBasis),
   billingTrigger: z.enum(BillingTrigger).nullable(),

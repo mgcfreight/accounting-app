@@ -50,6 +50,7 @@ import {
   listDisputes,
   resolveDispute,
 } from "@/services";
+import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { invoiceListHref } from "../invoices/invoice-view";
 
 type View = "changes" | "disputes";
@@ -167,10 +168,10 @@ export default function NeedsReview() {
         );
       case "shipment":
         return <span className="font-mono">{item.shipmentId}</span>;
-      // Demo invoices aren't in the API, so their numbers aren't links: the
-      // invoice page would find nothing.
+      // Demo invoices aren't in the API, so their numbers link only in
+      // development (DemoInvoiceLink).
       case "invoice":
-        return <span className="font-bold">{item.invoiceNumber}</span>;
+        return <DemoInvoiceLink number={item.invoiceNumber} />;
       case "party":
         return <PartyAvatar name={item.partyName} tone="success" />;
       case "previous":
@@ -270,7 +271,7 @@ export default function NeedsReview() {
         if (dispute.status !== DisputeStatus.Open || !canEdit) return null;
         return (
           <RowActions
-            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, onPress: () => setResolving(dispute) }]}
+            actions={[{ key: "resolve", label: "Resolve", icon: <LuCircleCheck />, labelled: true, onPress: () => setResolving(dispute) }]}
           />
         );
       }

@@ -6,6 +6,7 @@ import {
   BaseInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   DirectionChip,
   ErrorState,
   FilterBar,
@@ -102,7 +103,11 @@ export default function Payments() {
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<OpenModal | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", method: ALL },
   });
   const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
@@ -287,6 +292,7 @@ export default function Payments() {
               className="max-w-sm"
               classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
               placeholder="Search by payment #, party or reference"
+              aria-label="Search payments"
               endContent={<SearchNormalSm />}
             />
             <BaseSelect
@@ -298,6 +304,7 @@ export default function Payments() {
               aria-label="Method"
               disallowEmptySelection
             />
+            <ClearFiltersButton active={isDirty} onClear={() => reset()} />
           </FilterBar>
           <Card>
             {/* A failed refetch keeps the last page beside the error; amounts

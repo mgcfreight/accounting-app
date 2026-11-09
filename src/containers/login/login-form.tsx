@@ -150,7 +150,7 @@ export default function LoginForm() {
       )}
       <BaseButton
         type="submit"
-        text="Login"
+        text="Sign In"
         isLoading={loading}
         className="my-6 w-full"
       />

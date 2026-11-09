@@ -49,9 +49,12 @@ const AMOUNT = /^\d{1,12}\.\d{2}$/;
 export default function RecordPaymentModal({
   isOpen,
   onClose,
+  shipper,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  // Opens on money in from this shipper, in their currency.
+  shipper?: { id: string; currency: string };
 }) {
   const queryClient = useQueryClient();
   // Only the sides the role may record (the header button needs either).
@@ -60,9 +63,12 @@ export default function RecordPaymentModal({
     can(option.permission)
   );
   const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
+    // Read once, on mount: render this with `shipper` already set.
     defaultValues: {
-      direction: directionOptions[0]?.value ?? PaymentDirection.In,
-      party: "",
+      direction: shipper
+        ? PaymentDirection.In
+        : (directionOptions[0]?.value ?? PaymentDirection.In),
+      party: shipper?.id ?? "",
       method: "",
       amount: "",
       paidOn: "",
@@ -84,8 +90,12 @@ export default function RecordPaymentModal({
   }, [isOpen, reset]);
 
   // A shipper chosen before switching to "Money out" is not a carrier, so the
-  // choice is cleared rather than submitted against the wrong side.
+  // choice is cleared rather than submitted against the wrong side. Only on a
+  // real change, so a shipper passed in survives the first render.
+  const shownDirection = useRef(direction);
   useEffect(() => {
+    if (shownDirection.current === direction) return;
+    shownDirection.current = direction;
     setValue("party", "");
   }, [direction, setValue]);
 
@@ -183,6 +193,7 @@ export default function RecordPaymentModal({
           control={control}
           label={currency ? `Amount (${currency})` : "Amount"}
           placeholder="0.00"
+          inputMode="decimal"
           rules={{
             required: "Enter the amount",
             pattern: {

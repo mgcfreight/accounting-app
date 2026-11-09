@@ -2,11 +2,14 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { ReactNode, useState } from "react";
 import {
+  AlertBanner,
   BaseButton,
   BaseCardWrapper,
   BaseTable,
+  DetailRow,
   ErrorState,
   InfoStrip,
+  Money,
   StatusChip,
   TableSkeleton,
 } from "@/components/common";
@@ -15,12 +18,13 @@ import { useCan } from "@/components/providers/user-provider";
 import { useServerPaging } from "@/hooks";
 import {
   billingTriggerLabels,
+  creditStatusLabels,
   paymentTermsLabels,
   taxBasisLabels,
   taxTreatmentLabels,
 } from "@/lib/constants";
-import { InvoiceDirection, PartyType, Permission } from "@/lib/enums";
-import { AgreementView, Paginated, PartyView } from "@/lib/interfaces";
+import { CreditStatus, InvoiceDirection, PartyType, Permission } from "@/lib/enums";
+import { AgreementView, ContactView, Paginated, PartyView } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
 import {
@@ -28,12 +32,17 @@ import {
   errorMessage,
   getParty,
   listCarrierInvoices,
+  listContacts,
   listCustomerInvoices,
 } from "@/services";
-import InvoiceViewCell, { InvoiceView } from "../invoices/invoice-view";
+import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
 import PartyAccount from "./party-account";
-import PartyContacts from "./party-contacts";
-import { AgreementFormModal } from "./party-modals";
+import {
+  AgreementFormModal,
+  ContactFormModal,
+} from "./party-modals";
+import { ContactsState } from "./automation-rules";
+import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
@@ -43,6 +52,7 @@ const invoiceColumns: BaseTableColumn[] = [
   { key: "total", label: "Total", align: "end" },
   { key: "balance", label: "Balance", align: "end" },
   { key: "status", label: "Status" },
+  { key: "actions", label: "Actions", align: "center" },
 ];
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
@@ -107,14 +117,6 @@ export default function PartyDetail({ type }: { type: PartyType }) {
           <ArrowRight />
           <span className="text-base-primary-600 text-sm">{data.name}</span>
         </div>
-        {can(Permission.PartiesEdit) && (
-          <BaseButton
-            text="Add Agreement"
-            className="rounded-xl px-4"
-            startContent={<Add />}
-            onPress={() => setAddingAgreement(true)}
-          />
-        )}
       </div>
 
       <InfoStrip
@@ -157,30 +159,44 @@ export default function PartyDetail({ type }: { type: PartyType }) {
               .filter(Boolean)
               .join(", ")}
           </Field>
+          <ProfileContacts party={data} canEdit={can(Permission.PartiesEdit)} />
         </div>
       </BaseCardWrapper>
 
-      <PartyContacts party={data} />
-
-      <BaseCardWrapper heading="Agreements">
+      <BaseCardWrapper
+        heading="Agreements"
+        action={
+          can(Permission.PartiesEdit) && (
+            <BaseButton
+              text="Add Agreement"
+              className="rounded-xl px-4"
+              startContent={<Add />}
+              onPress={() => setAddingAgreement(true)}
+            />
+          )
+        }
+      >
         {agreements.length === 0 ? (
-          <p className="text-sm text-content-5">
+          <p className="text-sm text-content-5 text-center border border-dashed border-content-4 rounded-lg p-6">
             No agreement yet. Invoices can&apos;t be made for this {what.toLowerCase()} until
             one is added.
           </p>
         ) : (
-          <div className="flex flex-col gap-4">
-            {agreements.map((agreement) => (
-              <AgreementRow
-                key={agreement.id}
-                agreement={agreement}
-                state={agreementState(agreement, today)}
-                isShipper={isShipper}
-              />
-            ))}
-          </div>
+          <Agreements
+            agreements={agreements}
+            current={current}
+            today={today}
+            isShipper={isShipper}
+          />
         )}
       </BaseCardWrapper>
+
+      <PartyAutomationContacts
+        partyId={data.id}
+        type={type}
+        agreement={current}
+        canEdit={can(Permission.PartiesEdit)}
+      />
 
       {can(
         isShipper
@@ -195,40 +211,87 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   );
 }
 
+// Earlier and later agreements shown before "Show all".
+const HISTORY_PREVIEW = 2;
+
+const agreementPeriod = (agreement: AgreementView) =>
+  `${formatDate(agreement.effectiveFrom)} – ${
+    agreement.effectiveTo ? formatDate(agreement.effectiveTo) : "open-ended"
+  }`;
+
+const AgreementStateChip = ({ state }: { state: ReturnType<typeof agreementState> }) =>
+  state === "current" ? (
+    <StatusChip text="In force" tone="success" />
+  ) : state === "upcoming" ? (
+    <StatusChip text="Starts later" tone="secondary" />
+  ) : (
+    <StatusChip text="Ended" tone="neutral" />
+  );
+
+// A tick or cross with the label, not a chip: these can't be changed here.
 const AgreementSwitch = ({ label, on }: { label: string; on: boolean }) => (
-  <StatusChip text={`${label}: ${on ? "on" : "off"}`} tone={on ? "success" : "neutral"} />
+  <span className="text-xs text-[#343A40]">
+    <span aria-hidden className={on ? "text-base-success" : "text-content-5"}>
+      {on ? "✓" : "✕"}
+    </span>{" "}
+    {label}
+    <span className="sr-only">: {on ? "on" : "off"}</span>
+  </span>
 );
 
-function AgreementRow({
+// The agreed terms, as label …… value rows.
+function AgreementTerms({
   agreement,
-  state,
   isShipper,
 }: {
   agreement: AgreementView;
-  state: ReturnType<typeof agreementState>;
   isShipper: boolean;
 }) {
+  const days = isShipper ? agreement.noticeDaysBefore : agreement.alertDaysBefore;
   return (
-    <div className="flex flex-col gap-1 text-sm text-[#343A40] border-b border-gray-100 pb-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">
-          {formatDate(agreement.effectiveFrom)} –{" "}
-          {agreement.effectiveTo ? formatDate(agreement.effectiveTo) : "open-ended"}
-        </span>
-        {state === "current" && <StatusChip text="In force" tone="success" />}
-        {state === "upcoming" && <StatusChip text="Starts later" tone="secondary" />}
-        {state === "ended" && <StatusChip text="Ended" tone="neutral" />}
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+        <DetailRow label="Payment terms" value={paymentTermsLabels[agreement.paymentTerms]} />
+        <DetailRow label="Currency" value={agreement.currency} />
+        {isShipper && (
+          <DetailRow
+            label="Credit"
+            value={
+              // Undefined until the Accounts API sends credit settings.
+              agreement.creditStatus ? creditStatusLabels[agreement.creditStatus] : "Not saved yet"
+            }
+          />
+        )}
+        {isShipper && agreement.creditStatus === CreditStatus.Allowed && (
+          <DetailRow
+            label="Credit limit"
+            value={
+              agreement.creditLimit === null ? (
+                "No limit"
+              ) : (
+                <Money amount={agreement.creditLimit} currency={agreement.currency} />
+              )
+            }
+          />
+        )}
+        <DetailRow label="Tax treatment" value={taxTreatmentLabels[agreement.taxTreatment]} />
+        <DetailRow label="Tax rate from" value={taxBasisLabels[agreement.taxBasis]} />
+        {!isShipper && (
+          <DetailRow
+            label="Billing trigger"
+            value={
+              agreement.billingTrigger ? billingTriggerLabels[agreement.billingTrigger] : "—"
+            }
+          />
+        )}
+        <DetailRow
+          label={isShipper ? "Notice before a billing period ends" : "Alert before a bill is due"}
+          value={days === null ? "Not set" : `${days} day${days === 1 ? "" : "s"}`}
+        />
       </div>
-      <span>
-        {paymentTermsLabels[agreement.paymentTerms]} · {agreement.currency} · Tax{" "}
-        {taxTreatmentLabels[agreement.taxTreatment].toLowerCase()}, rate from{" "}
-        {taxBasisLabels[agreement.taxBasis].toLowerCase()}
-        {agreement.billingTrigger &&
-          ` · ${billingTriggerLabels[agreement.billingTrigger]}`}
-      </span>
       {/* Read-only: adding an agreement can't set these yet (the API's
           create-agreement request doesn't take them). */}
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
         <AgreementSwitch label="Payment reminders" on={agreement.remindersEnabled} />
         {isShipper && (
           <>
@@ -238,9 +301,220 @@ function AgreementRow({
         )}
       </div>
       {agreement.notes && (
-        <span className="text-content-5 whitespace-pre-wrap">{agreement.notes}</span>
+        <p className="text-sm text-content-5 whitespace-pre-wrap">
+          <strong className="text-[#343A40]">Notes:</strong> {agreement.notes}
+        </p>
       )}
     </div>
+  );
+}
+
+// The agreement in force on its own panel, a banner for the next change, and
+// the rest as rows that open to show their terms. Agreements come newest
+// first.
+function Agreements({
+  agreements,
+  current,
+  today,
+  isShipper,
+}: {
+  agreements: AgreementView[];
+  current: AgreementView | undefined;
+  today: string;
+  isShipper: boolean;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const next = agreements.findLast((a) => agreementState(a, today) === "upcoming");
+  const others = agreements.filter((a) => a !== current);
+  const shown = showAll ? others : others.slice(0, HISTORY_PREVIEW);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {next && (
+        <AlertBanner
+          message={`New terms start ${formatDate(next.effectiveFrom)}: ${
+            paymentTermsLabels[next.paymentTerms]
+          }, ${next.currency}.`}
+        />
+      )}
+
+      {current ? (
+        <section
+          aria-label="Agreement in force"
+          className="flex flex-col gap-4 rounded-lg border border-content-10 bg-content-12 p-4"
+        >
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <AgreementStateChip state="current" />
+            <span className="font-semibold text-[#343A40]">{agreementPeriod(current)}</span>
+          </div>
+          <AgreementTerms agreement={current} isShipper={isShipper} />
+        </section>
+      ) : (
+        <p className="text-sm text-content-5 rounded-lg border border-dashed border-content-4 p-4">
+          No agreement is in force today.
+        </p>
+      )}
+
+      {others.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-[#343A40]">
+            {current ? "Other agreements" : "Agreements"}
+          </h2>
+          {shown.map((agreement) => (
+            <details
+              key={agreement.id}
+              className="group text-sm text-[#343A40] border-b border-gray-100 pb-2"
+            >
+              <summary className="flex flex-wrap items-center gap-2 cursor-pointer list-none py-1 rounded focus-visible:outline-2 focus-visible:outline-base-primary-300">
+                <span
+                  aria-hidden
+                  className="text-content-5 transition-transform group-open:rotate-90"
+                >
+                  ›
+                </span>
+                <span className="font-semibold">{agreementPeriod(agreement)}</span>
+                <span className="text-content-5">
+                  {paymentTermsLabels[agreement.paymentTerms]} · {agreement.currency}
+                </span>
+                <AgreementStateChip state={agreementState(agreement, today)} />
+              </summary>
+              <div className="pt-2 pl-4">
+                <AgreementTerms agreement={agreement} isShipper={isShipper} />
+              </div>
+            </details>
+          ))}
+          {others.length > HISTORY_PREVIEW && (
+            <BaseButton
+              varient="light"
+              className="self-start px-2"
+              text={showAll ? "Show fewer" : `Show all ${others.length}`}
+              onPress={() => setShowAll((all) => !all)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// What a contact is sent, as short tags.
+const contactTags = (contact: ContactView, isShipper: boolean) =>
+  [
+    contact.receivesInvoices && "Invoices & documents",
+    contact.receivesReminders && "Reminders",
+    isShipper && contact.receivesStatements && "Statements",
+  ].filter((tag): tag is string => !!tag);
+
+const linkButton = "text-base-primary underline text-sm";
+
+// The party's contacts as Profile lines: who the invoice and document emails
+// go to. Those who may edit parties add and change them here; retired ones
+// are left out.
+function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolean }) {
+  const isShipper = party.type === PartyType.Shipper;
+  const [editing, setEditing] = useState<ContactView | "new" | null>(null);
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", party.id],
+    queryFn: ({ signal }) => listContacts(party.id, signal),
+  });
+  const active = (contacts.data ?? []).filter((contact) => contact.isActive);
+  const addButton = canEdit && (
+    <button type="button" className={linkButton} onClick={() => setEditing("new")}>
+      Add contact
+    </button>
+  );
+
+  return (
+    <>
+      {contacts.isError ? (
+        <Field label="Contact">
+          <span className="text-base-danger">Couldn&apos;t load the contacts.</span>{" "}
+          <button type="button" className={linkButton} onClick={() => void contacts.refetch()}>
+            Try again
+          </button>
+        </Field>
+      ) : contacts.isPending ? (
+        <Field label="Contact">
+          <span className="text-content-5">Loading…</span>
+        </Field>
+      ) : active.length === 0 ? (
+        <Field label="Contact">
+          <span className="text-content-5">
+            None yet: invoices and documents can&apos;t be emailed until one is added.
+          </span>{" "}
+          {addButton}
+        </Field>
+      ) : (
+        <>
+          {active.map((contact, index) => {
+            const tags = contactTags(contact, isShipper);
+            return (
+              <Field key={contact.id} label={index === 0 ? "Contact" : "Also"}>
+                {contact.name} · <span className="break-all">{contact.email}</span>
+                {contact.phone && ` · ${contact.phone}`}
+                {tags.length > 0 && (
+                  <span className="text-content-5"> ({tags.join(", ")})</span>
+                )}
+                {canEdit && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className={linkButton}
+                      aria-label={`Edit ${contact.name}`}
+                      onClick={() => setEditing(contact)}
+                    >
+                      Edit
+                    </button>
+                  </>
+                )}
+              </Field>
+            );
+          })}
+          {addButton && <p>{addButton}</p>}
+        </>
+      )}
+      {editing && (
+        <ContactFormModal
+          party={party}
+          contact={editing === "new" ? undefined : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// Loads contacts then renders the automation card, seeded from the agreement
+// in force; a different agreement re-seeds it.
+function PartyAutomationContacts({
+  partyId,
+  type,
+  agreement,
+  canEdit,
+}: {
+  partyId: string;
+  type: PartyType;
+  agreement: AgreementView | undefined;
+  canEdit: boolean;
+}) {
+  const contacts = useQuery({
+    queryKey: ["parties", "contacts", partyId],
+    queryFn: ({ signal }) => listContacts(partyId, signal),
+  });
+  const contactsState: ContactsState = contacts.isError
+    ? { status: "error", retry: () => void contacts.refetch() }
+    : contacts.isPending
+      ? { status: "pending" }
+      : { status: "success", contacts: contacts.data.filter((c) => c.isActive) };
+  return (
+    <PartyAutomationCard
+      key={agreement?.id ?? "none"}
+      type={type}
+      agreement={agreement}
+      canEdit={canEdit}
+      contacts={contactsState}
+    />
   );
 }
 
@@ -279,7 +553,13 @@ function PartyInvoices({ party }: { party: PartyView }) {
           loading={invoices.isPending}
           refreshing={invoices.isPlaceholderData}
           rowKey={(row) => row.id}
-          renderCell={(row, key) => <InvoiceViewCell invoice={row} columnKey={key} />}
+          renderCell={(row, key) =>
+            key === "actions" ? (
+              <InvoiceViewAction invoice={row} />
+            ) : (
+              <InvoiceViewCell invoice={row} columnKey={key} />
+            )
+          }
           meta={paging.tableMeta(invoices.data?.meta)}
           setMeta={paging.setMeta}
           bottomContent="Invoices"

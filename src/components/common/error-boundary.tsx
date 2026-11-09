@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { isChunkLoadError } from "@/lib/chunk-error";
 import ErrorState from "./error-state";
 
 type Props = {
@@ -17,36 +18,49 @@ type Props = {
 //
 // Render errors only: errors in event handlers and promises are not caught
 // here and still need their own handling.
+//
+// A page chunk that failed to download gets "Reload page" instead of "Try
+// again": React.lazy keeps the failed import, so re-rendering replays the
+// failure, and only a reload fetches the chunk again.
 export default class ErrorBoundary extends Component<
   Props,
-  { failed: boolean }
+  { failed: boolean; chunkFailed: boolean }
 > {
-  state = { failed: false };
+  state = { failed: false, chunkFailed: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, chunkFailed: isChunkLoadError(error) };
   }
 
   componentDidUpdate(prev: Props) {
     if (this.state.failed && prev.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false });
+      this.setState({ failed: false, chunkFailed: false });
     }
   }
 
-  reset = () => this.setState({ failed: false });
+  reset = () => this.setState({ failed: false, chunkFailed: false });
 
   render() {
     if (!this.state.failed) return this.props.children;
     const { fallback } = this.props;
     if (typeof fallback === "function") return fallback(this.reset);
-    return (
-      fallback ?? (
+    if (fallback !== undefined) return fallback;
+    if (this.state.chunkFailed) {
+      return (
         <ErrorState
-          message="This page hit an unexpected error. Try again, or open another page."
-          actionText="Try again"
-          onAction={this.reset}
+          title="This page couldn't load"
+          message="The app may have just been updated. Reload the page to get the latest version."
+          actionText="Reload page"
+          onAction={() => window.location.reload()}
         />
-      )
+      );
+    }
+    return (
+      <ErrorState
+        message="This page hit an unexpected error. Try again, or open another page."
+        actionText="Try again"
+        onAction={this.reset}
+      />
     );
   }
 }

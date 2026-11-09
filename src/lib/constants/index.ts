@@ -1,5 +1,6 @@
 import {
   BillingTrigger,
+  CreditStatus,
   InvoiceReviewFlag,
   PaymentTerms,
   TaxBasis,
@@ -85,8 +86,25 @@ export const paymentTermsLabels: Record<PaymentTerms, string> = {
   [PaymentTerms.Net15]: "Net 15",
   [PaymentTerms.Net30]: "Net 30",
   [PaymentTerms.Net60]: "Net 60",
+  [PaymentTerms.Net90]: "Net 90",
 };
-export const paymentTermsOptions = optionsFrom(paymentTermsLabels);
+// Net 90 is shown but can't be saved yet: the Accounts API doesn't take it.
+// Forms that send terms use `paymentTermsOptions`, which leaves it out; the
+// agreement form offers it as a credit period and refuses it on save.
+export const PAYMENT_TERMS_NOT_IN_API: ReadonlySet<string> = new Set([
+  PaymentTerms.Net90,
+]);
+export const allPaymentTermsOptions = optionsFrom(paymentTermsLabels);
+export const paymentTermsOptions = allPaymentTermsOptions.filter(
+  (option) => !PAYMENT_TERMS_NOT_IN_API.has(option.value)
+);
+
+export const creditStatusLabels: Record<CreditStatus, string> = {
+  [CreditStatus.Allowed]: "Credit allowed",
+  [CreditStatus.Blocked]: "Credit blocked",
+  [CreditStatus.NotAllowed]: "Credit not allowed",
+};
+export const creditStatusOptions = optionsFrom(creditStatusLabels);
 
 export const taxTreatmentLabels: Record<TaxTreatment, string> = {
   [TaxTreatment.Standard]: "Standard",
@@ -134,5 +152,12 @@ export const TMS_INVOICE_CODE_PATTERN = /^[A-Za-z0-9]{6}$/;
 export const FX_RATE_PATTERN = /^(?!0+(\.0+)?$)\d{1,6}(\.\d{1,6})?$/;
 export const QUANTITY_PATTERN = /^(?!0+(\.0+)?$)\d{1,9}(\.\d{1,3})?$/;
 export const UNIT_PRICE_PATTERN = /^\d{1,10}(\.\d{1,4})?$/;
+// A line amount typed as quantity 1: a unit price, but to the cent, so the
+// API has nothing to round.
+export const LINE_AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
+// A base price to work commission from: above 0, up to 2 decimals.
+export const BASE_PRICE_PATTERN = /^(?!0+(\.0+)?$)\d{1,10}(\.\d{1,2})?$/;
+// A shipper's credit limit: 0 or more, up to 2 decimals (numeric(14,2)).
+export const CREDIT_LIMIT_PATTERN = /^\d{1,12}(\.\d{1,2})?$/;
 export const COUNTRY_PATTERN = /^[A-Z]{2}$/;
 export const REGION_PATTERN = /^[A-Z]{2,3}$/;

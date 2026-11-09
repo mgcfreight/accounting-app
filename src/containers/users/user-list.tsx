@@ -12,8 +12,10 @@ import { toast } from "sonner";
 import {
   AlertBanner,
   BaseInput,
+  BasePasswordInput,
   BaseSelect,
   BaseTable,
+  ClearFiltersButton,
   FilterBar,
   FormModal,
   PartyAvatar,
@@ -75,7 +77,11 @@ export default function UserList() {
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
   const [pending, setPending] = useState<Pending | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);
-  const { control } = useForm<Filters>({
+  const {
+    control,
+    reset,
+    formState: { isDirty },
+  } = useForm<Filters>({
     defaultValues: { search: "", role: ALL, status: ALL },
   });
   const search = useDebouncedValue(
@@ -199,18 +205,20 @@ export default function UserList() {
                     `/users/sessions/?userId=${encodeURIComponent(row.id)}`
                   ),
               },
-              {
-                key: "password",
-                label: "Set password",
-                onPress: () => {
-                  passwordForm.reset({ password: "" });
-                  setPending({ kind: "password", user: row });
-                },
-              },
               // The API refuses these on your own account; don't offer them.
+              // Your own password changes in My Account, which asks for the
+              // current one.
               ...(isMe
                 ? []
                 : [
+                    {
+                      key: "password",
+                      label: "Set password",
+                      onPress: () => {
+                        passwordForm.reset({ password: "" });
+                        setPending({ kind: "password", user: row });
+                      },
+                    },
                     {
                       key: "reset-2fa",
                       label: "Reset 2FA",
@@ -292,6 +300,7 @@ export default function UserList() {
           aria-label="Status"
           disallowEmptySelection
         />
+        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
       </FilterBar>
       {users.isError && (
         <AlertBanner
@@ -337,6 +346,7 @@ export default function UserList() {
           onOpenChange={(open) => !open && setPending(null)}
           title={`${confirmText[pending.kind]}: ${fullName(pending.user)}`}
           confirmText={confirmText[pending.kind]}
+          confirmColor={pending.kind === "disable" ? "danger" : "primary"}
           isConfirming={act.isPending}
           onConfirm={
             pending.kind === "password"
@@ -348,10 +358,9 @@ export default function UserList() {
         >
           <p className="text-sm">{explain(pending)}</p>
           {pending.kind === "password" && (
-            <BaseInput
+            <BasePasswordInput
               name="password"
               control={passwordForm.control}
-              type="password"
               autoComplete="new-password"
               label="New password"
               description={PASSWORD_RULE_TEXT}

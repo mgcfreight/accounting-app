@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseInput, BaseSelect, FormModal } from "@/components/common";
+import {
+  BaseInput,
+  BasePasswordInput,
+  BaseSelect,
+  FormModal,
+} from "@/components/common";
 import { useCurrentUser } from "@/components/providers/user-provider";
 import {
   EMAIL_SHAPE,
@@ -163,10 +168,9 @@ export default function UserFormModal({
         }
       />
       {!user && (
-        <BaseInput
+        <BasePasswordInput
           name="password"
           control={control}
-          type="password"
           autoComplete="new-password"
           label="Starting password"
           description={`Share it with the user privately. ${PASSWORD_RULE_TEXT}`}

@@ -2,8 +2,10 @@ import {
   AdjustmentMode,
   AllocationRule,
   BillingPeriodStatus,
+  AutomationKind,
   BillingTrigger,
   CarrierInvoiceStatus,
+  CreditStatus,
   Currency,
   CustomerInvoiceStatus,
   DisputeOutcome,
@@ -13,6 +15,7 @@ import {
   FxRateSource,
   InstallmentStatus,
   InvoiceDirection,
+  InvoiceDeliveryMode,
   InvoiceKind,
   InvoiceReviewFlag,
   InvoiceStatus,
@@ -30,6 +33,8 @@ import {
   ReviewKind,
   SessionEndReason,
   SessionStatus,
+  StatementFrequency,
+  StatementScope,
   ShipmentSource,
   EmailStatus,
   StatementEntryType,
@@ -104,6 +109,9 @@ export interface Role {
   permissionsEditable: boolean;
   // In catalog order. Every permission for the Admin role.
   permissions: Permission[];
+  // Granted, but newer than this build: not shown, and sent back on save so
+  // the role keeps them (a role's permissions are replaced as a whole set).
+  unknownPermissions: string[];
   userCount: number;
   createdAt: string;
   updatedAt: string;
@@ -196,6 +204,8 @@ export interface Attachment {
   id: string;
   kind: "BOL" | "POD" | "MGC_INVOICE" | "OTHER";
   fileName: string;
+  // Where the file opens, on this app's own origin. Unset when there's none.
+  url?: string;
 }
 
 export interface HistoryEntry {
@@ -510,6 +520,13 @@ export interface AgreementView {
   partyId: string;
   paymentTerms: PaymentTerms;
   currency: Currency;
+  // Shipper credit settings. The Accounts API doesn't send these yet
+  // (undefined until it does); then null for carriers. Recorded only — the
+  // TMS keeps its own credit settings for bookings.
+  creditStatus?: CreditStatus | null;
+  // Shippers with credit allowed: the most they may owe at once, in
+  // `currency`; null for no limit, undefined until the API sends it.
+  creditLimit?: string | null;
   taxTreatment: TaxTreatment;
   taxBasis: TaxBasis;
   billingTrigger: BillingTrigger | null;
@@ -964,6 +981,30 @@ export interface TaxReport {
   };
 }
 
+// One shipper's overdue invoices as the TMS reports them.
+export interface TmsOverdueShipper {
+  partyId: string;
+  partyName: string;
+  currency: Currency;
+  // Total overdue, already summed by the sender.
+  amount: string;
+  invoiceCount: number;
+  // Days past due of the shipper's oldest overdue invoice.
+  oldestOverdueDays: number;
+}
+
+// Every shipper with a payment overdue in the TMS, for the "clear the
+// overdue payment" bar above the header. Demo only: no API sends this yet.
+export interface TmsOverdueSummary {
+  // Most days past due first.
+  shippers: TmsOverdueShipper[];
+  // One total per currency, already summed by the sender: CAD and USD are
+  // never added together.
+  totals: { currency: Currency; amount: string }[];
+  // Days past due of the oldest overdue invoice across all of them.
+  oldestOverdueDays: number;
+}
+
 // One payment allocation to a USD invoice and what the rate change did to
 // it in CAD. Gain is +, loss is -.
 export interface FxGainLossRow {
@@ -1020,7 +1061,8 @@ export interface PartyAccountSummary {
   } | null;
   // Average days from invoice date to full payment, over the last 12 months.
   averagePaymentDays: number | null;
-  // Shippers only: emailed a statement every Friday.
+  // Shippers only: emailed a statement every Friday and on the last weekday
+  // of each month (the agreement's weekly statement switch).
   weeklyStatement: boolean;
   statementEmail: string | null;
 }
@@ -1271,4 +1313,47 @@ export interface InstallmentPlan {
   remaining: string;
   agreedOn: string;
   installments: Installment[];
+}
+
+// One automated message for a shipper or carrier, as staff set it up.
+// `custom` false means the company default applies and the rest is ignored.
+// Fields a kind doesn't use are left at their defaults. Provisional: no API
+// stores these yet.
+export interface AutomationRule {
+  kind: AutomationKind;
+  enabled: boolean;
+  custom: boolean;
+  // Days: before the due date, past it, or after delivery, by kind.
+  steps: number[];
+  // The party's contacts it goes to; empty means "the contacts flagged to
+  // receive this kind" on the contact.
+  contactIds: string[];
+  // Also send it to MGC's accounts team inbox.
+  notifyTeam: boolean;
+  extraEmails: string[];
+  // Overdue only: copy the accounts team from this many days past due.
+  escalateFromDays: number | null;
+  deliveryMode: InvoiceDeliveryMode;
+  frequency: StatementFrequency;
+  // 1 (Monday) to 5 (Friday), for weekly and every-two-weeks statements.
+  weekday: number;
+  statementScope: StatementScope;
+  // Credit limit only: alert at this share of the limit.
+  thresholdPercent: number;
+  subject: string;
+  body: string;
+}
+
+export interface PartyAutomation {
+  // Whether a pause has been set. Read it through isPaused, which also
+  // honours pausedUntil.
+  paused: boolean;
+  // Calendar date the pause ends on (inclusive); null for an indefinite
+  // pause. Ignored while paused is false.
+  pausedUntil: string | null;
+  pauseReason: string;
+  // Hour of the day, Toronto time, that messages go out (0–23).
+  sendHour: number;
+  skipWeekends: boolean;
+  rules: AutomationRule[];
 }

@@ -79,8 +79,13 @@ export default function RoleFormModal({
     if (role && description !== (role.description ?? "")) {
       changes.description = description || null;
     }
+    // The whole set is replaced, so permissions this build can't show go back
+    // unchanged rather than being removed.
     if (catalog.data && !sameSet(selected, new Set(role?.permissions ?? []))) {
-      changes.permissions = inCatalogOrder(catalog.data, selected);
+      changes.permissions = [
+        ...inCatalogOrder(catalog.data, selected),
+        ...(role?.unknownPermissions ?? []),
+      ];
     }
     return changes;
   };
@@ -161,7 +166,7 @@ export default function RoleFormModal({
       {isLocked && (
         <AlertBanner message="The Admin role always has every permission, plus users, roles and settings. It can't be changed." />
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex flex-col gap-4">
         <BaseInput
           name="name"
           control={control}
@@ -189,7 +194,6 @@ export default function RoleFormModal({
           name="description"
           control={control}
           label="Description (optional)"
-          minRows={1}
           isDisabled={isLocked}
           rules={{
             validate: (value: string) =>
@@ -219,6 +223,11 @@ export default function RoleFormModal({
         />
       ) : (
         <TableSkeleton />
+      )}
+      {role && role.unknownPermissions.length > 0 && !isLocked && (
+        <p className="text-xs text-content-5">
+          {`This role also has ${role.unknownPermissions.length === 1 ? "1 permission" : `${role.unknownPermissions.length} permissions`} this version of the app can't show. Saving keeps them.`}
+        </p>
       )}
       {role && role.userCount > 0 && !isLocked && (
         <p className="text-xs text-content-5">

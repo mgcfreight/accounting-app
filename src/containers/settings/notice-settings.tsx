@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import {
@@ -38,17 +39,30 @@ const wholeDays = (max: number) => (value: string) =>
 // PREPAID get no notice), and the default for the carrier "payment due soon"
 // alert to the accounts team. Each customer's or carrier's agreement can set
 // its own. Saved only: nothing sends notices yet.
-export default function NoticeSettingsSection() {
+// The Settings page asks before leaving with unsaved edits; this section
+// reports them through `onDirtyChange`.
+export default function NoticeSettingsSection({
+  onDirtyChange,
+}: {
+  onDirtyChange: (dirty: boolean) => void;
+}) {
   const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: QUERY_KEY,
     queryFn: ({ signal }) => getNoticeSettings(signal),
   });
   // `values`: the form follows the saved settings whenever they (re)load.
-  const { control, handleSubmit } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { dirtyFields },
+  } = useForm<Values>({
     mode: "onTouched",
     values: settings.data && toForm(settings.data),
   });
+  const isDirty = Object.keys(dirtyFields).length > 0;
+  useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
   const save = useMutation({
     mutationFn: (values: Values) =>
@@ -65,6 +79,10 @@ export default function NoticeSettingsSection() {
       }),
     onSuccess: (saved) => {
       queryClient.setQueryData(QUERY_KEY, saved);
+      // Reset here, not through `values`: that resets only when the saved
+      // settings differ from the last ones, so an edit the API normalises
+      // back (07 → 7) would leave the form dirty.
+      reset(toForm(saved));
       toast.success("Notice settings saved.");
     },
     onError: (error) => toast.error(errorMessage(error)),

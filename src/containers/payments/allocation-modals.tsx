@@ -21,7 +21,7 @@ import {
   Permission,
 } from "@/lib/enums";
 import { Allocation, Payment, SuggestedAllocation } from "@/lib/interfaces";
-import { compareMoney, isZeroMoney } from "@/lib/money";
+import { compareMoney, formatMoney, isZeroMoney, sumMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import {
   allocatePayment,
@@ -262,8 +262,10 @@ const useOpenInvoices = (payment: Payment) => {
 type Amounts = Record<string, string>;
 
 // A payment with money unapplied: apply what matching suggests, or split it
-// by hand over the party's open invoices. Whatever is left stays on the
-// payment as unapplied credit.
+// by hand over the party's open invoices. Each amount is checked against its
+// invoice's balance, and together they must add up to no more than the
+// payment's unapplied amount; the API checks both again. Whatever is left
+// stays on the payment as unapplied credit.
 export function AllocateModal({
   payment,
   onClose,
@@ -319,6 +321,14 @@ export function AllocateModal({
       if (first) {
         setError(first.id, { message: "Enter an amount for at least one invoice" });
       }
+      return;
+    }
+    // Each field passed on its own; the total must fit the payment too. A
+    // null total (a malformed amount) blocks rather than passing.
+    const total = sumMoney(lines.map((line) => line.amount));
+    if (total === null || compareMoney(total, payment.unapplied) > 0) {
+      const message = `Together more than the payment's unapplied ${formatMoney(payment.unapplied, payment.currency)}`;
+      lines.forEach((line) => setError(line.invoiceId, { message }));
       return;
     }
     allocate.mutate(
@@ -424,14 +434,15 @@ export function AllocateModal({
                   control={control}
                   aria-label={`Amount for ${invoice.number ?? "invoice"}`}
                   placeholder="0.00"
+                  inputMode="decimal"
                   rules={{ validate: validate(invoice) }}
                 />
               </div>
             ))}
             <p className="text-xs text-content-5">
-              Less than an invoice&apos;s balance leaves it part paid. The API
-              checks the amounts add up to no more than the payment; anything
-              left stays as unapplied credit.
+              Less than an invoice&apos;s balance leaves it part paid. The
+              amounts must add up to no more than the payment&apos;s unapplied
+              amount; anything left stays as unapplied credit.
             </p>
           </>
         )}

@@ -5,6 +5,7 @@ import { ErrorBoundary, ErrorState } from "@/components/common";
 import { DashboardLayout } from "@/components/layouts";
 import { useUser } from "@/components/providers/user-provider";
 import { LOGIN_PATH } from "@/lib/constants";
+import TmsOverdueBar from "@/containers/payments/tms-overdue-bar";
 import RouteGuard from "./route-guard";
 
 // Signed-in pages render only once GET /auth/me (UserProvider) has returned a
@@ -18,6 +19,12 @@ import RouteGuard from "./route-guard";
 // content area while its chunk loads. Router navigations are transitions, so
 // moving between pages keeps the current one on screen until the next is
 // ready.
+//
+// The overdue bar runs on lib/mock, so it is development only (`npm run dev`),
+// like the invoice pages' demo fallback: a build must never show demo figures
+// on every page as if they were real. It comes back here once it reads the API.
+const SHOW_TMS_OVERDUE_BAR = import.meta.env.DEV;
+
 export default function AppLayout() {
   const { pathname, search } = useLocation();
   const { user, loadError, retry } = useUser();
@@ -49,7 +56,7 @@ export default function AppLayout() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout topBar={SHOW_TMS_OVERDUE_BAR ? <TmsOverdueBar /> : undefined}>
       <ErrorBoundary resetKey={pathname}>
         <RouteGuard>
           <Suspense

@@ -16,10 +16,10 @@ import {
   partySchema,
 } from "./schemas";
 
-// Customers (SHIPPER) and carriers (CARRIER), and their agreed terms (/party).
-// Reading needs parties.view, adding a party parties.create, and new terms
-// parties.edit; the API answers 403 otherwise. `partyId` travels as a query
-// param.
+// Customers (SHIPPER) and carriers (CARRIER), their agreed terms and their
+// contacts (/party). Reading needs parties.view, adding a party
+// parties.create, and new terms or contacts parties.edit; the API answers
+// 403 otherwise. `partyId` and `contactId` travel as query params.
 
 export type PartyListParams = {
   page: number;
