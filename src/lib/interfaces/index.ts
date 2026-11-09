@@ -49,10 +49,9 @@ import {
 } from "../enums";
 import { PaginationMeta } from "../types";
 
-// Shapes of the data the screens show. Users, sessions, audit and settings
-// come from the Accounts API and are checked on arrival (services/schemas.ts);
-// the rest are provisional and filled from lib/mock. Money is always a
-// 2-decimal string beside its currency, never a number; see lib/money.ts.
+// Shapes of the data the screens show, as the Accounts API sends them and
+// checked on arrival (services/schemas.ts). Money is always a 2-decimal
+// string beside its currency, never a number; see lib/money.ts.
 
 // The role shown next to a user. Compare `id` (SystemRoleId), never `name`.
 export interface RoleRef {
@@ -1289,9 +1288,8 @@ export interface Dispute {
 }
 
 // ---------------------------------------------------------------------------
-// Provisional shapes for the screen with no API yet (installment plans),
-// filled from lib/mock. Every amount is already calculated, as the API will
-// send it.
+// Installment plans (/installment-plan). Every amount is calculated by the
+// API.
 
 export interface Installment {
   number: number;

@@ -3,7 +3,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { PiFileCsv, PiFilePdf, PiFileXls } from "react-icons/pi";
 import { Link } from "react-router";
-import { toast } from "sonner";
 import {
   AgingTable,
   BaseButton,
@@ -31,6 +30,7 @@ import {
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
 import {
+  exportAccountantCsv,
   exportReport,
   getAging,
   getFxGainLoss,
@@ -298,6 +298,9 @@ export default function Reports() {
     ({ kind, format }: { kind: ReportKind; format: ReportFormat }) =>
       exportReport(kind, period, format, exportFileName(kind, period, format))
   );
+  const accountantCsv = useFileDownload((exportPeriod: string) =>
+    exportAccountantCsv(exportPeriod)
+  );
   const downloading = (kind: ReportKind, format: ReportFormat) =>
     download.isPending &&
     download.variables?.kind === kind &&
@@ -362,9 +365,8 @@ export default function Reports() {
             varient="bordered"
             className="text-base-primary rounded-xl px-3"
             startContent={<PiFileCsv className="text-lg" />}
-            onPress={() =>
-              toast.info(`${card.title} (${periodLabel}) — demo only. It waits on the choice of accounting software.`)
-            }
+            isLoading={accountantCsv.isPending}
+            onPress={() => accountantCsv.mutate(period)}
           />
         )
       );

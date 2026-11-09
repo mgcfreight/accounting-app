@@ -356,7 +356,7 @@ export enum ReminderSkipReason {
   Manual = "MANUAL",
 }
 
-// Installments and disputes: no API yet; the screens read lib/mock.
+// Installment plans and disputes (both on the Accounts API).
 
 export enum AllocationRule {
   InvoiceNumber = "INVOICE_NUMBER",
