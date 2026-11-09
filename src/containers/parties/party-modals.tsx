@@ -483,12 +483,6 @@ export function ContactFormModal({
   );
 }
 
-const DemoNote = () => (
-  <p className="text-xs text-content-5">
-    Demo only: these settings aren&apos;t saved yet.
-  </p>
-);
-
 type AgreementValues = {
   effectiveFrom: string;
   currency: string;
@@ -524,8 +518,8 @@ export function AgreementFormModal({
       effectiveFrom: "",
       currency: party.agreements?.[0]?.currency ?? party.defaultCurrency,
       paymentTerms: PaymentTerms.Net30,
-      // Carried over once the API sends them, so new terms for another
-      // reason don't drop the shipper's credit settings.
+      // Carried over, so new terms for another reason don't drop the
+      // shipper's credit settings.
       creditStatus: replacing?.creditStatus ?? CreditStatus.Allowed,
       creditLimit: replacing?.creditLimit ?? "",
       taxTreatment: TaxTreatment.Standard,
@@ -556,19 +550,20 @@ export function AgreementFormModal({
               billingTrigger: values.billingTrigger as BillingTrigger,
               alertDaysBefore: days,
             }
-          : { noticeDaysBefore: days }),
-        // Credit status and limit aren't sent: the API doesn't take them yet.
+          : {
+              noticeDaysBefore: days,
+              creditStatus: values.creditStatus as CreditStatus,
+              // A limit only while credit is allowed; empty means no limit.
+              creditLimit:
+                values.creditStatus === CreditStatus.Allowed
+                  ? optional(values.creditLimit)
+                  : undefined,
+            }),
       };
       return createAgreement(body);
     },
-    onSuccess: (_, values) => {
+    onSuccess: () => {
       toast.success("Agreement added.");
-      if (
-        !isCarrier &&
-        (values.creditStatus !== CreditStatus.Allowed || values.creditLimit.trim())
-      ) {
-        toast.info("Credit settings — demo only, nothing was saved.");
-      }
       void queryClient.invalidateQueries({ queryKey: ["parties"] });
       onClose();
     },
@@ -676,7 +671,6 @@ export function AgreementFormModal({
         <div className="flex flex-col gap-3 border-t border-content-3 pt-4">
           <div>
             <p className="text-sm font-semibold text-base-primary-900">Credit</p>
-            <DemoNote />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <BaseSelect

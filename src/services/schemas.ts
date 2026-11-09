@@ -110,6 +110,7 @@ import {
   TaxRate,
   TaxReport,
   TaxSummaryRow,
+  TmsOverdueSummary,
   User,
   UserRef,
   UserSession,
@@ -692,6 +693,21 @@ export const allocationSuggestionSchema: z.ZodType<AllocationSuggestion> =
 const currencyAmountsSchema: z.ZodType<CurrencyAmounts> = z.object({
   CAD: money,
   USD: money,
+});
+
+export const overdueSummarySchema: z.ZodType<TmsOverdueSummary> = z.object({
+  shippers: z.array(
+    z.object({
+      partyId: z.string(),
+      partyName: z.string(),
+      currency: z.enum(Currency),
+      amount: money,
+      invoiceCount: z.number().int().positive(),
+      oldestOverdueDays: z.number().int().positive(),
+    })
+  ),
+  totals: z.array(z.object({ currency: z.enum(Currency), amount: money })),
+  oldestOverdueDays: z.number().int().nonnegative(),
 });
 
 const excludedFromCadSchema: z.ZodType<ExcludedFromCad> = z.object({

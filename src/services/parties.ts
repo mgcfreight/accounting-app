@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   BillingTrigger,
+  CreditStatus,
   Currency,
   PartyType,
   PaymentTerms,
@@ -59,6 +60,10 @@ export type NewAgreement = {
   taxTreatment?: TaxTreatment;
   taxBasis?: TaxBasis;
   billingTrigger?: BillingTrigger;
+  // Shippers only. The limit only while credit is ALLOWED; left out for no
+  // limit.
+  creditStatus?: CreditStatus;
+  creditLimit?: string;
   // 0-60.
   noticeDaysBefore?: number;
   alertDaysBefore?: number;

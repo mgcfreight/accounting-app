@@ -11,63 +11,86 @@ const state = vi.hoisted(() => ({
   canView: true,
   canRecord: true,
   overdue: null as TmsOverdueSummary | null,
+  failing: false,
 }));
 
 vi.mock("@/components/providers/user-provider", () => ({
   useCan: () => ({
     can: (permission: Permission) =>
-      permission === Permission.CustomerPaymentsView
+      permission === Permission.CustomerInvoicesView
         ? state.canView
         : permission === Permission.CustomerPaymentsCreate && state.canRecord,
   }),
 }));
 
-vi.mock("@/lib/mock", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/mock")>();
+// GET /account/overdue answers with the fixture in lib/mock unless a test
+// sets its own.
+vi.mock("@/services", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services")>();
   return {
     ...actual,
-    get mockTmsOverdue() {
-      return state.overdue ?? actual.mockTmsOverdue;
-    },
+    getOverdueShippers: vi.fn(async () => {
+      if (state.failing) throw new Error("Network Error");
+      return state.overdue ?? mockTmsOverdue;
+    }),
   };
 });
 
+const show = () =>
+  render(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <TmsOverdueBar />
+    </QueryClientProvider>
+  );
+
 const bar = () => screen.getByRole("region", { name: "Overdue payments" });
+const shown = () => screen.findByRole("region", { name: "Overdue payments" });
 const tick = () => act(() => vi.advanceTimersByTime(TICKER_MS));
 
-const PRAIRIE = "Payment overdue in the TMS · 1 of 3: Prairie Agri Inc. owes CAD 2,320.50";
-const GREAT_LAKES = "Payment overdue in the TMS · 2 of 3: Great Lakes Supply owes USD 1,475.00";
-const NORTHWIND = "Payment overdue in the TMS · 3 of 3: Northwind Distribution owes CAD 2,816.89";
+const PRAIRIE = "Payment overdue · 1 of 3: Prairie Agri Inc. owes CAD 2,320.50";
+const GREAT_LAKES = "Payment overdue · 2 of 3: Great Lakes Supply owes USD 1,475.00";
+const NORTHWIND = "Payment overdue · 3 of 3: Northwind Distribution owes CAD 2,816.89";
 
 describe("TmsOverdueBar", () => {
   beforeEach(() => {
     state.canView = true;
     state.canRecord = true;
     state.overdue = null;
+    state.failing = false;
   });
 
-  it("labels its figures as demo data before anything else", async () => {
-    render(<TmsOverdueBar />);
-    expect(bar()).toHaveTextContent(/^Demo data · Payment overdue in the TMS/);
+  it("shows the API's overdue shippers, with no demo label", async () => {
+    show();
+    expect(await shown()).toHaveTextContent(/^Payment overdue · 1 of 3/);
+    expect(bar()).not.toHaveTextContent(/demo/i);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
-    expect(
-      await screen.findByRole("dialog", { name: "Overdue Payments in the TMS (Demo Data)" })
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Overdue Payments" })).toBeInTheDocument();
   });
 
-  it("shows nothing to those who can't view customer payments", () => {
+  it("shows nothing to those who can't view shipper invoices", async () => {
     state.canView = false;
-    render(<TmsOverdueBar />);
+    show();
+    await act(async () => {});
+    expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
+  });
+
+  it("stays hidden when the list can't be read", async () => {
+    state.failing = true;
+    show();
+    await act(async () => {});
     expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
   });
 
   describe("rotating", () => {
-    beforeEach(() => vi.useFakeTimers());
+    // Timers advance with real time too, so the API's answer arrives.
+    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
     afterEach(() => vi.useRealTimers());
 
-    it("shows each overdue shipper in turn, then starts over", () => {
-      render(<TmsOverdueBar />);
-      expect(bar()).toHaveTextContent(PRAIRIE);
+    it("shows each overdue shipper in turn, then starts over", async () => {
+      show();
+      expect(await shown()).toHaveTextContent(PRAIRIE);
       tick();
       expect(bar()).toHaveTextContent(GREAT_LAKES);
       tick();
@@ -76,13 +99,14 @@ describe("TmsOverdueBar", () => {
       expect(bar()).toHaveTextContent(PRAIRIE);
     });
 
-    it("keeps screen readers quiet while it rotates", () => {
-      render(<TmsOverdueBar />);
-      expect(bar().querySelector("[aria-live]")).toHaveAttribute("aria-live", "off");
+    it("keeps screen readers quiet while it rotates", async () => {
+      show();
+      expect((await shown()).querySelector("[aria-live]")).toHaveAttribute("aria-live", "off");
     });
 
-    it("holds still under the pointer or focus, and after Pause", () => {
-      render(<TmsOverdueBar />);
+    it("holds still under the pointer or focus, and after Pause", async () => {
+      show();
+      await shown();
       fireEvent.mouseEnter(bar());
       tick();
       expect(bar()).toHaveTextContent(PRAIRIE);
@@ -104,8 +128,9 @@ describe("TmsOverdueBar", () => {
       expect(bar()).toHaveTextContent(GREAT_LAKES);
     });
 
-    it("steps back and forward with the arrows", () => {
-      render(<TmsOverdueBar />);
+    it("steps back and forward with the arrows", async () => {
+      show();
+      await shown();
       fireEvent.click(screen.getByRole("button", { name: "Previous overdue payment" }));
       expect(bar()).toHaveTextContent(NORTHWIND);
       fireEvent.click(screen.getByRole("button", { name: "Next overdue payment" }));
@@ -114,7 +139,8 @@ describe("TmsOverdueBar", () => {
   });
 
   it("lists every shipper, with the totals per currency", async () => {
-    render(<TmsOverdueBar />);
+    show();
+    await shown();
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Total overdue: CAD 5,137.39 · USD 1,475.00");
@@ -127,39 +153,24 @@ describe("TmsOverdueBar", () => {
     expect(rows[1]).toHaveTextContent("USD 1,475.00");
   });
 
-  it("lists every shipper the totals count, even one at zero", async () => {
+  it("lists a shipper owing in two currencies once per currency", async () => {
+    const prairie = mockTmsOverdue.shippers[0];
     state.overdue = {
-      ...mockTmsOverdue,
-      shippers: [
-        ...mockTmsOverdue.shippers,
-        {
-          partyId: "USR_00ZZ",
-          partyName: "Zero Balance Ltd.",
-          currency: mockTmsOverdue.shippers[0].currency,
-          amount: "0.00",
-          invoiceCount: 0,
-          oldestOverdueDays: 0,
-        },
-      ],
+      shippers: [prairie, { ...prairie, currency: mockTmsOverdue.shippers[1].currency, amount: "10.00" }],
+      totals: mockTmsOverdue.totals,
+      oldestOverdueDays: prairie.oldestOverdueDays,
     };
-    render(<TmsOverdueBar />);
+    show();
+    await shown();
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Total overdue: CAD 5,137.39 · USD 1,475.00");
-    const rows = within(dialog).getAllByRole("listitem");
-    expect(rows).toHaveLength(4);
-    expect(rows[3]).toHaveTextContent("Zero Balance Ltd.");
+    const rows = within(await screen.findByRole("dialog")).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toHaveTextContent("USD 10.00");
   });
 
   it("opens Record Payment on money in for the chosen shipper", async () => {
-    // The form runs on the Accounts API: the shipper's name and currency
-    // load from there, so only the direction is known up front.
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <TmsOverdueBar />
-      </QueryClientProvider>
-    );
+    show();
+    await shown();
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const rows = within(await screen.findByRole("dialog")).getAllByRole("listitem");
     await userEvent.click(within(rows[1]).getByRole("button", { name: "Clear Payment" }));
@@ -172,15 +183,15 @@ describe("TmsOverdueBar", () => {
     expect(chosen[0]).toBe("Money in (from a shipper)");
   });
 
-  it("names a single overdue shipper, with no count or controls", () => {
+  it("names a single overdue shipper, with no count or controls", async () => {
     state.overdue = {
       ...mockTmsOverdue,
       shippers: [mockTmsOverdue.shippers[0]],
       totals: [{ currency: mockTmsOverdue.shippers[0].currency, amount: "2320.50" }],
     };
-    render(<TmsOverdueBar />);
-    expect(bar()).toHaveTextContent(
-      "Demo data · Payment overdue in the TMS: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
+    show();
+    expect(await shown()).toHaveTextContent(
+      "Payment overdue: Prairie Agri Inc. owes CAD 2,320.50 on 1 invoice, the oldest 66 days past due."
     );
     expect(screen.queryByRole("button", { name: "View All" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
@@ -191,7 +202,8 @@ describe("TmsOverdueBar", () => {
 
   it("hides Clear Payment from those who can't record payments, but still lists", async () => {
     state.canRecord = false;
-    render(<TmsOverdueBar />);
+    show();
+    await shown();
     expect(screen.queryByRole("button", { name: /Clear payment/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const dialog = await screen.findByRole("dialog");
@@ -200,12 +212,14 @@ describe("TmsOverdueBar", () => {
 
   it("shows nothing when no one is overdue, and goes away when dismissed", async () => {
     state.overdue = { shippers: [], totals: [], oldestOverdueDays: 0 };
-    const { unmount } = render(<TmsOverdueBar />);
+    const { unmount } = show();
+    await act(async () => {});
     expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
     unmount();
 
     state.overdue = null;
-    render(<TmsOverdueBar />);
+    show();
+    await shown();
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
   });

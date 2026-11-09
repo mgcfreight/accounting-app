@@ -19,11 +19,13 @@ import { InvoiceView } from "./invoice-view";
 
 // The invoice pages' reads, with lib/mock to fall back on while the API has
 // no invoices to show: when a read fails, or the unfiltered list is empty.
-// Development only (`npm run dev`) — a build never shows demo figures as
-// real ones; there the API's error shows. Demo invoices are marked
+// Off unless asked for: development with VITE_DEMO_INVOICES=true only. A
+// build never shows demo figures as real ones, and by default neither does
+// `npm run dev`: the API's answer or error shows. Demo invoices are marked
 // (isDemoInvoice) so the page says so and offers nothing that would write.
 
-export const DEMO_FALLBACK = import.meta.env.DEV;
+export const DEMO_FALLBACK =
+  import.meta.env.DEV && import.meta.env.VITE_DEMO_INVOICES === "true";
 
 const demoIds = new Set<string>();
 
