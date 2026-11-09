@@ -28,7 +28,7 @@ import {
 } from "@/hooks";
 import { AuditEvent } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDateTime, fullName, torontoDayBounds } from "@/lib/utils";
+import { formatDateTime, fullName, isCalendarDate, torontoDayBounds } from "@/lib/utils";
 import { errorMessage, listAuditEvents, listUsers } from "@/services";
 
 type Filters = { actorId: string; action: string; targetType: string; from: string; to: string };
@@ -97,7 +97,8 @@ const option = (value: string, label = value) => ({ key: value, label, value });
 
 const BLANK: Filters = { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" };
 const URL_DEFAULTS = { ...BLANK, page: "1", limit: "10" };
-const DATE_PARAM = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).catch("");
+// A date that exists, not just its shape: ?from=2026-13-45 falls back to "".
+const DATE_PARAM = z.string().refine(isCalendarDate).catch("");
 
 // The filters and page as kept in the URL (see useListUrlState): only the
 // actions and targets the API accepts; a user id is checked for its shape.
@@ -126,7 +127,10 @@ export default function AuditLog() {
   const fromUrl = useListUrlState(urlSchema);
   const { control, reset } = useForm<Filters>({
     defaultValues: {
-      actorId: fromUrl.actorId,
+      // Only an Admin can filter by user. For anyone else an actorId from the
+      // URL (an Admin's shared link) is dropped here, so it isn't counted as a
+      // filter, kept in the paging key, or written back to the URL.
+      actorId: isAdmin ? fromUrl.actorId : ALL,
       action: fromUrl.action,
       targetType: fromUrl.targetType,
       from: fromUrl.from,
