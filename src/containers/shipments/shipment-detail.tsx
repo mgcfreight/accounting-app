@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   BaseCardWrapper,
   ErrorState,
@@ -33,6 +33,10 @@ export default function ShipmentDetail() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
   const { can } = useCan();
+  // Whether each side's invoice card is open. Each opens on its own; the
+  // two sides are matched in height only while both are open or both closed.
+  const [shipperOpen, setShipperOpen] = useState(false);
+  const [carrierOpen, setCarrierOpen] = useState(false);
 
   const shipment = useQuery({
     queryKey: ["shipments", "detail", id],
@@ -162,13 +166,18 @@ export default function ShipmentDetail() {
       </BaseCardWrapper>
 
       {/* Each side only for those who may read its invoices. */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${
+          shipperOpen === carrierOpen ? "" : "items-start"
+        }`}
+      >
         {can(Permission.CustomerInvoicesView) && (
           <ShipmentInvoices
             direction={InvoiceDirection.Receivable}
             shipment={data}
             parties={parties}
             heading="Shipper Invoice"
+            onExpandedChange={setShipperOpen}
           />
         )}
         {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (
@@ -177,6 +186,7 @@ export default function ShipmentDetail() {
             shipment={data}
             parties={parties}
             heading="Carrier Invoice"
+            onExpandedChange={setCarrierOpen}
           />
         )}
       </div>
