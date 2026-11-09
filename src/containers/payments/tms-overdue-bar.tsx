@@ -4,7 +4,6 @@ import { useCan } from "@/components/providers/user-provider";
 import { Permission } from "@/lib/enums";
 import { TmsOverdueShipper } from "@/lib/interfaces";
 import { mockTmsOverdue } from "@/lib/mock";
-import RecordPaymentModal from "./record-payment-modal";
 
 // How long each overdue shipper stays in the bar before the next.
 export const TICKER_MS = 5000;
@@ -28,9 +27,11 @@ const iconButton =
 // Only for those who may see customer payments (customer_payments.view);
 // Clear Payment also needs customer_payments.create.
 //
-// Demo only: the figures are mockTmsOverdue and recording a payment saves
-// nothing, so AppLayout mounts it in development only, and it says "Demo data"
-// before any figure. Dismissing hides it until the next page load.
+// Demo only: the figures are mockTmsOverdue, so AppLayout mounts it in
+// development only, and it says "Demo data" before any figure. Clear Payment
+// opens a demo form that saves nothing: the real Record Payment posts to the
+// API, and these shipper ids are mock ones. Dismissing hides it until the
+// next page load.
 export default function TmsOverdueBar() {
   const { can } = useCan();
   const canView = can(Permission.CustomerPaymentsView);
@@ -200,14 +201,50 @@ export default function TmsOverdueBar() {
         </ul>
       </FormModal>
 
-      {/* Mounted per shipper, so the form opens filled in for them. */}
       {recording && (
-        <RecordPaymentModal
-          isOpen
+        <DemoClearPaymentModal
+          shipper={recording}
           onClose={() => setRecording(null)}
-          shipper={{ id: recording.partyId, currency: recording.currency }}
         />
       )}
     </>
+  );
+}
+
+// What Clear Payment would record, filled in for the shipper, but nothing is
+// sent: the bar's shipper is mock data, and a mock id could match a real
+// party. Real payments are recorded on the Payments page.
+function DemoClearPaymentModal({
+  shipper,
+  onClose,
+}: {
+  shipper: TmsOverdueShipper;
+  onClose: () => void;
+}) {
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Record Payment (Demo Data)"
+      confirmText="Close"
+      onConfirm={onClose}
+    >
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm text-[#343A40]">
+        <dt className="font-semibold">Direction</dt>
+        <dd>Money in (from a shipper)</dd>
+        <dt className="font-semibold">Shipper</dt>
+        <dd>{shipper.partyName}</dd>
+        <dt className="font-semibold">Currency</dt>
+        <dd>{shipper.currency}</dd>
+        <dt className="font-semibold">Overdue</dt>
+        <dd>
+          <Money amount={shipper.amount} currency={shipper.currency} />
+        </dd>
+      </dl>
+      <p className="text-sm text-content-5">
+        Demo data: nothing is recorded from this bar. Record the payment on
+        the Payments page.
+      </p>
+    </FormModal>
   );
 }

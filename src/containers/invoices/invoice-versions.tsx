@@ -9,19 +9,15 @@ import { BaseCardWrapper, Money, StatusChip } from "@/components/common";
 import { DownArrowSm, EyeIcon, Pdf } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { formatDate } from "@/lib/utils";
-import usePartyNames from "../parties/use-party-names";
 import { canExportPdf, isPrintable, versionLabel } from "./invoice-pdf";
 import {
   apiInvoiceHref,
-  carrierIdsOf,
   invoiceNumberOf,
   InvoiceStatusCell,
   InvoiceTotal,
   InvoiceView,
   owesNothingYet,
-  partyOf,
 } from "./invoice-view";
-import useInvoicePdf from "./use-invoice-pdf";
 
 const actionClass =
   "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-base-default px-2.5 py-1.5 text-xs text-base-primary hover:bg-content-12 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -71,19 +67,20 @@ export function VersionSwitcher({
 }
 
 // Every version of an invoice, newest first: which one is the latest, which
-// one is open, what each one totalled, and its page and PDF.
+// one is open, what each one totalled, and its page and PDF (the API's, as
+// `onPdf` downloads it).
 export default function InvoiceVersions({
   current,
   versions,
+  onPdf,
 }: {
   // The version this page shows.
   current: InvoiceView;
   // Oldest first, as the API sends them.
   versions: InvoiceView[];
+  onPdf: (version: InvoiceView) => void;
 }) {
   const { can } = useCan();
-  const printPdf = useInvoicePdf();
-  const carriers = usePartyNames(carrierIdsOf(versions));
   const latest = versions[versions.length - 1];
   const newestFirst = [...versions].reverse();
 
@@ -92,9 +89,7 @@ export default function InvoiceVersions({
       <p className="text-sm text-content-5 mb-4">
         {versions.length > 1
           ? "Correcting an issued invoice makes a new version. Earlier versions are kept exactly as they were sent: open any of them or save it as a PDF."
-          : "This invoice has one version. Correcting it after it's issued adds a new version here, and this one is kept as it was sent."}{" "}
-        &ldquo;PDF&rdquo; opens the print window: choose &ldquo;Save as
-        PDF&rdquo; as the printer to save the file.
+          : "This invoice has one version. Correcting it after it's issued adds a new version here, and this one is kept as it was sent."}
       </p>
       <ol className="flex flex-col">
         {newestFirst.map((version, index) => {
@@ -166,13 +161,7 @@ export default function InvoiceVersions({
                               ? undefined
                               : "Nothing to print until it's issued or the bill arrives."
                           }
-                          onClick={() =>
-                            void printPdf({
-                              invoice: version,
-                              partyName: partyOf(version, carriers).name,
-                              versions,
-                            })
-                          }
+                          onClick={() => onPdf(version)}
                         >
                           <Pdf className="h-4 w-4" />
                           PDF

@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -151,25 +150,24 @@ describe("TmsOverdueBar", () => {
     expect(rows[3]).toHaveTextContent("Zero Balance Ltd.");
   });
 
-  it("opens Record Payment on money in for the chosen shipper", async () => {
-    // The form runs on the Accounts API: the shipper's name and currency
-    // load from there, so only the direction is known up front.
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <TmsOverdueBar />
-      </QueryClientProvider>
-    );
+  it("opens a demo Record Payment for the chosen shipper in their currency", async () => {
+    render(<TmsOverdueBar />);
     await userEvent.click(screen.getByRole("button", { name: "View All" }));
     const rows = within(await screen.findByRole("dialog")).getAllByRole("listitem");
     await userEvent.click(within(rows[1]).getByRole("button", { name: "Clear Payment" }));
 
-    const form = await screen.findByRole("dialog", { name: "Record Payment" });
-    // What the direction select shows as chosen (every option is also in the
-    // DOM, in HeroUI's hidden <select>, so the dialog's text alone proves
-    // nothing).
-    const chosen = [...form.querySelectorAll("[data-slot=value]")].map((el) => el.textContent);
-    expect(chosen[0]).toBe("Money in (from a shipper)");
+    // Filled in for the shipper, and saves nothing: its ids are mock ones.
+    const form = await screen.findByRole("dialog", { name: "Record Payment (Demo Data)" });
+    const fields = Object.fromEntries(
+      [...form.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling?.textContent])
+    );
+    expect(fields).toEqual({
+      Direction: "Money in (from a shipper)",
+      Shipper: "Great Lakes Supply",
+      Currency: "USD",
+      Overdue: "USD 1,475.00",
+    });
+    expect(form).toHaveTextContent("nothing is recorded from this bar");
   });
 
   it("names a single overdue shipper, with no count or controls", () => {

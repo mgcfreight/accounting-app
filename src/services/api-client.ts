@@ -63,12 +63,40 @@ export class ResponseShapeError extends Error {
   }
 }
 
+// A failure the screen itself detects, with a message written for staff
+// ("Too many reminders to export…"). errorMessage shows it as it is.
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserFacingError";
+  }
+}
+
 // The text to show for a failed request: the API's own message (they are
 // written for staff), or a generic one for anything else.
 export const errorMessage = (error: unknown) =>
-  error instanceof ApiError || error instanceof ResponseShapeError
+  error instanceof ApiError ||
+  error instanceof ResponseShapeError ||
+  error instanceof UserFacingError
     ? error.message
     : "Something went wrong. Please try again.";
+
+// Every row of a paged list, read 100 at a time, for a screen that must see
+// them all (a write-off further back, an invoice past the first page).
+// Stops with `tooMany` rather than reading for ever.
+export const readAllPages = async <T>(
+  page: (page: number) => Promise<{ items: T[]; meta: { totalPages: number } }>,
+  tooMany: string,
+  maxPages = 50
+): Promise<T[]> => {
+  const rows: T[] = [];
+  for (let n = 1; n <= maxPages; n += 1) {
+    const result = await page(n);
+    rows.push(...result.items);
+    if (n >= result.meta.totalPages) return rows;
+  }
+  throw new UserFacingError(tooMany);
+};
 
 // Checks a response body against its schema, throwing on any mismatch.
 export const parseBody = <T extends z.ZodType>(schema: T, body: unknown) => {
