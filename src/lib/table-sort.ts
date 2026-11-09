@@ -93,7 +93,10 @@ export const sortTableRows = <T>(
   const sign = direction === "asc" ? 1 : -1;
   // USD 10,000.00 and CAD 10,000.00 aren't the same amount, so a money
   // column groups rows by their currency (the row's `currency`, or
-  // `currencyKey`) before comparing amounts within each.
+  // `currencyKey`) before comparing amounts within each. Rows without a
+  // currency form their own group after the others, in both directions —
+  // comparing them by amount against rows that have one would make the
+  // order inconsistent (USD 50 < none 100 < CAD 200, yet CAD < USD).
   const currencyOf = (row: T): string | undefined => {
     if (column.sortType !== "money") return undefined;
     const currency = readPath(row, column.currencyKey ?? "currency");
@@ -107,6 +110,7 @@ export const sortTableRows = <T>(
         if (isEmpty(a.value) && isEmpty(b.value)) return 0;
         return isEmpty(a.value) ? 1 : -1;
       }
+      if (!a.currency !== !b.currency) return a.currency ? -1 : 1;
       if (a.currency && b.currency && a.currency !== b.currency) {
         return collator.compare(a.currency, b.currency);
       }

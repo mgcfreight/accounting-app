@@ -29,4 +29,20 @@ describe("sortTableRows, money", () => {
     const plain = rows.map(({ id, balance: amount }) => ({ id, balance: amount }));
     expect(sortTableRows(plain, balance, "asc").map((row) => row.id)).toEqual(["d", "b", "a", "c"]);
   });
+
+  it("puts rows without a currency in their own group, last", () => {
+    const mixed = [
+      { id: "none-100", balance: "100.00" },
+      { id: "usd-50", currency: "USD", balance: "50.00" },
+      { id: "cad-200", currency: "CAD", balance: "200.00" },
+      { id: "none-20", balance: "20.00" },
+    ];
+    const order = (direction: "asc" | "desc") =>
+      sortTableRows(mixed, balance, direction).map((row) => row.id);
+    expect(order("asc")).toEqual(["cad-200", "usd-50", "none-20", "none-100"]);
+    expect(order("desc")).toEqual(["cad-200", "usd-50", "none-100", "none-20"]);
+    // The order mustn't depend on where the rows started.
+    const reversed = sortTableRows([...mixed].reverse(), balance, "asc");
+    expect(reversed.map((row) => row.id)).toEqual(order("asc"));
+  });
 });
