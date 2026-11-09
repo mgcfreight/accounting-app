@@ -1,7 +1,6 @@
 import { Card, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useSearchParams } from "react-router";
 import { LuCircleCheck } from "react-icons/lu";
 import { toast } from "sonner";
 import {
@@ -17,6 +16,7 @@ import {
   StatusChip,
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
+import { useUrlTab } from "@/hooks";
 import {
   DisputeStatus,
   InvoiceDirection,
@@ -29,7 +29,8 @@ import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 
-type View = "changes" | "disputes";
+const views = ["changes", "disputes"] as const;
+type View = (typeof views)[number];
 
 const columns: BaseTableColumn[] = [
   { key: "kind", label: "Change" },
@@ -67,10 +68,7 @@ type PendingResolution = { item: ReviewItem; action: string; done: string };
 export default function NeedsReview() {
   // The tab is in the URL (?view=disputes), so it can be linked to and Back
   // from an invoice returns to it. Anything else shows the changes.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const view: View = searchParams.get("view") === "disputes" ? "disputes" : "changes";
-  const setView = (next: View) =>
-    setSearchParams(next === "changes" ? {} : { view: next }, { replace: true });
+  const [view, setView] = useUrlTab<View>(views, "changes");
   const [resolving, setResolving] = useState<Dispute | null>(null);
   // Once wired, each resolution issues or settles something for good, so it
   // asks first, showing the amounts, rather than acting on one click.
