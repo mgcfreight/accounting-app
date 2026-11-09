@@ -365,7 +365,6 @@ export default function InvoiceDetail({
       <DocumentsCard
         invoice={data}
         onUpload={openIfOffered("upload")}
-        onEmail={openIfOffered("email-documents")}
       />
 
       <InvoiceHistory invoice={data} />

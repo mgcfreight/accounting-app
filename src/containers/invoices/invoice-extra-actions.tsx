@@ -1,4 +1,3 @@
-import { CheckboxGroup } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -8,7 +7,6 @@ import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
-  BaseCheckbox,
   BaseInput,
   BaseSelect,
   BaseSwitch,
@@ -19,7 +17,7 @@ import {
   Money,
 } from "@/components/common";
 import { RowAction } from "@/components/common/row-actions";
-import { DocumentUpload, Pdf, Send } from "@/components/icons";
+import { DocumentUpload } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { EMAIL_SHAPE } from "@/lib/constants";
 import {
@@ -27,7 +25,6 @@ import {
   CustomerInvoiceStatus,
   Permission,
 } from "@/lib/enums";
-import { Attachment } from "@/lib/interfaces";
 import { compareMoney, isZeroMoney } from "@/lib/money";
 import { listContacts } from "@/services";
 import {
@@ -354,15 +351,12 @@ type DocumentsEmailValues = {
   message: string;
 };
 
-// The documents on an invoice, sent to its shipper or carrier: each one
-// ticked by default and left out by unticking it.
+// The documents on an invoice, sent to its shipper or carrier. The API
+// doesn't list an invoice's documents yet, so there are none to choose and
+// the form says so; the document picker comes with a documents endpoint.
 function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
   const isCustomer = isCustomerInvoice(invoice);
   const who = partyWord(invoice);
-  const documents = documentsOf(invoice);
-  const [chosen, setChosen] = useState<string[]>(() =>
-    documents.map((item) => item.id)
-  );
   const [missing, setMissing] = useState<string | null>(null);
   const recipients = useInvoiceRecipients(invoice);
   const reference =
@@ -383,38 +377,16 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
     (value) => setValue("to", value)
   );
 
-  const submit = handleSubmit((values) => {
-    if (documents.length === 0) {
-      setMissing("There are no documents on this invoice to send.");
-      return;
-    }
-    if (chosen.length === 0) {
-      setMissing("Choose at least one document to send.");
-      return;
-    }
-    demo(
-      `Email of ${chosen.length} ${chosen.length === 1 ? "document" : "documents"} to ${addresses(values.to).join(", ")}`,
-      "sent"
-    );
-    onClose();
+  const submit = handleSubmit(() => {
+    setMissing("There are no documents on this invoice to send.");
   });
-
-  const allChosen = chosen.length === documents.length;
-  const choose = (value: string[]) => {
-    setChosen(value);
-    setMissing(null);
-  };
 
   return (
     <FormModal
       isOpen
       onOpenChange={(open) => !open && onClose()}
       title={`Email Documents to ${isCustomer ? "Shipper" : "Carrier"}`}
-      confirmText={
-        chosen.length > 0
-          ? `Send ${chosen.length} ${chosen.length === 1 ? "document" : "documents"}`
-          : "Send"
-      }
+      confirmText="Send"
       onConfirm={submit}
       size="2xl"
     >
@@ -427,48 +399,9 @@ function EmailDocumentsModal({ invoice, partyName, onClose }: ModalProps) {
         description={recipientHint(recipients, who)}
         rules={{ validate: emailList(true) }}
       />
-      {documents.length === 0 ? (
-        <p className="text-sm text-content-5">
-          No documents on this invoice yet. Upload {isCustomer ? "a BOL or POD" : "a POD"} first.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-base-primary">
-              Documents to send ({chosen.length} of {documents.length})
-            </span>
-            <button
-              type="button"
-              className="text-xs text-base-primary underline"
-              onClick={() => choose(allChosen ? [] : documents.map((item) => item.id))}
-            >
-              {allChosen ? "Clear all" : "Select all"}
-            </button>
-          </div>
-          <CheckboxGroup
-            aria-label="Documents to send"
-            size="sm"
-            value={chosen}
-            onValueChange={choose}
-            orientation="horizontal"
-            // Side by side, wrapping, as on the invoice's Documents card.
-            classNames={{ wrapper: "flex-wrap gap-2" }}
-          >
-            {documents.map((item) => (
-              <BaseCheckbox
-                key={item.id}
-                value={item.id}
-                classNames={{
-                  base: "m-0 min-w-0 max-w-full sm:max-w-xs rounded-medium border border-base-default p-3 data-[selected=true]:border-base-primary",
-                  label: "min-w-0 w-full",
-                }}
-              >
-                <DocumentLine document={item} />
-              </BaseCheckbox>
-            ))}
-          </CheckboxGroup>
-        </div>
-      )}
+      <p className="text-sm text-content-5">
+        No documents on this invoice yet. Upload {isCustomer ? "a BOL or POD" : "a POD"} first.
+      </p>
       {missing && (
         <p role="alert" className="text-xs text-base-danger">
           {missing}
@@ -645,108 +578,37 @@ const carrierDocumentKinds = documentKinds.filter(
   (kind) => kind.key === "POD" || kind.key === "OTHER"
 );
 
-const documentKindLabel = (kind: string) =>
-  documentKinds.find((item) => item.key === kind)?.label ?? kind;
-
-// The documents attached to an invoice. The API doesn't list them yet and
-// Upload Document stores nothing, so there are none to show until it does.
-const documentsOf = (_invoice: InvoiceView): Attachment[] => [];
-
-// A document's icon, name and kind, as one line of a list.
-function DocumentLine({ document }: { document: Attachment }) {
-  return (
-    <div className="flex items-center gap-3 min-w-0">
-      {/\.pdf$/i.test(document.fileName) ? (
-        <Pdf className="h-8 w-8 shrink-0" aria-hidden />
-      ) : (
-        <DocumentUpload className="h-8 w-8 shrink-0" aria-hidden />
-      )}
-      <div className="min-w-0">
-        <p className="truncate text-sm text-content-6" title={document.fileName}>
-          {document.fileName}
-        </p>
-        <p className="text-xs text-content-5">{documentKindLabel(document.kind)}</p>
-      </div>
-    </div>
-  );
-}
-
-// The documents on an invoice, with uploading and emailing them to the
-// shipper or carrier for those allowed to.
+// The documents on an invoice. The API doesn't list them yet and Upload
+// Document stores nothing, so the card shows its empty state until a
+// documents endpoint exists.
 export function DocumentsCard({
   invoice,
   onUpload,
-  onEmail,
 }: {
   invoice: InvoiceView;
   onUpload?: () => void;
-  onEmail?: () => void;
 }) {
   const isCustomer = isCustomerInvoice(invoice);
-  const who = partyWord(invoice);
-  const documents = documentsOf(invoice);
   return (
-    <BaseCardWrapper
-      heading={
-        documents.length > 0
-          ? `Supporting Documents (${documents.length})`
-          : "Supporting Documents"
-      }
-    >
+    <BaseCardWrapper heading="Supporting Documents">
       <div className="flex flex-col gap-4">
-        {documents.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-4 text-center">
-            <DocumentUpload className="h-8 w-8" aria-hidden />
-            <p className="text-sm text-content-6">No documents yet</p>
-            <p className="text-xs text-content-5">
-              {isCustomer
-                ? "Upload the signed BOL and POD to keep them with this invoice and send them to the shipper."
-                : "Upload the signed POD to keep it with this bill and send it to the carrier."}
-            </p>
-          </div>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {documents.map((item) => (
-              <li key={item.id} className="min-w-0 max-w-full sm:max-w-xs">
-                {/* Downloads the file under its own name, as the browser
-                    saves any download; `download` works only on our own
-                    origin, so only a same-origin path is linked. */}
-                {item.url?.startsWith("/") && !item.url.startsWith("//") ? (
-                  <a
-                    href={item.url}
-                    download={item.fileName}
-                    aria-label={`Download ${item.fileName}`}
-                    className="block rounded-medium border border-base-default p-3 transition-colors hover:border-base-primary hover:bg-content-12 focus-visible:outline-2 focus-visible:outline-focus"
-                  >
-                    <DocumentLine document={item} />
-                  </a>
-                ) : (
-                  <div className="rounded-medium border border-base-default p-3">
-                    <DocumentLine document={item} />
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {(onUpload || onEmail) && (
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <DocumentUpload className="h-8 w-8" aria-hidden />
+          <p className="text-sm text-content-6">No documents yet</p>
+          <p className="text-xs text-content-5">
+            {isCustomer
+              ? "Upload the signed BOL and POD to keep them with this invoice and send them to the shipper."
+              : "Upload the signed POD to keep it with this bill and send it to the carrier."}
+          </p>
+        </div>
+        {onUpload && (
           <div className="flex flex-wrap gap-2">
-            {onEmail && documents.length > 0 && (
-              <BaseButton
-                text={`Email to ${who}`}
-                startContent={<Send />}
-                className="px-4"
-                onPress={onEmail}
-              />
-            )}
-            {onUpload && (
-              <BaseButton
-                text="Upload document"
-                varient="bordered"
-                className="text-base-primary px-4"
-                onPress={onUpload}
-              />
-            )}
+            <BaseButton
+              text="Upload document"
+              varient="bordered"
+              className="text-base-primary px-4"
+              onPress={onUpload}
+            />
           </div>
         )}
       </div>
