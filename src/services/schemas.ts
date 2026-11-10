@@ -420,8 +420,9 @@ export const agreementSchema: z.ZodType<AgreementView> = z.object({
   partyId: z.string(),
   paymentTerms: z.enum(PaymentTerms),
   currency: z.enum(Currency),
-  // Optional until the Accounts API sends them; when it does, a malformed
-  // one still fails the record.
+  // The API sends both (null when not set, as for a carrier). Optional so
+  // an API from before credit settings still loads; a malformed one still
+  // fails the record.
   creditStatus: z.enum(CreditStatus).nullable().optional(),
   creditLimit: money.nullable().optional(),
   taxTreatment: z.enum(TaxTreatment),
@@ -702,8 +703,10 @@ export const overdueSummarySchema: z.ZodType<TmsOverdueSummary> = z.object({
       partyName: z.string(),
       currency: z.enum(Currency),
       amount: money,
-      invoiceCount: z.number().int().positive(),
-      oldestOverdueDays: z.number().int().positive(),
+      // Not positive(): a row at 0 (the Toronto day boundary) must not
+      // reject the whole list. Which shippers count is the API's call.
+      invoiceCount: z.number().int().nonnegative(),
+      oldestOverdueDays: z.number().int().nonnegative(),
     })
   ),
   totals: z.array(z.object({ currency: z.enum(Currency), amount: money })),

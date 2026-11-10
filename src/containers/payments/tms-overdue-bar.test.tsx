@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Permission } from "@/lib/enums";
@@ -36,18 +36,32 @@ vi.mock("@/services", async (importOriginal) => {
   };
 });
 
-const show = () =>
-  render(
-    <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
-    >
-      <TmsOverdueBar />
-    </QueryClientProvider>
-  );
+let client: QueryClient;
+const show = () => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<TmsOverdueBar />, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+};
+const refetchAll = () => client.refetchQueries();
 
 const bar = () => screen.getByRole("region", { name: "Overdue payments" });
 const shown = () => screen.findByRole("region", { name: "Overdue payments" });
-const tick = () => act(() => vi.advanceTimersByTime(TICKER_MS));
+// With fake timers: let the API's answer and React Query's updates through.
+const settle = () =>
+  act(async () => {
+    for (let i = 0; i < 5; i += 1) await vi.advanceTimersByTimeAsync(0);
+  });
+const shownNow = async () => {
+  await settle();
+  return bar();
+};
+const tick = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(TICKER_MS);
+  });
 
 const PRAIRIE = "Payment overdue · 1 of 3: Prairie Agri Inc. owes CAD 2,320.50";
 const GREAT_LAKES = "Payment overdue · 2 of 3: Great Lakes Supply owes USD 1,475.00";
@@ -76,6 +90,41 @@ describe("TmsOverdueBar", () => {
     expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument();
   });
 
+  it("hides older amounts when a refresh fails", async () => {
+    show();
+    await shown();
+    state.failing = true;
+    await act(async () => {
+      await refetchAll();
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Overdue payments" })).not.toBeInTheDocument()
+    );
+  });
+
+  it("lists every shipper the totals count, even one at zero", async () => {
+    state.overdue = {
+      ...mockTmsOverdue,
+      shippers: [
+        ...mockTmsOverdue.shippers,
+        {
+          partyId: "USR_00ZZ",
+          partyName: "Zero Balance Ltd.",
+          currency: mockTmsOverdue.shippers[0].currency,
+          amount: "0.00",
+          invoiceCount: 0,
+          oldestOverdueDays: 0,
+        },
+      ],
+    };
+    show();
+    await shown();
+    await userEvent.click(screen.getByRole("button", { name: "View All" }));
+    const rows = within(await screen.findByRole("dialog")).getAllByRole("listitem");
+    expect(rows).toHaveLength(4);
+    expect(rows[3]).toHaveTextContent("Zero Balance Ltd.");
+  });
+
   it("stays hidden when the list can't be read", async () => {
     state.failing = true;
     show();
@@ -84,53 +133,70 @@ describe("TmsOverdueBar", () => {
   });
 
   describe("rotating", () => {
-    // Timers advance with real time too, so the API's answer arrives.
-    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+    // Plain fake timers: only tick() moves the clock, however slow the run.
+    beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
     it("shows each overdue shipper in turn, then starts over", async () => {
       show();
-      expect(await shown()).toHaveTextContent(PRAIRIE);
-      tick();
+      expect(await shownNow()).toHaveTextContent(PRAIRIE);
+      await tick();
       expect(bar()).toHaveTextContent(GREAT_LAKES);
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(NORTHWIND);
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(PRAIRIE);
     });
 
     it("keeps screen readers quiet while it rotates", async () => {
       show();
-      expect((await shown()).querySelector("[aria-live]")).toHaveAttribute("aria-live", "off");
+      expect((await shownNow()).querySelector("[aria-live]")).toHaveAttribute("aria-live", "off");
     });
 
     it("holds still under the pointer or focus, and after Pause", async () => {
       show();
-      await shown();
+      await shownNow();
       fireEvent.mouseEnter(bar());
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(PRAIRIE);
       fireEvent.mouseLeave(bar());
 
       const clear = screen.getByRole("button", { name: "Clear payment for Prairie Agri Inc." });
       fireEvent.focus(clear);
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(PRAIRIE);
       fireEvent.blur(clear);
 
       fireEvent.click(screen.getByRole("button", { name: "Pause" }));
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(PRAIRIE);
       expect(bar().querySelector("[aria-live]")).toHaveAttribute("aria-live", "polite");
 
       fireEvent.click(screen.getByRole("button", { name: "Play" }));
-      tick();
+      await tick();
       expect(bar()).toHaveTextContent(GREAT_LAKES);
+    });
+
+    it("keeps the same shipper when a refresh re-sorts the list", async () => {
+      const { rerender } = show();
+      await shownNow();
+      fireEvent.click(screen.getByRole("button", { name: "Next overdue payment" }));
+      expect(bar()).toHaveTextContent(GREAT_LAKES);
+      fireEvent.mouseEnter(bar());
+
+      // Great Lakes moves to the end, and Prairie has paid.
+      const [, greatLakes, northwind] = mockTmsOverdue.shippers;
+      state.overdue = { ...mockTmsOverdue, shippers: [northwind, greatLakes] };
+      await act(async () => {
+        await refetchAll();
+      });
+      rerender(<TmsOverdueBar />);
+      expect(bar()).toHaveTextContent("Great Lakes Supply owes USD 1,475.00");
     });
 
     it("steps back and forward with the arrows", async () => {
       show();
-      await shown();
+      await shownNow();
       fireEvent.click(screen.getByRole("button", { name: "Previous overdue payment" }));
       expect(bar()).toHaveTextContent(NORTHWIND);
       fireEvent.click(screen.getByRole("button", { name: "Next overdue payment" }));

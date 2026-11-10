@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { BaseInput, BaseSelect, FormModal } from "@/components/common";
+import { AlertBanner, BaseInput, BaseSelect, FormModal } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
 import { FX_RATE_PATTERN, paymentMethodOptions } from "@/lib/constants";
 import {
@@ -50,7 +50,9 @@ const AMOUNT = /^\d{1,12}\.\d{2}$/;
 
 // Recording a payment (design §8.5). The API saves it all unapplied; it is
 // then allocated from the Unmatched tab, where matching suggests the
-// invoices. The currency is the party's own: each party uses one.
+// invoices. The currency is the party's own: each party uses one. Opened for
+// a debt in another currency (the overdue bar lists one row per currency),
+// it refuses rather than record the payment in the party's currency.
 export default function RecordPaymentModal({
   isOpen,
   onClose,
@@ -137,11 +139,16 @@ export default function RecordPaymentModal({
     onError: (error) => toast.error(errorMessage(error)),
   });
 
+  // The debt it was opened for is in a currency this party isn't billed in.
+  const currencyMismatch =
+    !!shipper && !!currency && partyId === shipper.id && shipper.currency !== currency;
+
   const submit = handleSubmit((values) => {
     if (!currency) {
       toast.error("Wait for the party to load, then try again.");
       return;
     }
+    if (currencyMismatch) return;
     record.mutate(values);
   });
 
@@ -157,6 +164,11 @@ export default function RecordPaymentModal({
       isConfirming={record.isPending}
       size="xl"
     >
+      {currencyMismatch && (
+        <AlertBanner
+          message={`This debt is in ${shipper.currency}, but ${party.data?.name ?? "this shipper"} is billed in ${currency}. A payment is recorded in the party's currency, so record this one from the Payments page once the currency is sorted out.`}
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <BaseSelect
           className="sm:col-span-2"

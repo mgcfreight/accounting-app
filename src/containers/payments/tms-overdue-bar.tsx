@@ -34,23 +34,27 @@ const iconButton =
 //
 // Only for those who may see shipper invoices (customer_invoices.view);
 // Clear Payment also needs customer_payments.create, and records a real
-// payment. Dismissing hides it until the next page load. While the list
-// loads, or if it can't be read, the bar stays hidden: it is a prompt, and
-// the dashboard shows the same figures.
+// payment. Dismissing hides it, and stops reading the list, until the next
+// page load. While the list loads, or if the last read failed, the bar stays
+// hidden rather than show older amounts: it is a prompt, and the dashboard
+// shows the same figures. It sits under ["accounts"], so every change that
+// moves a balance refreshes it (refreshMoneyViews).
 export default function TmsOverdueBar() {
   const { can } = useCan();
   const canView = can(Permission.CustomerInvoicesView);
   const canRecord = canView && can(Permission.CustomerPaymentsCreate);
+  const [dismissed, setDismissed] = useState(false);
   const summary = useQuery({
-    queryKey: ["account", "overdue"],
+    queryKey: ["accounts", "overdue"],
     queryFn: ({ signal }) => getOverdueShippers(signal),
-    enabled: canView,
+    enabled: canView && !dismissed,
     refetchInterval: REFRESH_MS,
   });
-  const [dismissed, setDismissed] = useState(false);
   const [listing, setListing] = useState(false);
   const [recording, setRecording] = useState<TmsOverdueShipper | null>(null);
-  const [index, setIndex] = useState(0);
+  // The row shown, by key: a refreshed list that is re-sorted or shorter
+  // can't put another shipper under the pointer.
+  const [shownKey, setShownKey] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -59,24 +63,29 @@ export default function TmsOverdueBar() {
   // rows here would leave the sender's totals counting shippers the list no
   // longer shows, and re-summing them would be arithmetic on money. Which
   // shippers count as overdue is the sender's call.
-  const overdue = summary.data;
+  const overdue = summary.isError ? undefined : summary.data;
   const shippers = overdue?.shippers ?? [];
   const count = shippers.length;
+  // A row that left the list falls back to the first.
+  const position = Math.max(
+    0,
+    shippers.findIndex((shipper) => keyOf(shipper) === shownKey)
+  );
   const rotating =
     count > 1 && !dismissed && !paused && !hovered && !focused && !listing && !recording;
 
+  const step = (by: number) =>
+    setShownKey(keyOf(shippers[(position + by + count) % count]));
+
+  const nextKey = count > 0 ? keyOf(shippers[(position + 1) % count]) : null;
   useEffect(() => {
-    if (!rotating) return;
-    const timer = setInterval(() => setIndex((i) => (i + 1) % count), TICKER_MS);
-    return () => clearInterval(timer);
-  }, [rotating, count]);
+    if (!rotating || nextKey === null) return;
+    const timer = setTimeout(() => setShownKey(nextKey), TICKER_MS);
+    return () => clearTimeout(timer);
+  }, [rotating, nextKey]);
 
   if (!canView || dismissed || !overdue || count === 0) return null;
-  // The list can shrink under the index when real data refreshes.
-  const position = index % count;
   const current = shippers[position];
-
-  const step = (by: number) => setIndex((position + by + count) % count);
   const record = (shipper: TmsOverdueShipper) => {
     setListing(false);
     setRecording(shipper);

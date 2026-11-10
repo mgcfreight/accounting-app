@@ -257,8 +257,8 @@ function AgreementTerms({
           <DetailRow
             label="Credit"
             value={
-              // Undefined until the Accounts API sends credit settings.
-              agreement.creditStatus ? creditStatusLabels[agreement.creditStatus] : "Not saved yet"
+              // Null when no credit status is set on this agreement.
+              agreement.creditStatus ? creditStatusLabels[agreement.creditStatus] : "Not set"
             }
           />
         )}
