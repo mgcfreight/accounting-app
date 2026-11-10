@@ -598,7 +598,10 @@ function PartyInvoices({ party }: { party: PartyView }) {
             key === "actions" ? (
               <InvoiceViewAction invoice={row} />
             ) : key === "shipment" ? (
-              <ShipmentLink shipmentId={row.shipmentId} />
+              <ShipmentLink
+                shipmentId={row.shipmentId}
+                loadNumber={row.loadNumber}
+              />
             ) : (
               <InvoiceViewCell invoice={row} columnKey={key} />
             )

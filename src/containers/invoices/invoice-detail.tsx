@@ -36,10 +36,8 @@ import {
   errorMessage,
   getCarrierInvoice,
   getCarrierInvoiceByNumber,
-  getCarrierInvoiceVersions,
   getCustomerInvoice,
   getCustomerInvoiceByNumber,
-  getCustomerInvoiceVersions,
   getNoticeSettings,
   getParty,
 } from "@/services";
@@ -55,6 +53,7 @@ import InvoiceExtraActionModal, {
 } from "./invoice-extra-actions";
 import InvoiceHistory from "./invoice-history";
 import { versionLabel } from "./invoice-pdf";
+import { fetchInvoiceVersions } from "./invoice-reads";
 import { availableActions } from "./invoice-row-actions";
 import InvoiceVersions, { VersionSwitcher } from "./invoice-versions";
 import {
@@ -121,10 +120,7 @@ export default function InvoiceDetail({
   const invoiceId = invoice.data?.id;
   const versions = useQuery({
     queryKey: ["invoices", direction, "versions", invoiceId],
-    queryFn: ({ signal }): Promise<InvoiceView[]> =>
-      isReceivable
-        ? getCustomerInvoiceVersions(invoiceId!, signal)
-        : getCarrierInvoiceVersions(invoiceId!, signal),
+    queryFn: ({ signal }) => fetchInvoiceVersions(direction, invoiceId!, signal),
     enabled: !!invoiceId,
   });
   const carriers = usePartyNames(carrierIdsOf(invoice.data ? [invoice.data] : []));
@@ -295,7 +291,11 @@ export default function InvoiceDetail({
         items={[
           {
             label: "Shipment",
-            value: <ShipmentLink shipmentId={data.shipmentId} variant="pill" />,
+            value: <ShipmentLink
+                shipmentId={data.shipmentId}
+                loadNumber={data.loadNumber}
+                variant="pill"
+              />,
           },
           { label: "Invoice Date", value: formatDate(data.invoiceDate ?? undefined) ?? "—" },
           { label: "Due Date", value: formatDate(data.dueDate ?? undefined) ?? "—" },

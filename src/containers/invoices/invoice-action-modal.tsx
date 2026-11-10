@@ -12,6 +12,7 @@ import {
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
 import {
+  BASE_PRICE_PATTERN,
   billingTriggerLabels,
   FX_RATE_PATTERN,
   LINE_AMOUNT_PATTERN,
@@ -32,16 +33,17 @@ import { CarrierInvoiceView, ReferenceNumbers } from "@/lib/interfaces";
 import {
   commissionPercent,
   compareMoney,
-  exactLineAmount,
   sumMoney,
   toAmount,
 } from "@/lib/money";
 import {
+  ApiError,
   approveCarrierInvoice,
   errorMessage,
   InvoiceChanges,
   isInvoiceEditConflict,
   issueCustomerInvoice,
+  listCarrierInvoices,
   listCustomerInvoices,
   receiveCarrierInvoice,
   reviseCarrierInvoice,
@@ -75,8 +77,8 @@ type ModalProps<T extends InvoiceView = InvoiceView> = {
 
 // The forms behind an invoice's actions, each sending the invoice's
 // `version`. Each is mounted only while open, so its form starts from the
-// invoice as last read. After a change — or an edit conflict, meaning
-// someone else changed it first — every invoice query is refetched. A new version opens
+// invoice as last read. After a change — or any 409, such as someone else
+// changing it first — every invoice query is refetched. A new version opens
 // in place of the one it replaced (`onRevised`).
 export default function InvoiceActionModal({
   action,
@@ -136,22 +138,28 @@ const useInvoiceMutation = <T, R = unknown>(
       onDone?.(result);
     },
     onError: (error) => {
+      // Every 409 means the invoice may not be what this form was read
+      // from — an edit conflict, but also e.g. a draft-only action on an
+      // invoice someone has since issued — so every one rereads it. Telling
+      // an edit conflict apart (by the API's error code) only picks what to
+      // say and whether to close, never whether to refetch.
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      }
       // Someone else changed the invoice first. The form still holds what
-      // was read before their change, so sending it again would undo it
-      // (and from a list row would resend the old version and fail again).
-      // The modal closes instead, the invoice is read again, and the user
-      // reopens the action on what is there now.
+      // was read before their change, so sending it again would undo it.
+      // The modal closes instead, and the user reopens the action on what
+      // is there now.
       if (isInvoiceEditConflict(error)) {
         toast.error(
           "Someone else changed this invoice while you were working on it. It has been reloaded: check it, then try again."
         );
-        void queryClient.invalidateQueries({ queryKey: ["invoices"] });
         onClose();
         return;
       }
-      // Anything else — including a 409 that isn't an edit conflict, such
-      // as a date in a closed month — shows the API's message and keeps the
-      // form open with what was typed.
+      // Anything else — including a 409 that isn't recognised as an edit
+      // conflict, such as a date in a closed month — shows the API's
+      // message and keeps the form open with what was typed.
       toast.error(errorMessage(error));
     },
   });
@@ -346,10 +354,11 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
     defaultValues: { acknowledgeReview: false },
   });
   const [missingAck, setMissingAck] = useState(false);
-  const [showMissing, setShowMissing] = useState(false);
   const flags = invoice.reviewFlags;
-  // What the API needs before it will issue, checked here so the user is
-  // told up front rather than by an error after pressing Issue.
+  // What the API is expected to need before it will issue, so the user is
+  // warned up front. A warning only: Issue still sends the request, and the
+  // API's answer decides — its rule may differ from this copy of it (e.g.
+  // for a kind of invoice, or a reference this form doesn't know about).
   const missing = [
     !invoice.tmsInvoiceCode && "a TMS invoice code",
     referencesOf(invoice).length === 0 && "at least one reference number",
@@ -368,10 +377,6 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
   const acknowledged = useWatch({ control, name: "acknowledgeReview" });
 
   const submit = handleSubmit((values) => {
-    if (missing.length > 0) {
-      setShowMissing(true);
-      return;
-    }
     if (flags.length > 0 && !values.acknowledgeReview) {
       setMissingAck(true);
       return;
@@ -409,12 +414,11 @@ function IssueInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         invoice code and at least one reference number.
       </p>
       {missing.length > 0 && (
-        <p
-          role={showMissing ? "alert" : undefined}
-          className={`text-sm ${showMissing ? "text-base-danger" : "text-[#343A40]"}`}
-        >
-          This invoice still needs {missing.join(" and ")}. Close this and use
-          Edit Details to add {missing.length > 1 ? "them" : "it"}.
+        <p className="rounded-lg border border-warning bg-warning-50 p-3 text-sm text-[#343A40]">
+          <span aria-hidden>⚠ </span>This invoice seems to be missing{" "}
+          {missing.join(" and ")}, so it will probably be refused. If it is,
+          close this and use Edit Details to add{" "}
+          {missing.length > 1 ? "them" : "it"}.
         </p>
       )}
       {flags.length > 0 && (
@@ -469,7 +473,17 @@ function ReceiveBillModal({
         lines: toCharges(values.lines),
       }),
     "Carrier bill recorded.",
-    onClose
+    onClose,
+    // Whether the bill goes on hold is the API's decision (its line
+    // rounding and its rule for a difference from expected), so it is
+    // reported from the saved invoice, never predicted while typing.
+    (saved) => {
+      if (saved.status === CarrierInvoiceStatus.OnHold) {
+        toast.warning(
+          `On hold: ${saved.holdReason ?? "the bill differs from what was expected."}`
+        );
+      }
+    }
   );
 
   return (
@@ -489,9 +503,10 @@ function ReceiveBillModal({
         before tax
       </p>
       <p className="text-xs text-content-5">
-        Enter the charges as printed on the bill, before tax. Line amounts and
-        tax are calculated by the server. A subtotal different from expected
-        puts the invoice on hold. The due date counts from today.
+        Enter the charges as printed on the bill, before tax. Line amounts,
+        the subtotal and tax are calculated by the server on save. A subtotal
+        different from expected puts the invoice on hold. The due date counts
+        from today.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <BaseInput
@@ -520,69 +535,8 @@ function ReceiveBillModal({
         control={control}
         name="lines"
         priceLabel={`Unit price (${invoice.currency})`}
-        footer={<BillSubtotal invoice={invoice} control={control} />}
       />
     </FormModal>
-  );
-}
-
-// The bill's charges added up, before tax, beside what was expected: a
-// preview while typing, so a bill that will go on hold is seen before
-// saving. Shown only when every line multiplies out to whole cents; a line
-// that needs rounding is left to the API, which works out the amounts.
-function BillSubtotal({
-  invoice,
-  control,
-}: {
-  invoice: CarrierInvoiceView;
-  control: Control<BillValues>;
-}) {
-  const lines = useWatch({ control, name: "lines" });
-  const amounts = lines.map((line) =>
-    exactLineAmount(line.quantity.trim(), line.unitPrice.trim())
-  );
-  const subtotal = amounts.every((amount): amount is string => amount !== null)
-    ? sumMoney(amounts)
-    : null;
-  const difference =
-    subtotal && !invoice.expectedTotal.startsWith("-")
-      ? sumMoney([subtotal, `-${invoice.expectedTotal}`])
-      : null;
-  const direction = difference ? compareMoney(difference, "0.00") : 0;
-
-  return (
-    <div className="flex flex-wrap items-baseline justify-end gap-x-4 gap-y-1 text-right">
-      <span className="text-sm text-[#343A40]">
-        Bill subtotal <span className="text-content-5">(before tax)</span>
-      </span>
-      {subtotal ? (
-        <span className="flex flex-col items-end">
-          <span className="text-base font-semibold tabular-nums text-base-primary-900">
-            <Money amount={subtotal} currency={invoice.currency} />
-          </span>
-          {difference && (
-            <span
-              className={`text-xs ${direction === 0 ? "text-base-success" : "text-base-danger"}`}
-            >
-              {direction === 0 ? (
-                "matches expected"
-              ) : (
-                <>
-                  {direction > 0 ? "+" : ""}
-                  <Money amount={difference} currency={invoice.currency} /> vs
-                  expected: will go on hold
-                </>
-              )}
-            </span>
-          )}
-        </span>
-      ) : (
-        <span className="text-xs text-content-5">
-          Shown once every line has a quantity and price (lines that need
-          rounding are worked out on save)
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -770,7 +724,11 @@ function ReviseInvoiceModal({
         />
       </Step>
 
-      {!isCustomer && (
+      {isCustomer ? (
+        <Step number={2} title="Commission" hint="A check on the margin. Shown only: nothing here is saved.">
+          <ShipperCommissionSummary invoice={invoice} control={control} />
+        </Step>
+      ) : (
         <>
           <Step number={2} title="Carrier bill number">
             <BaseInput
@@ -783,12 +741,12 @@ function ReviseInvoiceModal({
             />
           </Step>
           <Step number={3} title="Commission" hint="A check on the margin. Shown only: nothing here is saved.">
-            <CommissionSummary invoice={invoice} control={control} />
+            <CarrierCommissionSummary invoice={invoice} control={control} />
           </Step>
         </>
       )}
 
-      <Step number={isCustomer ? 2 : 4} title="Why it changed">
+      <Step number={isCustomer ? 3 : 4} title="Why it changed">
         <div className="flex flex-col gap-3">
           <BaseTextArea
             name="reason"
@@ -815,7 +773,7 @@ function ReviseInvoiceModal({
       </Step>
 
       {flags.length > 0 && (
-        <Step number={3} title="Check the flags">
+        <Step number={4} title="Check the flags">
           <div
             className={`flex flex-col gap-3 rounded-lg border p-4 ${
               missingAck ? "border-base-danger bg-danger-50" : "border-warning bg-warning-50"
@@ -983,12 +941,144 @@ function NewSubtotal({
   );
 }
 
+// mokal-app's commission, once for a shipper invoice's new version: the base
+// price (what the carrier charges, before tax), the customer rate (every
+// charge above, added up) and the commission between them. Shown only: the
+// charges are what's sent, and nothing here changes them or is saved.
+function ShipperCommissionSummary({
+  invoice,
+  control,
+}: {
+  invoice: InvoiceView;
+  control: Control<ReviseValues>;
+}) {
+  const { can } = useCan();
+  const { currency, shipmentId } = invoice;
+  const canRead = !!shipmentId && can(Permission.CarrierInvoicesView);
+  // The shipment's one live standard carrier invoice (the API allows no
+  // second); null when it has none yet.
+  const carrierInvoice = useQuery({
+    queryKey: ["invoices", InvoiceDirection.Payable, "for-shipment", shipmentId],
+    queryFn: async ({ signal }) => {
+      const page = await listCarrierInvoices(
+        { page: 1, limit: 10, shipmentId: shipmentId! },
+        signal
+      );
+      return (
+        page.items.find(
+          (item) =>
+            item.kind === InvoiceKind.Standard &&
+            item.status !== CarrierInvoiceStatus.Void
+        ) ?? null
+      );
+    },
+    enabled: canRead,
+  });
+  const carrier = carrierInvoice.data;
+  // Before tax: the bill's subtotal, or the expected charges until it
+  // arrives. Never across currencies: a USD cost isn't a CAD one.
+  const carrierBase =
+    carrier && carrier.currency === currency
+      ? carrier.status === CarrierInvoiceStatus.Expected
+        ? carrier.expectedTotal
+        : carrier.subtotal
+      : undefined;
+  // Starts from the carrier invoice once it loads; a typed base is kept.
+  const { control: baseControl } = useForm({
+    values: { basePrice: carrierBase ?? "" },
+    resetOptions: { keepDirtyValues: true },
+  });
+  const basePrice = useWatch({ control: baseControl, name: "basePrice" }).trim();
+  const lines = useWatch({ control, name: "lines" });
+
+  const amounts = lines.map((line) => toAmount(line.unitPrice.trim()));
+  const customerRate = amounts.every((amount): amount is string => amount !== null)
+    ? sumMoney(amounts)
+    : null;
+  const base = BASE_PRICE_PATTERN.test(basePrice) ? toAmount(basePrice) : null;
+  const commission =
+    customerRate && base ? sumMoney([customerRate, `-${base}`]) : null;
+  const percent = customerRate && base ? commissionPercent(base, customerRate) : null;
+  const belowBase = !!commission && compareMoney(commission, "0.00") < 0;
+
+  const source = !canRead ? (
+    "What the carrier charges, before tax."
+  ) : carrierInvoice.isPending ? (
+    "Loading the carrier invoice…"
+  ) : carrierInvoice.isError ? (
+    <span className="text-base-danger">
+      Couldn&apos;t load the carrier invoice: enter it, or{" "}
+      <button
+        type="button"
+        className="underline"
+        onClick={() => void carrierInvoice.refetch()}
+      >
+        try again
+      </button>
+      .
+    </span>
+  ) : !carrier ? (
+    "The shipment has no carrier invoice: enter what the carrier charges, before tax."
+  ) : carrier.currency !== currency ? (
+    `The carrier invoice is in ${carrier.currency}: enter the carrier's charges in ${currency}, before tax.`
+  ) : carrier.status === CarrierInvoiceStatus.Expected ? (
+    "The carrier invoice's expected charges, before tax (the bill hasn't arrived)."
+  ) : (
+    "The carrier invoice's subtotal, before tax."
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <BaseInput
+        name="basePrice"
+        control={baseControl}
+        label={`Base price (${currency})`}
+        placeholder="0.00"
+        description={source}
+        rules={{
+          validate: (value: string) =>
+            value.trim() === "" ||
+            BASE_PRICE_PATTERN.test(value.trim()) ||
+            "Above 0, up to 2 decimals",
+        }}
+      />
+      <DetailRow
+        label="Customer rate (the charges above)"
+        value={
+          customerRate ? (
+            <Money amount={customerRate} currency={currency} />
+          ) : (
+            <span className="text-content-5">Enter every amount, up to 2 decimals</span>
+          )
+        }
+      />
+      <DetailRow
+        label="Commission"
+        value={
+          commission && percent ? (
+            <span className={belowBase ? "text-base-danger" : ""}>
+              <Money amount={commission} currency={currency} /> ({percent}%)
+            </span>
+          ) : (
+            <span className="text-content-5">—</span>
+          )
+        }
+      />
+      {belowBase && (
+        <p className="text-xs text-base-danger">
+          The charges are below the base price.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // mokal-app's commission, once for a carrier invoice's new version: the base
 // price (every carrier charge above, added up, before tax), the customer rate
 // (what the shipper is charged, before tax) and the commission between them.
 // Shown only: the charges are what's sent, and nothing here changes them or
-// is saved.
-function CommissionSummary({
+// is saved. A shipper invoice's new version gets ShipperCommissionSummary.
+function CarrierCommissionSummary({
   invoice,
   control,
 }: {

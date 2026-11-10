@@ -8,9 +8,8 @@ import { Currency } from "./enums";
 //
 // Arithmetic on money does not belong in the frontend. Totals, tax and
 // balances come already calculated. The exceptions are form helpers: sumMoney,
-// which checks a form's amounts before they are sent, commissionPercent,
-// which shows the commission on a revised invoice's charges, and
-// exactLineAmount, which previews a bill's subtotal. Never display
+// which checks a form's amounts before they are sent, and commissionPercent,
+// which shows the commission on a revised invoice's charges. Never display
 // their results as an official total.
 
 const AMOUNT_PATTERN = /^(-)?(\d+)\.(\d{2})$/;
@@ -89,20 +88,6 @@ const divideHalfUp = (n: bigint, d: bigint): bigint => {
   const negative = n < BigInt(0);
   const magnitude = (BigInt(2) * (negative ? -n : n) + d) / (BigInt(2) * d);
   return negative ? -magnitude : magnitude;
-};
-
-// quantity × unit price as an amount string, only when the product is exact
-// to the cent ("2" × "150.5" → "301.00"). Null when it would need rounding
-// ("1.5" × "0.0333") or either value is malformed: rounding a line is the
-// API's rule, so a form preview never guesses at it. Only for showing.
-export const exactLineAmount = (quantity: string, unitPrice: string): string | null => {
-  if (!/^\d+(\.\d{1,3})?$/.test(quantity) || !UNIT_PRICE_PATTERN.test(unitPrice)) {
-    return null;
-  }
-  const product = toScaled(quantity, 3)! * toScaled(unitPrice, 4)!;
-  const scale = BigInt(100000); // 10^7 down to 10^2
-  if (product % scale !== BigInt(0)) return null;
-  return fromScaled(product / scale, 2);
 };
 
 // A base price as typed or sent: 0 or more, up to 2 decimals ("400", "400.5").

@@ -6,18 +6,22 @@ import { Permission } from "@/lib/enums";
 import { getShipment } from "@/services";
 import { shipmentHref } from "./shipment-list";
 
-// A link to an invoice's shipment, labelled with its load number. The API
-// sends only the shipment's id, so the shipment is read under the shipment
-// page's key (needs shipments.view); its id stands in until the load number
-// arrives, or if it can't be read. Without shipments.view the route guard
-// would turn the user away, so it's shown as text instead.
+// A link to an invoice's shipment, labelled with its load number. Pass the
+// invoice's `loadNumber` when the API sent one — in a table that's what
+// keeps each row from reading its own shipment. Left undefined (an API that
+// doesn't send it yet), the shipment is read under the shipment page's key
+// (needs shipments.view). Its id stands in until the load number arrives,
+// or if there's none. Without shipments.view the route guard would turn
+// the user away, so it's shown as text instead.
 //
 // "pill" is the invoice page's top strip; "plain" a table cell.
 export default function ShipmentLink({
   shipmentId,
+  loadNumber: givenLoadNumber,
   variant = "plain",
 }: {
   shipmentId: string | null;
+  loadNumber?: string | null;
   variant?: "pill" | "plain";
 }) {
   const { can } = useCan();
@@ -26,11 +30,12 @@ export default function ShipmentLink({
     queryKey: ["shipments", "detail", shipmentId],
     queryFn: ({ signal }) => getShipment(shipmentId!, signal),
     staleTime: 5 * 60_000,
-    enabled: !!shipmentId && canView,
+    enabled: !!shipmentId && canView && givenLoadNumber === undefined,
   });
 
   if (!shipmentId) return <span className="text-gray-400">None</span>;
-  const loadNumber = shipment.data?.loadNumber;
+  const loadNumber =
+    givenLoadNumber === undefined ? shipment.data?.loadNumber : givenLoadNumber;
   const label = loadNumber ? (
     variant === "pill" ? (
       `Load ${loadNumber}`

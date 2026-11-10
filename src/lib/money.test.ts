@@ -1,25 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commissionPercent, compareMoney, exactLineAmount, sumMoney, toAmount } from "./money";
-
-describe("exactLineAmount", () => {
-  it("multiplies exactly when the result is whole cents", () => {
-    expect(exactLineAmount("2", "150.5")).toBe("301.00");
-    expect(exactLineAmount("1", "1250.0000")).toBe("1250.00");
-    expect(exactLineAmount("0.5", "0.1")).toBe("0.05");
-    expect(exactLineAmount("3", "0.1")).toBe("0.30");
-  });
-
-  it("refuses anything that would need rounding", () => {
-    expect(exactLineAmount("1.5", "0.0333")).toBeNull();
-    expect(exactLineAmount("1", "0.005")).toBeNull();
-  });
-
-  it("refuses malformed input", () => {
-    expect(exactLineAmount("", "10")).toBeNull();
-    expect(exactLineAmount("2", "abc")).toBeNull();
-    expect(exactLineAmount("-1", "10")).toBeNull();
-  });
-});
+import { commissionPercent, compareMoney, sumMoney, toAmount } from "./money";
 
 describe("compareMoney", () => {
   it("orders by value", () => {

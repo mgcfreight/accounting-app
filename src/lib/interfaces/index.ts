@@ -672,6 +672,9 @@ export interface InvoiceViewBase extends ReferenceNumbers {
   suffix: string;
   kind: InvoiceKind;
   shipmentId: string | null;
+  // The shipment's load number, so a list needn't read each shipment.
+  // Absent from an API that doesn't send it yet.
+  loadNumber?: string | null;
   agreementId: string;
   paymentStatus: PaymentStatus;
   currency: Currency;

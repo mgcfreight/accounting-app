@@ -7,7 +7,7 @@ import {
   SortOrder,
 } from "@/lib/enums";
 import { ReferenceNumbers } from "@/lib/interfaces";
-import { ApiError, apiClient, parseBody } from "./api-client";
+import { ApiError, apiClient, apiErrorCode, parseBody } from "./api-client";
 import {
   carrierInvoiceSchema,
   customerInvoiceSchema,
@@ -29,19 +29,14 @@ import {
 
 // Not every 409 is that: the API also answers 409 for a change that isn't
 // allowed (a closed month, a draft-only action, a bill number already used).
-// Its 409 body carries no error code — only NestJS's `message` — so an edit
-// conflict is told apart by the API's own text (INVOICE_STALE and
-// INVOICE_ALREADY_REVISED in its error-response.messages.ts). Keep these in
-// step with the API.
-const EDIT_CONFLICT_MESSAGES = new Set([
-  "The invoice was changed by someone else. Reload it and try again.",
-  "Someone else just made a new version of this invoice. Reload it and try again.",
-]);
+// An edit conflict is told apart by the `code` in the API's 409 body (its
+// ErrorCodes), never by the wording of its message.
+const EDIT_CONFLICT_CODES = new Set(["INVOICE_STALE", "INVOICE_ALREADY_REVISED"]);
 
 export const isInvoiceEditConflict = (error: unknown) =>
   error instanceof ApiError &&
   error.status === 409 &&
-  EDIT_CONFLICT_MESSAGES.has(error.message);
+  EDIT_CONFLICT_CODES.has(apiErrorCode(error) ?? "");
 
 type InvoiceListParams = {
   page: number;

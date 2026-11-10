@@ -140,6 +140,16 @@ export const envelope = <T extends z.ZodType>(data: T) =>
 
 export const messageOnly = z.object({ message: z.string() });
 
+// The body of a refused request: NestJS's `statusCode` and `message`, plus
+// `code` on the few refusals a screen must tell apart from others with the
+// same status (the API's ErrorCodes, e.g. INVOICE_STALE). Branch on `code`,
+// never on `message`: that is wording for staff, and the API may edit it.
+export const apiErrorBodySchema = z.object({
+  statusCode: z.number().int(),
+  message: z.union([z.string(), z.array(z.string())]),
+  code: z.string().optional(),
+});
+
 const paginationMeta = z.object({
   totalItems: z.number().int().nonnegative(),
   itemCount: z.number().int().nonnegative(),
@@ -563,6 +573,7 @@ const invoiceBaseFields = {
   suffix: z.string(),
   kind: z.enum(InvoiceKind),
   shipmentId: z.string().nullable(),
+  loadNumber: z.string().nullable().optional(),
   agreementId: z.string(),
   paymentStatus: z.enum(PaymentStatus),
   currency: z.enum(Currency),

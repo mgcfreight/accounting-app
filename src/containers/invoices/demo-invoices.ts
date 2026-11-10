@@ -1,17 +1,11 @@
 import { InvoiceDirection } from "@/lib/enums";
 import { Paginated } from "@/lib/interfaces";
-import {
-  mockInvoiceView,
-  mockInvoiceViewPage,
-  mockInvoiceViewVersions,
-} from "@/lib/mock";
+import { mockInvoiceView, mockInvoiceViewPage } from "@/lib/mock";
 import {
   CarrierInvoiceListParams,
   CustomerInvoiceListParams,
   getCarrierInvoice,
-  getCarrierInvoiceVersions,
   getCustomerInvoice,
-  getCustomerInvoiceVersions,
   listCarrierInvoices,
   listCustomerInvoices,
 } from "@/services";
@@ -62,23 +56,6 @@ export const fetchInvoice = (
     () => {
       const invoice = mockInvoiceView(direction, id);
       return invoice && markDemo([invoice])[0];
-    },
-    signal
-  );
-
-export const fetchInvoiceVersions = (
-  direction: InvoiceDirection,
-  id: string,
-  signal?: AbortSignal
-): Promise<InvoiceView[]> =>
-  withDemo<InvoiceView[]>(
-    () =>
-      direction === InvoiceDirection.Receivable
-        ? getCustomerInvoiceVersions(id, signal)
-        : getCarrierInvoiceVersions(id, signal),
-    () => {
-      const versions = mockInvoiceViewVersions(direction, id);
-      return versions && markDemo(versions);
     },
     signal
   );
