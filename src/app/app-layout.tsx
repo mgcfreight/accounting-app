@@ -1,6 +1,11 @@
 import { Spinner } from "@heroui/react";
-import { Suspense } from "react";
-import { Navigate, Outlet, useLocation } from "react-router";
+import { Suspense, useState } from "react";
+import {
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigationType,
+} from "react-router";
 import { ErrorBoundary, ErrorState } from "@/components/common";
 import { DashboardLayout } from "@/components/layouts";
 import { useUser } from "@/components/providers/user-provider";
@@ -26,8 +31,24 @@ import RouteGuard from "./route-guard";
 const SHOW_TMS_OVERDUE_BAR = import.meta.env.DEV;
 
 export default function AppLayout() {
-  const { pathname, search } = useLocation();
+  const { pathname, search, key } = useLocation();
+  const navigationType = useNavigationType();
   const { user, loadError, retry } = useUser();
+
+  // A list reads its filters from the URL once, when it mounts. A link to
+  // the same list with no query (its sidebar entry, clicked to start again)
+  // would otherwise leave the filters on screen and write them straight back
+  // into the URL, so that page mounts afresh instead. Filter changes replace
+  // the URL rather than push, and don't count.
+  const [shown, setShown] = useState({ key, pathname, search, fresh: 0 });
+  if (shown.key !== key) {
+    const restart =
+      navigationType === "PUSH" &&
+      pathname === shown.pathname &&
+      !search &&
+      !!shown.search;
+    setShown({ key, pathname, search, fresh: shown.fresh + (restart ? 1 : 0) });
+  }
 
   if (user === undefined) {
     // A failed /auth/me is not "signed out": the server may simply be
@@ -58,7 +79,7 @@ export default function AppLayout() {
   return (
     <DashboardLayout topBar={SHOW_TMS_OVERDUE_BAR ? <TmsOverdueBar /> : undefined}>
       <ErrorBoundary resetKey={pathname}>
-        <RouteGuard>
+        <RouteGuard key={shown.fresh}>
           <Suspense
             fallback={
               <div className="flex justify-center py-16">

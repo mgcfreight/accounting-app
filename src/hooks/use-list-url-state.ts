@@ -48,6 +48,21 @@ export function useListUrlState<S extends z.ZodType<Values>>(
   return initial;
 }
 
+// Each list's last query string, by path, so a detail page's breadcrumb can
+// go back to the list as it was left (listReturnHref). In memory only, and
+// cleared at sign-out (UserProvider) so the next user on this tab doesn't
+// inherit the last one's filters.
+const lastListQuery = new Map<string, string>();
+
+export const clearListReturnHrefs = () => lastListQuery.clear();
+
+// `listPath` with the filters, sort and page it was last shown with in this
+// tab, or plain `listPath` if it hasn't been opened.
+export const listReturnHref = (listPath: string) => {
+  const query = lastListQuery.get(listPath);
+  return query ? `${listPath}?${query}` : listPath;
+};
+
 export function useSyncListUrl(current: Values, defaults: Values) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { pathname } = useLocation();
@@ -62,7 +77,9 @@ export function useSyncListUrl(current: Values, defaults: Values) {
   const shown = searchParams.toString();
 
   useEffect(() => {
-    if (pathname !== listPath.current || query === shown) return;
+    if (pathname !== listPath.current) return;
+    lastListQuery.set(listPath.current, query);
+    if (query === shown) return;
     setSearchParams(new URLSearchParams(query), { replace: true });
   }, [pathname, query, shown, setSearchParams]);
 }

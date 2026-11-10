@@ -5,7 +5,9 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  clearListReturnHrefs,
   limitParam,
+  listReturnHref,
   oneOf,
   pageParam,
   searchParam,
@@ -96,5 +98,16 @@ describe("useSyncListUrl", () => {
 
     expect(router.state.location.pathname).toBe("/other/");
     expect(router.state.location.search).toBe("?id=1");
+  });
+});
+
+describe("listReturnHref", () => {
+  it("returns the list as it was left, until cleared at sign-out", async () => {
+    open("/list/");
+    await userEvent.click(screen.getByRole("button", { name: "Paid" }));
+    expect(listReturnHref("/list/")).toBe("/list/?status=PAID");
+
+    clearListReturnHrefs();
+    expect(listReturnHref("/list/")).toBe("/list/");
   });
 });

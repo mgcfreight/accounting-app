@@ -1,5 +1,9 @@
-import { ReactNode, useLayoutEffect, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useLocation,
+  useNavigationType,
+  useSearchParams,
+} from "react-router";
 import { useCurrentUser } from "../providers/user-provider";
 import { HeaderActionProvider } from "../providers/header-action-provider";
 import { HeaderDetailProvider } from "../providers/header-detail-provider";
@@ -18,20 +22,59 @@ export function DashboardLayout({
 }) {
   const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(true);
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  const navigationType = useNavigationType();
   const id = useSearchParams()[0].get("id");
   const columnRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  // How far each history entry was scrolled, so Back to a list returns to
+  // the row the user opened rather than the top. In memory only: a reload
+  // starts at the top.
+  const scrolled = useRef(new Map<string, { column: number; main: number }>());
+  const page = useRef({ pathname, id });
+  // The entry a scroll belongs to. Switched in the layout effect below, in
+  // the same commit as the new page, so a scroll event the new page causes
+  // (the scroll to the top, or shorter content clamping the position) is
+  // never saved under the entry being left. Keyed by a closure swapped in a
+  // passive effect, such an event could land first and save the list's
+  // position as 0.
+  const entry = useRef(key);
+
+  useEffect(() => {
+    const column = columnRef.current;
+    const main = mainRef.current;
+    if (!column || !main) return;
+    const remember = () =>
+      scrolled.current.set(entry.current, {
+        column: column.scrollTop,
+        main: main.scrollTop,
+      });
+    column.addEventListener("scroll", remember, { passive: true });
+    main.addEventListener("scroll", remember, { passive: true });
+    return () => {
+      column.removeEventListener("scroll", remember);
+      main.removeEventListener("scroll", remember);
+    };
+  }, []);
 
   // The page scrolls inside <main>, not the window, and this layout stays
   // mounted between pages, so a new page would open as far down as the last
   // one was scrolled. Each page (or another ?id) starts at the top, before it
-  // paints. A list's filters and page are in the query string too, but
-  // changing those doesn't move the view.
+  // paints; Back or Forward returns to where that entry was left. A list's
+  // filters and page are in the query string too, but changing those doesn't
+  // move the view.
   useLayoutEffect(() => {
-    columnRef.current?.scrollTo(0, 0);
-    mainRef.current?.scrollTo(0, 0);
-  }, [pathname, id]);
+    entry.current = key;
+    const saved = scrolled.current.get(key);
+    if (navigationType === "POP" && saved) {
+      columnRef.current?.scrollTo(0, saved.column);
+      mainRef.current?.scrollTo(0, saved.main);
+    } else if (page.current.pathname !== pathname || page.current.id !== id) {
+      columnRef.current?.scrollTo(0, 0);
+      mainRef.current?.scrollTo(0, 0);
+    }
+    page.current = { pathname, id };
+  }, [key, navigationType, pathname, id]);
 
   return (
     <HeaderActionProvider>

@@ -28,7 +28,7 @@ import {
 } from "@/components/common";
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useFileDownload, useServerPaging } from "@/hooks";
+import { useDebouncedValue, useFileDownload, useServerPaging, useUrlTab } from "@/hooks";
 import { Currency, PartyType, Permission, StatementRunTrigger } from "@/lib/enums";
 import { CurrencyAmounts, PartyAccountSummary, StatementRun } from "@/lib/interfaces";
 import { formatMoney } from "@/lib/money";
@@ -47,7 +47,8 @@ import {
 import BillingPeriods from "./billing-periods";
 import StatementModal from "./statement-modal";
 
-type View = "carriers" | "shippers" | "billing";
+const views = ["carriers", "shippers", "billing"] as const;
+type View = (typeof views)[number];
 type AccountsView = Exclude<View, "billing">;
 type ListFormat = "pdf" | "xlsx";
 
@@ -94,7 +95,8 @@ export default function Statements() {
   const canShippers = can(Permission.CustomerInvoicesView);
   const canCarriers = can(Permission.CarrierInvoicesView);
   const canSend = canShippers && can(Permission.ReportsSendEmail);
-  const [chosenView, setView] = useState<View>("carriers");
+  // In the URL (?view=shippers), so Back from an invoice keeps the tab.
+  const [chosenView, setView] = useUrlTab<View>(views, "carriers");
   const view: View =
     chosenView === "carriers" && !canCarriers ? "shippers" : chosenView;
   // The account lists below; the Billing Periods tab has its own.

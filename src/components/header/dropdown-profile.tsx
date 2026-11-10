@@ -6,18 +6,16 @@ import {
 } from "@heroui/react";
 import { useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
-import { ACCOUNT_PATH, LOGIN_PATH } from "@/lib/constants";
+import { ACCOUNT_PATH, LOGIN_PATH, SIGN_OUT_STATE } from "@/lib/constants";
 import { Me } from "@/lib/interfaces";
 import { canAccessRoute } from "@/lib/routes.config";
 import { createInitials, fullName } from "@/lib/utils";
 import { DownArrowSm, Logout, Setting2, User as UserIcon } from "../icons";
-import { useUser } from "../providers/user-provider";
 
 // mokal-app's DropdownProfile: initials, name and role, opening on hover as
 // well as click (click keeps it usable on touch).
 export default function DropdownProfile({ user }: { user: Me }) {
   const navigate = useNavigate();
-  const { signOut } = useUser();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHoveringTrigger = useRef(false);
@@ -125,10 +123,9 @@ export default function DropdownProfile({ user }: { user: Me }) {
         <DropdownItem
           key="logout"
           startContent={<Logout />}
-          onPress={async () => {
-            await signOut();
-            navigate(LOGIN_PATH);
-          }}
+          // The login page ends the session (SIGN_OUT_STATE), so a page with
+          // unsaved edits can ask first.
+          onPress={() => navigate(LOGIN_PATH, { state: SIGN_OUT_STATE })}
         >
           Sign Out
         </DropdownItem>

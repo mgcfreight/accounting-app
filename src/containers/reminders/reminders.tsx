@@ -29,7 +29,7 @@ import {
 import { SearchNormalSm } from "@/components/icons";
 import { RowAction } from "@/components/common/row-actions";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import { useDebouncedValue, useServerPaging, useUrlTab } from "@/hooks";
 import {
   InvoiceDirection,
   Permission,
@@ -54,6 +54,7 @@ import {
 } from "@/services";
 
 type View = "all" | ReminderStatus;
+const views: View[] = ["all", ...Object.values(ReminderStatus)];
 type Filters = { side: string; search: string };
 type OpenModal = { modal: "send" | "skip"; reminder: Reminder };
 
@@ -142,7 +143,7 @@ const allReminders = (filters: Omit<ReminderListParams, "page" | "limit">) =>
 // MGC's accounts team that a carrier bill falls due. The days are set in
 // Settings. Listed, filtered and paged by the API.
 export default function Reminders() {
-  const [view, setView] = useState<View>("all");
+  const [view, setView] = useUrlTab<View>(views, "all");
   const [open, setOpen] = useState<OpenModal | null>(null);
   const { can } = useCan();
   const canViewShipper = can(Permission.CustomerInvoicesView);
