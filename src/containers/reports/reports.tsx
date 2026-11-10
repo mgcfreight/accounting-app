@@ -30,6 +30,11 @@ import {
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
 import {
+  accountantExportAccess,
+  accountantExportFileName,
+  accountantExportNote,
+} from "./accountant-export";
+import {
   exportAccountantCsv,
   exportReport,
   getAging,
@@ -44,7 +49,8 @@ import {
   ReportKind,
 } from "@/services";
 
-type PeriodOption = { key: string; label: string; value: string };
+// `toDate`: the period is still running, as of today.
+type PeriodOption = { key: string; label: string; value: string; toDate: boolean };
 
 const monthName = (year: number, month: number) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-US", {
@@ -63,16 +69,31 @@ const periodOptions = (today: string): PeriodOption[] => {
     const y = Math.floor(index / 12);
     const m = (index % 12) + 1;
     const key = `${y}-${String(m).padStart(2, "0")}`;
-    return { key, label: `${monthName(y, m)}${back === 0 ? " (to date)" : ""}`, value: key };
+    return {
+      key,
+      label: `${monthName(y, m)}${back === 0 ? " (to date)" : ""}`,
+      value: key,
+      toDate: back === 0,
+    };
   });
   const quarter = Math.ceil(month / 3);
   const [prevYear, prevQuarter] = quarter === 1 ? [year - 1, 4] : [year, quarter - 1];
   return [
     ...months,
-    { key: `${year}-Q${quarter}`, label: `Q${quarter} ${year} (to date)`, value: `${year}-Q${quarter}` },
-    { key: `${prevYear}-Q${prevQuarter}`, label: `Q${prevQuarter} ${prevYear}`, value: `${prevYear}-Q${prevQuarter}` },
-    { key: `${year}-YTD`, label: `${year} year to date`, value: `${year}-YTD` },
-    { key: `${year - 1}`, label: `${year - 1}`, value: `${year - 1}` },
+    {
+      key: `${year}-Q${quarter}`,
+      label: `Q${quarter} ${year} (to date)`,
+      value: `${year}-Q${quarter}`,
+      toDate: true,
+    },
+    {
+      key: `${prevYear}-Q${prevQuarter}`,
+      label: `Q${prevQuarter} ${prevYear}`,
+      value: `${prevYear}-Q${prevQuarter}`,
+      toDate: false,
+    },
+    { key: `${year}-YTD`, label: `${year} year to date`, value: `${year}-YTD`, toDate: true },
+    { key: `${year - 1}`, label: `${year - 1}`, value: `${year - 1}`, toDate: false },
   ];
 };
 
@@ -138,8 +159,10 @@ const reportCards: ReportCard[] = [
   {
     key: "accountant",
     title: "Accountant Export",
+    // Neutral on purpose: MGC hasn't chosen its accounting software, and the
+    // API sends a generic layout.
     description:
-      "Invoices, notes and payments for a period, for import into MGC's accounting software.",
+      "Invoices, notes and payments for a period, as one CSV in a generic layout.",
   },
 ];
 
@@ -259,11 +282,17 @@ const leftOutText = (summary: ReportSummary) => {
 // Design §10: every report for the chosen period, worked out by the API in
 // CAD at each record's own rate, with the API's Excel and PDF of each.
 export default function Reports() {
-  const options = periodOptions(torontoToday());
+  const today = torontoToday();
+  const options = periodOptions(today);
   const { control } = useForm({ defaultValues: { period: options[0].value } });
   const period = useWatch({ control, name: "period" });
-  const periodLabel = options.find((option) => option.key === period)?.label ?? period;
+  const chosen = options.find((option) => option.key === period);
+  const periodLabel = chosen?.label ?? period;
   const { can } = useCan();
+  const accountantAccess = accountantExportAccess(can);
+  // A running period is exported as far as today, and says so.
+  const runsTo = chosen?.toDate ? today : null;
+  const accountantNote = accountantExportNote(accountantAccess, runsTo);
 
   const summary = useQuery({
     queryKey: ["report", "summary", period],
@@ -298,9 +327,7 @@ export default function Reports() {
     ({ kind, format }: { kind: ReportKind; format: ReportFormat }) =>
       exportReport(kind, period, format, exportFileName(kind, period, format))
   );
-  const accountantCsv = useFileDownload((exportPeriod: string) =>
-    exportAccountantCsv(exportPeriod)
-  );
+  const accountantCsv = useFileDownload(exportAccountantCsv);
   const downloading = (kind: ReportKind, format: ReportFormat) =>
     download.isPending &&
     download.variables?.kind === kind &&
@@ -359,14 +386,19 @@ export default function Reports() {
     const kind = card.kind;
     if (!kind) {
       return (
-        can(Permission.ReportsExportCsv) && (
+        accountantAccess.canExport && (
           <BaseButton
             text="CSV"
             varient="bordered"
             className="text-base-primary rounded-xl px-3"
             startContent={<PiFileCsv className="text-lg" />}
             isLoading={accountantCsv.isPending}
-            onPress={() => accountantCsv.mutate(period)}
+            onPress={() =>
+              accountantCsv.mutate({
+                period,
+                fileName: accountantExportFileName(period, runsTo),
+              })
+            }
           />
         )
       );
@@ -429,6 +461,11 @@ export default function Reports() {
                 <div>
                   <p className="font-semibold text-base-primary-900">{card.title}</p>
                   <p className="text-xs text-[#8F9494] mt-1">{card.description}</p>
+                  {card.key === "accountant" &&
+                    accountantAccess.canExport &&
+                    accountantNote && (
+                      <p className="text-xs text-base-danger mt-1">{accountantNote}</p>
+                    )}
                 </div>
               </div>
               <div className="flex gap-2 justify-end">{exportButtons(card)}</div>

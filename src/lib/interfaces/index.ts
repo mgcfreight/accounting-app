@@ -49,9 +49,11 @@ import {
 } from "../enums";
 import { PaginationMeta } from "../types";
 
-// Shapes of the data the screens show, as the Accounts API sends them and
-// checked on arrival (services/schemas.ts). Money is always a 2-decimal
-// string beside its currency, never a number; see lib/money.ts.
+// Shapes of the data the screens show. Most arrive from the Accounts API and
+// are checked on arrival (services/schemas.ts); installment plans, Needs
+// Review's MGC changes and the automation rules still come from lib/mock.
+// Money is always a 2-decimal string beside its currency, never a number;
+// see lib/money.ts.
 
 // The role shown next to a user. Compare `id` (SystemRoleId), never `name`.
 export interface RoleRef {
@@ -1288,8 +1290,8 @@ export interface Dispute {
 }
 
 // ---------------------------------------------------------------------------
-// Installment plans (/installment-plan). Every amount is calculated by the
-// API.
+// Installment plans: the shape /installment-plan sends, but the screen still
+// reads mockInstallmentPlans (payments.tsx) until it is wired to the API.
 
 export interface Installment {
   number: number;
