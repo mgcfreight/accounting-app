@@ -10,20 +10,15 @@ import {
   TableSkeleton,
 } from "@/components/common";
 import { DownArrow } from "@/components/icons";
-import { PaymentTerms } from "@/lib/enums";
+import { noticeTermsList, paymentTermsLabels } from "@/lib/constants";
 import { NoticeSettings, NoticeTerms } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
 import { errorMessage, getNoticeSettings, saveNoticeSettings } from "@/services";
 
-// Every term with a notice default. The form and the save payload are built
-// from this list, so a new term cannot be shown but left out of either.
-const TERMS: NoticeTerms[] = [
-  PaymentTerms.Net7,
-  PaymentTerms.Net15,
-  PaymentTerms.Net30,
-  PaymentTerms.Net60,
-  PaymentTerms.Net90,
-];
+// Every term with a notice default, derived from PaymentTerms. The form and
+// the save payload are built from this list, so a new term can't be shown
+// but left out of either.
+const TERMS = noticeTermsList;
 
 // Text fields in the form; sent as whole numbers.
 type Values = Record<NoticeTerms, string> & { carrierAlertDaysBefore: string };
@@ -130,7 +125,7 @@ export default function NoticeSettingsSection({
               name={terms}
               control={control}
               type="number"
-              label={terms.replace("_", " ")}
+              label={paymentTermsLabels[terms]}
               rules={{ required: "Enter days", validate: wholeDays(30) }}
             />
           ))}

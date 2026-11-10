@@ -6,6 +6,7 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "../enums";
+import type { NoticeTerms } from "../interfaces";
 
 export const LOGIN_PATH = "/login/";
 export const HOME_PATH = "/dashboard/";
@@ -87,6 +88,16 @@ export const paymentTermsLabels: Record<PaymentTerms, string> = {
   [PaymentTerms.Net90]: "Net 90",
 };
 export const paymentTermsOptions = optionsFrom(paymentTermsLabels);
+
+// The one place that says COD and prepaid get no notice (NoticeTerms is the
+// type of the rest).
+export const isNoticeTerms = (terms: PaymentTerms): terms is NoticeTerms =>
+  terms !== PaymentTerms.COD && terms !== PaymentTerms.Prepaid;
+
+// Every term with a notice default, in the enum's order (Net 7 to Net 90):
+// derived, so a new payment term can't be left out.
+export const noticeTermsList: NoticeTerms[] =
+  Object.values(PaymentTerms).filter(isNoticeTerms);
 
 export const creditStatusLabels: Record<CreditStatus, string> = {
   [CreditStatus.Allowed]: "Credit allowed",

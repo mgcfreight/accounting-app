@@ -1,4 +1,4 @@
-import { PaymentTerms } from "@/lib/enums";
+import { isNoticeTerms } from "@/lib/constants";
 import { AgreementView, NoticeSettings } from "@/lib/interfaces";
 import { addDays } from "@/lib/utils";
 import { InvoiceView, isCustomerInvoice, isOwed } from "./invoice-view";
@@ -25,10 +25,9 @@ export const paymentReminder = (
     return null;
   }
   const terms = invoice.paymentTerms;
-  const defaultDays =
-    terms === PaymentTerms.COD || terms === PaymentTerms.Prepaid
-      ? null
-      : settings.defaultNoticeDays[terms];
+  const defaultDays = isNoticeTerms(terms)
+    ? settings.defaultNoticeDays[terms]
+    : null;
   const daysBefore = isCustomerInvoice(invoice)
     ? agreement.noticeDaysBefore ?? defaultDays
     : agreement.alertDaysBefore ?? settings.carrierAlertDaysBefore;
