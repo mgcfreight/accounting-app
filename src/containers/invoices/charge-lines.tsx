@@ -1,6 +1,6 @@
 import { Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { ReactNode } from "react";
+import { KeyboardEvent, ReactNode } from "react";
 import {
   ArrayPath,
   Control,
@@ -31,6 +31,15 @@ export const emptyCharge: ChargeValues = {
 };
 
 const MAX_LINES = 50;
+
+// Enter in a charge field would submit the whole form (FormModal is a real
+// form), saving a bill with one line when the user meant to move on to the
+// next. Inside the lines, Enter does nothing; the form's button saves.
+const keepEnterInLines = (event: KeyboardEvent<HTMLDivElement>) => {
+  if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+    event.preventDefault();
+  }
+};
 
 // An invoice's lines as form rows, to start a new version from: the values
 // exactly as the API sent them, never re-formatted.
@@ -139,7 +148,7 @@ export default function ChargeLines<T extends FieldValues>({
       </div>
     );
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" onKeyDown={keepEnterInLines}>
         {loadError}
         <div className="rounded-lg border border-base-default">
           <div
@@ -243,7 +252,7 @@ export default function ChargeLines<T extends FieldValues>({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" onKeyDown={keepEnterInLines}>
       {loadError}
       {fields.map((field, index) => (
         <div
@@ -308,6 +317,7 @@ export default function ChargeLines<T extends FieldValues>({
           onPress={add}
         />
       )}
+      {footer}
     </div>
   );
 }

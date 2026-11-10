@@ -101,6 +101,30 @@ describe("ChargeLines", () => {
     });
   });
 
+  it("shows the footer in the rows layout too", () => {
+    renderLines([line("Freight")]);
+
+    expect(screen.getByText("Subtotal footer")).toBeTruthy();
+  });
+
+  // FormModal is a real form: Enter after typing a price would save the
+  // whole bill with one line.
+  it.each(["rows", "table"] as const)("doesn't submit the form on Enter in a %s field", async (layout) => {
+    const onSubmit = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <form onSubmit={onSubmit}>
+          <Form lines={[line("Freight")]} layout={layout} />
+          <button type="submit">Save</button>
+        </form>
+      </QueryClientProvider>
+    );
+
+    await userEvent.type(screen.getByRole("textbox", { name: /Unit price/ }), "100{Enter}");
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   describe("as a table", () => {
     const tableDescriptions = () =>
       screen

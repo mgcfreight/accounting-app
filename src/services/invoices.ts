@@ -7,7 +7,7 @@ import {
   SortOrder,
 } from "@/lib/enums";
 import { ReferenceNumbers } from "@/lib/interfaces";
-import { apiClient, parseBody } from "./api-client";
+import { ApiError, apiClient, parseBody } from "./api-client";
 import {
   carrierInvoiceSchema,
   customerInvoiceSchema,
@@ -26,6 +26,22 @@ import {
 // the invoice since, the API answers 409 rather than overwrite them: refetch
 // and try again. Every figure comes back calculated — nothing here does
 // arithmetic on money.
+
+// Not every 409 is that: the API also answers 409 for a change that isn't
+// allowed (a closed month, a draft-only action, a bill number already used).
+// Its 409 body carries no error code — only NestJS's `message` — so an edit
+// conflict is told apart by the API's own text (INVOICE_STALE and
+// INVOICE_ALREADY_REVISED in its error-response.messages.ts). Keep these in
+// step with the API.
+const EDIT_CONFLICT_MESSAGES = new Set([
+  "The invoice was changed by someone else. Reload it and try again.",
+  "Someone else just made a new version of this invoice. Reload it and try again.",
+]);
+
+export const isInvoiceEditConflict = (error: unknown) =>
+  error instanceof ApiError &&
+  error.status === 409 &&
+  EDIT_CONFLICT_MESSAGES.has(error.message);
 
 type InvoiceListParams = {
   page: number;
