@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { Control, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -295,6 +295,11 @@ export function AllocateModal({
   const invoices = useOpenInvoices(payment);
   const open = invoices.data ?? [];
   const { control, handleSubmit, setError } = useForm<Amounts>();
+  // The open invoices arrive after the form is made, so there are no
+  // default values to compare with: any amount typed counts as an edit.
+  const typedAny = Object.values(useWatch({ control })).some((value) =>
+    String(value ?? "").trim()
+  );
 
   const allocate = usePaymentMutation(
     (allocations: AllocationLine[]) =>
@@ -370,6 +375,7 @@ export function AllocateModal({
       confirmText="Allocate"
       onConfirm={submit}
       isConfirming={allocate.isPending}
+      isDirty={typedAny}
       size="2xl"
     >
       <PaymentSummary payment={payment} />
@@ -453,6 +459,7 @@ export function AllocateModal({
                 />
               </div>
             ))}
+            <AllocatedSoFar control={control} payment={payment} />
             <p className="text-xs text-content-5">
               Less than an invoice&apos;s balance leaves it part paid. The
               amounts must add up to no more than the payment&apos;s unapplied
@@ -462,6 +469,61 @@ export function AllocateModal({
         )}
       </div>
     </FormModal>
+  );
+}
+
+// The amounts typed so far against the payment's unapplied amount, while
+// typing, so going over is seen before pressing Allocate. Added exactly
+// (sumMoney); shown only once every typed amount is well formed.
+function AllocatedSoFar({
+  control,
+  payment,
+}: {
+  control: Control<Amounts>;
+  payment: Payment;
+}) {
+  const values = useWatch({ control });
+  const typed = Object.values(values)
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  const total = typed.every((value) => AMOUNT.test(value)) ? sumMoney(typed) : null;
+  const left = total ? sumMoney([payment.unapplied, `-${total}`]) : null;
+  const over = !!left && compareMoney(left, "0.00") < 0;
+
+  return (
+    <p
+      aria-live="polite"
+      className={`flex flex-wrap justify-end gap-x-2 text-sm ${over ? "text-base-danger" : "text-[#343A40]"}`}
+    >
+      {total && left ? (
+        <>
+          <span>
+            Allocated{" "}
+            <strong>
+              <Money amount={total} currency={payment.currency} />
+            </strong>{" "}
+            of <Money amount={payment.unapplied} currency={payment.currency} />
+          </span>
+          <span>
+            ·{" "}
+            {over ? (
+              <>
+                over by{" "}
+                <Money amount={left.replace(/^-/, "")} currency={payment.currency} />
+              </>
+            ) : (
+              <>
+                <Money amount={left} currency={payment.currency} /> left as credit
+              </>
+            )}
+          </span>
+        </>
+      ) : (
+        <span className="text-content-5">
+          Enter amounts with cents to see the total.
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -535,7 +597,11 @@ export function ReversePaymentModal({
   payment: Payment;
   onClose: () => void;
 }) {
-  const { control, handleSubmit } = useForm<{ reason: string }>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<{ reason: string }>({
     defaultValues: { reason: "" },
   });
   const reverse = usePaymentMutation(
@@ -557,6 +623,7 @@ export function ReversePaymentModal({
       confirmText="Reverse Payment"
       onConfirm={handleSubmit((values) => reverse.mutate(values.reason.trim()))}
       isConfirming={reverse.isPending}
+      isDirty={isDirty}
     >
       <PaymentSummary payment={payment} />
       <p className="text-sm">

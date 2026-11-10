@@ -69,7 +69,11 @@ export default function UserFormModal({
     label: role.name,
     value: role.id,
   }));
-  const { control, handleSubmit } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<Values>({
     mode: "onTouched",
     defaultValues: {
       firstName: user?.firstName ?? "",
@@ -118,6 +122,7 @@ export default function UserFormModal({
       title={user ? "Edit User" : "Add User"}
       confirmText={user ? "Save" : "Add User"}
       isConfirming={save.isPending}
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => save.mutate(values))}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
