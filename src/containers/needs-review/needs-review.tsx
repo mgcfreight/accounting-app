@@ -65,6 +65,7 @@ const columns: BaseTableColumn[] = [
   { key: "shipment", label: "Shipment" },
   { key: "invoice", label: "Invoice" },
   { key: "party", label: "Party" },
+  { key: "side", label: "Side" },
   { key: "previous", label: "On the Invoice", align: "end" },
   { key: "next", label: "In MGC Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
@@ -96,7 +97,7 @@ const outcomeLabels: Record<DisputeOutcome, string> = {
   [DisputeOutcome.WriteOff]: "Written off",
 };
 
-const isReceivable = (dispute: Dispute) =>
+const isReceivable = (dispute: { direction: InvoiceDirection }) =>
   dispute.direction === InvoiceDirection.Receivable;
 
 const invoiceHref = (item: { direction: InvoiceDirection; invoiceId: string }) =>
@@ -104,6 +105,17 @@ const invoiceHref = (item: { direction: InvoiceDirection; invoiceId: string }) =
 
 const invoiceLabel = (dispute: Dispute) =>
   dispute.invoiceNumber ?? "No number yet";
+
+// Not issued yet (a draft, or a carrier bill still awaited): it is fixed by
+// editing or voiding it on its page, so the action only opens it.
+const NOT_ISSUED = ["DRAFT", "EXPECTED"];
+
+// What the invoice page offers for this change, for a role that may act on
+// the side; "View invoice" for one that may only look.
+const changeAction = (item: ReviewItem, canAct: boolean) => {
+  if (!canAct || NOT_ISSUED.includes(item.invoiceStatus)) return "View invoice";
+  return item.kind === ReviewKind.Cancellation ? "Void or Credit" : "Revise or Note";
+};
 
 // Design §6.2 steps 4–5: invoices the TMS changed or cancelled after they
 // were invoiced (the sync flags them; their amounts never change). Staff act
@@ -186,14 +198,19 @@ export default function NeedsReview() {
             {item.invoiceNumber ?? "No number yet"}
           </Link>
         );
+      // As on the Disputes tab: the side's colour and a Shipper/Carrier chip.
       case "party":
         return (
-          <div className="flex flex-col">
-            <PartyAvatar name={item.partyName} tone="success" />
-            <span className="text-xs text-content-5">
-              {item.direction === InvoiceDirection.Receivable ? "Shipper" : "Carrier"}
-            </span>
-          </div>
+          <PartyAvatar
+            name={item.partyName}
+            tone={isReceivable(item) ? "success" : "primary"}
+          />
+        );
+      case "side":
+        return isReceivable(item) ? (
+          <StatusChip text="Shipper" tone="success" />
+        ) : (
+          <StatusChip text="Carrier" tone="primary" />
         );
       case "previous":
         return <Money amount={item.previousAmount} currency={item.currency} />;
@@ -206,12 +223,15 @@ export default function NeedsReview() {
       case "actions":
         return (
           <div className="flex gap-2">
-            <Link
+            <BaseButton
+              as={Link}
               to={invoiceHref(item)}
-              className="rounded-full px-3 py-1.5 text-sm font-semibold bg-base-primary text-white whitespace-nowrap"
-            >
-              {item.kind === ReviewKind.Cancellation ? "Void or Credit" : "Revise or Note"}
-            </Link>
+              text={changeAction(item, canResolveChange(item))}
+              varient={canResolveChange(item) ? "solid" : "bordered"}
+              className={`rounded-full px-3 whitespace-nowrap ${
+                canResolveChange(item) ? "" : "text-base-primary"
+              }`}
+            />
             {canResolveChange(item) && (
               <BaseButton
                 text="Resolve"
@@ -340,7 +360,8 @@ export default function NeedsReview() {
           title={
             <div className="flex items-center gap-2">
               MGC changes
-              {changes.data && (
+              {/* Not after a failed refetch: the count would be stale. */}
+              {changes.data && !changes.isError && (
                 <StatusChip
                   text={`${changes.data.meta.totalItems}`}
                   tone="warning"
@@ -357,7 +378,7 @@ export default function NeedsReview() {
           <Card>
             {changes.isError ? (
               <ErrorState
-                message={errorMessage(changes.error)}
+                message="We couldn't load the MGC changes. Please try again."
                 onAction={() => void changes.refetch()}
               />
             ) : (
@@ -469,9 +490,11 @@ function ResolveChangeModal({
     },
     onError: (error) => {
       toast.error(errorMessage(error));
-      // Changed by someone else, or already resolved: show what is true now.
+      // Changed by someone else, or already resolved: refetch and close, so
+      // a retry starts from the refreshed row and its current version.
       if (error instanceof ApiError && error.status === 409) {
         void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+        onClose();
       }
     },
   });
@@ -487,9 +510,17 @@ function ResolveChangeModal({
     >
       <p className="text-sm text-[#707070]">
         {item.invoiceNumber ?? "No number yet"} · {item.partyName} ·{" "}
-        {item.kind === ReviewKind.Cancellation ? "cancelled in MGC" : "MGC now"}{" "}
-        <Money amount={item.newAmount} currency={item.currency} />, invoice{" "}
-        <Money amount={item.previousAmount} currency={item.currency} />
+        {item.kind === ReviewKind.Cancellation ? (
+          <>
+            Cancelled in MGC · invoiced{" "}
+            <Money amount={item.previousAmount} currency={item.currency} />
+          </>
+        ) : (
+          <>
+            MGC now <Money amount={item.newAmount} currency={item.currency} /> ·
+            invoiced <Money amount={item.previousAmount} currency={item.currency} />
+          </>
+        )}
       </p>
       <BaseTextArea
         name="note"

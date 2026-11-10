@@ -1,0 +1,62 @@
+{
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "invoiceId": "cin_9fK2qZ0aB1",
+        "direction": "AR",
+        "kind": "AMOUNT_CHANGE",
+        "invoiceNumber": "sin_EGP9wr_230",
+        "invoiceStatus": "ISSUED",
+        "version": 3,
+        "shipmentId": "shp_4fK9qZ0aB1",
+        "loadNumber": "MGC-230",
+        "partyId": "pty_4fK9qZ0aB1",
+        "partyName": "Prairie Agri Inc.",
+        "currency": "CAD",
+        "previousAmount": "1450.00",
+        "newAmount": "1325.50",
+        "detectedAt": "2026-11-09T15:04:12.000Z"
+      },
+      {
+        "invoiceId": "cin_7hM3rT1cD2",
+        "direction": "AR",
+        "kind": "CANCELLATION",
+        "invoiceNumber": null,
+        "invoiceStatus": "DRAFT",
+        "version": 1,
+        "shipmentId": "shp_7hM3rT1cD2",
+        "loadNumber": "MGC-231",
+        "partyId": "pty_4fK9qZ0aB1",
+        "partyName": "Prairie Agri Inc.",
+        "currency": "CAD",
+        "previousAmount": "880.00",
+        "newAmount": "0.00",
+        "detectedAt": "2026-11-09T16:20:00.000Z"
+      },
+      {
+        "invoiceId": "cri_2pQ8sV4eF5",
+        "direction": "AP",
+        "kind": "CANCELLATION",
+        "invoiceNumber": "cin_EGP9wr_230",
+        "invoiceStatus": "APPROVED",
+        "version": 2,
+        "shipmentId": "shp_4fK9qZ0aB1",
+        "loadNumber": "MGC-230",
+        "partyId": "pty_9xL1mN2oP3",
+        "partyName": "Northern Haul Ltd.",
+        "currency": "USD",
+        "previousAmount": "910.25",
+        "newAmount": "0.00",
+        "detectedAt": "2026-11-09T17:45:30.000Z"
+      }
+    ],
+    "meta": {
+      "totalItems": 3,
+      "itemCount": 3,
+      "itemsPerPage": 20,
+      "totalPages": 1,
+      "currentPage": 1
+    }
+  }
+}
