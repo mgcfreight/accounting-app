@@ -1,5 +1,4 @@
 import type { SortDescriptor } from "@heroui/react";
-import { compareMoney } from "./money";
 import type { BaseTableColumn, SortDirection, TableSort } from "./types";
 
 // Ported from mokal-app's lib/table-sort.ts (client-side mode only — there is
@@ -65,8 +64,6 @@ const compareValues = (
   sortType: BaseTableColumn["sortType"]
 ): number => {
   switch (sortType) {
-    case "money":
-      return compareMoney(String(a), String(b));
     case "number":
       return Number(a) - Number(b);
     case "date":
@@ -91,28 +88,13 @@ export const sortTableRows = <T>(
       ? (column.sortValue as (row: T) => unknown)(row)
       : readPath(row, sortKey);
   const sign = direction === "asc" ? 1 : -1;
-  // USD 10,000.00 and CAD 10,000.00 aren't the same amount, so a money
-  // column groups rows by their currency (the row's `currency`, or
-  // `currencyKey`) before comparing amounts within each. Rows without a
-  // currency form their own group after the others, in both directions —
-  // comparing them by amount against rows that have one would make the
-  // order inconsistent (USD 50 < none 100 < CAD 200, yet CAD < USD).
-  const currencyOf = (row: T): string | undefined => {
-    if (column.sortType !== "money") return undefined;
-    const currency = readPath(row, column.currencyKey ?? "currency");
-    return typeof currency === "string" ? currency : undefined;
-  };
 
   return rows
-    .map((row) => ({ row, value: read(row), currency: currencyOf(row) }))
+    .map((row) => ({ row, value: read(row) }))
     .sort((a, b) => {
       if (isEmpty(a.value) || isEmpty(b.value)) {
         if (isEmpty(a.value) && isEmpty(b.value)) return 0;
         return isEmpty(a.value) ? 1 : -1;
-      }
-      if (!a.currency !== !b.currency) return a.currency ? -1 : 1;
-      if (a.currency && b.currency && a.currency !== b.currency) {
-        return collator.compare(a.currency, b.currency);
       }
       return compareValues(a.value, b.value, column.sortType) * sign;
     })

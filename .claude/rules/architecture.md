@@ -161,8 +161,9 @@ Amounts are 2-decimal strings beside a currency code. Show them with
 without converting it to a number and always prints the currency.
 
 - Never `parseFloat`, `Number()`, or do arithmetic on an amount. Totals, tax,
-  balances and CAD conversions come from the API already calculated. Sort
-  money columns with `sortType: "money"` (`compareMoney`), which is exact.
+  balances and CAD conversions come from the API already calculated. Money
+  columns sort on the server (the API's `sortBy`); to compare two amounts
+  in the browser, use `compareMoney`, which is exact.
 - `formatMoney` returns `null` for a malformed amount; `<Money>` shows a red
   dash. Never fall back to `0.00`.
 - Draft and void invoices show "Not issued" / "—" for balance, not `0.00`.
