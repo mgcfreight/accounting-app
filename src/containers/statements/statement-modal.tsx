@@ -251,6 +251,10 @@ export default function StatementModal({
   });
   const email = useMutation(sendMutation(emailStatement, "statement"));
   const dues = useMutation(sendMutation(sendLatestDues, "dues report"));
+  // Both buttons email the shipper, so each asks first and names who gets
+  // it, as the bulk "Send statements now" does.
+  const [confirming, setConfirming] = useState<"statement" | "dues" | null>(null);
+  const confirmingSend = confirming === "dues" ? dues : email;
   // Only a statement whose email did not go may be sent again; the API
   // refuses one already sent.
   const canResend = isShipper && can(Permission.ReportsSendEmail);
@@ -343,19 +347,37 @@ export default function StatementModal({
                 className="text-base-primary rounded-xl px-3"
                 isLoading={dues.isPending}
                 isDisabled={email.isPending}
-                onPress={() => dues.mutate()}
+                onPress={() => setConfirming("dues")}
               />
               <BaseButton
                 text="Email statement"
                 className="rounded-xl px-3"
                 isLoading={email.isPending}
                 isDisabled={dues.isPending}
-                onPress={() => email.mutate()}
+                onPress={() => setConfirming("statement")}
               />
             </>
           )}
         </div>
       </div>
+      <FormModal
+        isOpen={confirming !== null}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        title={confirming === "dues" ? "Send the latest dues?" : "Email this statement?"}
+        confirmText={confirming === "dues" ? "Send Dues" : "Email Statement"}
+        isConfirming={confirmingSend.isPending}
+        onConfirm={() =>
+          confirmingSend.mutate(undefined, { onSettled: () => setConfirming(null) })
+        }
+        size="sm"
+      >
+        <p className="text-sm">
+          {confirming === "dues"
+            ? `${partyName}'s latest billing-period dues will be emailed to `
+            : `The current statement for ${partyName} will be saved and emailed to `}
+          <strong className="break-all">{summary.statementEmail}</strong>.
+        </p>
+      </FormModal>
       {statement?.sentTo && statement.sentTo.length > 0 && (
         <p className="text-sm text-[#707070]">To {statement.sentTo.join(", ")}</p>
       )}
