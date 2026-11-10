@@ -33,8 +33,8 @@ export default function ShipmentDetail() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
   const { can } = useCan();
-  // Whether each side's invoice card is open. Each opens on its own; the
-  // two sides are matched in height only while both are open or both closed.
+  // Whether any invoice card on each side is open. The two sides are matched
+  // in height only while both have one open or both are all closed.
   const [shipperOpen, setShipperOpen] = useState(false);
   const [carrierOpen, setCarrierOpen] = useState(false);
 

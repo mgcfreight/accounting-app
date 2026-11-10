@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import {
   BaseButton,
@@ -66,10 +66,24 @@ export default function ShipmentInvoices({
   shipment: ShipmentView;
   parties: Map<string, PartyView>;
   heading: string;
-  // Told when the main invoice card opens or closes, so the page can match
-  // this side's height to the other's when both are in the same state.
+  // Told whether any main invoice card on this side is open, so the page can
+  // match this side's height to the other's when both are in the same state.
   onExpandedChange?: (expanded: boolean) => void;
 }) {
+  // Which main cards are open, by invoice id. A side can have more than one
+  // (a voided invoice and its replacement), so closing one must not report
+  // the side as closed while another is still open.
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set());
+  const setCardOpen = useCallback((id: string, open: boolean) => {
+    setOpenIds((prev) => {
+      if (prev.has(id) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   const params = { page: 1, limit: 20, shipmentId: shipment.id };
   const invoices = useQuery({
     queryKey: ["invoices", direction, "shipment", params],
@@ -86,6 +100,12 @@ export default function ShipmentInvoices({
   );
   const side =
     direction === InvoiceDirection.Receivable ? "shipper" : "carrier";
+  // Derived from the cards still listed, so a card that leaves the list on a
+  // refetch (its invoice replaced by a new version) stops counting as open.
+  const anyOpen = main.some((invoice) => openIds.has(invoice.id));
+  useEffect(() => {
+    onExpandedChange?.(anyOpen);
+  }, [anyOpen, onExpandedChange]);
 
   return (
     // The page's grid stretches this to the other side's height only while
@@ -115,7 +135,7 @@ export default function ShipmentInvoices({
               key={invoice.id}
               latest={invoice}
               parties={parties}
-              onExpandedChange={onExpandedChange}
+              onExpandedChange={(open) => setCardOpen(invoice.id, open)}
               fill
             />
           ))}
