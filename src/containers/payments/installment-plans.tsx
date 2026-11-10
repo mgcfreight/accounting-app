@@ -35,11 +35,13 @@ import { Installment, InstallmentPlan, Paginated } from "@/lib/interfaces";
 import { compareMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, torontoToday } from "@/lib/utils";
+import { useServerPaging } from "@/hooks";
 import {
   createInstallmentPlan,
   errorMessage,
   listCarrierInvoices,
   listCustomerInvoices,
+  readAllPages,
 } from "@/services";
 import { invoiceListHref } from "../invoices/invoice-view";
 import PartyPicker from "../shipments/party-picker";
@@ -108,10 +110,13 @@ const columns: BaseTableColumn[] = [
 
 export default function InstallmentPlans({
   query,
+  paging,
   directions,
 }: {
   // GET /installment-plan/all: only the sides the role may view.
   query: UseQueryResult<Paginated<InstallmentPlan>>;
+  // Its page, from useServerPaging.
+  paging: Pick<ReturnType<typeof useServerPaging>, "tableMeta" | "setMeta">;
   // The sides the role may record payments for.
   directions: PaymentDirection[];
 }) {
@@ -183,8 +188,12 @@ export default function InstallmentPlans({
             columns={columns}
             data={query.data?.items ?? []}
             loading={query.isPending}
+            refreshing={query.isPlaceholderData}
             rowKey={(row) => row.id}
             renderCell={renderCell}
+            meta={paging.tableMeta(query.data?.meta)}
+            setMeta={paging.setMeta}
+            bottomContent="Plans"
             emptyContent="No installment plans"
           />
         )}
@@ -239,11 +248,11 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
 }
 
 type PlanValues = {
-  direction: string;
+  direction: PaymentDirection;
   party: string;
   count: string;
   firstDue: string;
-  frequency: string;
+  frequency: InstallmentFrequency;
 };
 
 type OwingInvoice = {
@@ -252,12 +261,24 @@ type OwingInvoice = {
   dueDate: string | null;
   balance: string;
   currency: Currency;
+  disputed: boolean;
 };
 
 const directionOptions = {
-  [PaymentDirection.In]: { key: "IN", label: "Money in (a shipper pays)", value: "IN" },
-  [PaymentDirection.Out]: { key: "OUT", label: "Money out (MGC pays a carrier)", value: "OUT" },
+  [PaymentDirection.In]: {
+    key: PaymentDirection.In,
+    label: "Money in (a shipper pays)",
+    value: PaymentDirection.In,
+  },
+  [PaymentDirection.Out]: {
+    key: PaymentDirection.Out,
+    label: "Money out (MGC pays a carrier)",
+    value: PaymentDirection.Out,
+  },
 };
+
+const TOO_MANY_OWING =
+  "This party has too many unpaid invoices to list here. Ask for help with this plan.";
 
 const frequencyOptions = [
   { key: InstallmentFrequency.Weekly, label: "Weekly", value: InstallmentFrequency.Weekly },
@@ -266,21 +287,26 @@ const frequencyOptions = [
 ];
 
 // The party's invoices a plan can take: owing, not credit notes; issued
-// shipper invoices, or received, on-hold or approved carrier bills.
+// shipper invoices, or received, on-hold or approved carrier bills. Every
+// page, so a party with more than 100 loses none.
 const useOwingInvoices = (direction: PaymentDirection, partyId: string) =>
   useQuery({
     queryKey: ["invoices", direction, "owing", partyId],
     enabled: !!partyId,
     queryFn: async ({ signal }): Promise<OwingInvoice[]> => {
-      const base = { page: 1, limit: 100, paymentStatus: PaymentStatus.Unpaid };
+      const base = { limit: 100, paymentStatus: PaymentStatus.Unpaid };
       const rows =
         direction === PaymentDirection.In
           ? (
-              await listCustomerInvoices(
-                { ...base, customerId: partyId, status: CustomerInvoiceStatus.Issued },
-                signal
+              await readAllPages(
+                (page) =>
+                  listCustomerInvoices(
+                    { ...base, page, customerId: partyId, status: CustomerInvoiceStatus.Issued },
+                    signal
+                  ),
+                TOO_MANY_OWING
               )
-            ).items.map((i) => ({ ...i, number: i.invoiceNumber }))
+            ).map((i) => ({ ...i, number: i.invoiceNumber }))
           : (
               await Promise.all(
                 [
@@ -288,11 +314,15 @@ const useOwingInvoices = (direction: PaymentDirection, partyId: string) =>
                   CarrierInvoiceStatus.OnHold,
                   CarrierInvoiceStatus.Approved,
                 ].map((status) =>
-                  listCarrierInvoices({ ...base, carrierId: partyId, status }, signal)
+                  readAllPages(
+                    (page) =>
+                      listCarrierInvoices({ ...base, page, carrierId: partyId, status }, signal),
+                    TOO_MANY_OWING
+                  )
                 )
               )
             )
-              .flatMap((page) => page.items)
+              .flat()
               .map((i) => ({ ...i, number: i.referenceNumber }));
       return rows
         .filter((i) => i.kind !== InvoiceKind.CreditNote && compareMoney(i.balanceDue, "0.00") > 0)
@@ -302,11 +332,12 @@ const useOwingInvoices = (direction: PaymentDirection, partyId: string) =>
           dueDate: i.dueDate,
           balance: i.balanceDue,
           currency: i.currency,
+          disputed: i.disputed ?? false,
         }));
     },
   });
 
-function NewPlanModal({
+export function NewPlanModal({
   directions,
   onClose,
 }: {
@@ -323,18 +354,23 @@ function NewPlanModal({
       frequency: InstallmentFrequency.Biweekly,
     },
   });
-  const direction = useWatch({ control, name: "direction" }) as PaymentDirection;
+  const direction = useWatch({ control, name: "direction" });
   const partyId = useWatch({ control, name: "party" });
   // Ticked invoices belong to the party they were ticked for: choosing
-  // another party starts with none.
+  // another party (or direction, which clears the party) starts with none,
+  // and so does coming back to the first.
   const [ticked, setTicked] = useState<{ partyId: string; ids: string[] }>({
     partyId: "",
     ids: [],
   });
+  if (ticked.partyId !== partyId) setTicked({ partyId, ids: [] });
   const chosen = ticked.partyId === partyId ? ticked.ids : [];
-  const setChosen = (update: (prev: string[]) => string[]) =>
-    setTicked({ partyId, ids: update(chosen) });
   const [chosenError, setChosenError] = useState<string | null>(null);
+  // Ticking clears a message about the choice: it may be fixed now.
+  const setChosen = (update: (prev: string[]) => string[]) => {
+    setTicked({ partyId, ids: update(chosen) });
+    setChosenError(null);
+  };
   // A shipper chosen before switching to "Money out" is not a carrier, so
   // the choice is cleared rather than submitted against the wrong side.
   useEffect(() => {
@@ -353,11 +389,14 @@ function NewPlanModal({
         partyId: values.party,
         invoiceIds: chosen,
         count: Number(values.count),
-        frequency: values.frequency as InstallmentFrequency,
+        frequency: values.frequency,
         firstDueDate: values.firstDue,
       }),
     onSuccess: (plan) => {
-      toast.success(`Installment plan ${plan.id} agreed: ${plan.installments.length} installments.`);
+      const numbers = plan.invoices.map((invoice) => invoice.number ?? "an invoice").join(", ");
+      toast.success(
+        `Plan agreed with ${plan.partyName} for ${numbers}: ${plan.installments.length} installments.`
+      );
       void queryClient.invalidateQueries({ queryKey: ["installment-plans"] });
       onClose();
     },
@@ -437,6 +476,9 @@ function NewPlanModal({
                       <span className="font-mono">{invoice.number ?? "No number yet"}</span>
                       {invoice.dueDate && ` · due ${formatDate(invoice.dueDate)}`} · owing{" "}
                       <Money amount={invoice.balance} currency={invoice.currency} />
+                      {invoice.disputed && (
+                        <StatusChip text="Disputed" tone="warning" className="ml-2" />
+                      )}
                     </span>
                   </BaseCheckbox>
                 </li>

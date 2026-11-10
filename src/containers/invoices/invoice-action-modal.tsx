@@ -37,6 +37,7 @@ import {
   issueCustomerInvoice,
   listCarrierInvoices,
   receiveCarrierInvoice,
+  refreshMoneyViews,
   reviseCarrierInvoice,
   reviseCustomerInvoice,
   updateCarrierInvoice,
@@ -122,7 +123,8 @@ const useInvoiceMutation = <T, R = unknown>(
     mutationFn: action,
     onSuccess: (result) => {
       toast.success(successMessage);
-      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      // Issuing, revising or approving moves balances and plans too.
+      refreshMoneyViews(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["audit"] });
       onClose();
       onDone?.(result);
@@ -130,7 +132,7 @@ const useInvoiceMutation = <T, R = unknown>(
     onError: (error) => {
       toast.error(errorMessage(error));
       if (error instanceof ApiError && error.status === 409) {
-        void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+        refreshMoneyViews(queryClient);
       }
     },
   });

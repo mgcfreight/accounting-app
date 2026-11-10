@@ -120,10 +120,15 @@ export default function Payments() {
   const { can } = useCan();
   const canViewIn = can(Permission.CustomerPaymentsView);
   const canViewOut = can(Permission.CarrierPaymentsView);
-  // The API lists only the sides the role may view, newest first.
+  // The API lists only the sides the role may view, newest first, a page
+  // at a time (the tab's count is every plan).
+  const plansPaging = useServerPaging("plans");
   const plansQuery = useQuery({
-    queryKey: ["installment-plans", "list"],
-    queryFn: ({ signal }) => listInstallmentPlans({ page: 1, limit: 100 }, signal),
+    queryKey: ["installment-plans", "list", plansPaging.page, plansPaging.limit],
+    queryFn: ({ signal }) =>
+      listInstallmentPlans({ page: plansPaging.page, limit: plansPaging.limit }, signal),
+    placeholderData: keepPreviousData,
+    enabled: canViewIn || canViewOut,
   });
   const isIn = (direction: PaymentDirection) => direction === PaymentDirection.In;
   const canRecord = (direction: PaymentDirection) =>
@@ -282,7 +287,7 @@ export default function Payments() {
         />
       </Tabs>
       {view === "plans" ? (
-        <InstallmentPlans query={plansQuery} directions={plannable} />
+        <InstallmentPlans query={plansQuery} paging={plansPaging} directions={plannable} />
       ) : (
         <>
           <FilterBar>

@@ -1,8 +1,10 @@
 import { Currency } from "../enums";
 import { TmsOverdueSummary } from "../interfaces";
 
-// A sample GET /account/overdue answer, for the overdue bar's tests: three
-// shippers, one overdue invoice each. CAD total: 2320.50 + 2816.89 = 5137.39.
+// The overdue bar above the header shows this on every page until the API
+// reports overdue payments from the TMS. The three shippers with an overdue
+// balance in the account summaries below, one overdue invoice each.
+// CAD total: 2320.50 + 2816.89 = 5137.39.
 export const mockTmsOverdue: TmsOverdueSummary = {
   shippers: [
     {

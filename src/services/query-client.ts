@@ -23,7 +23,8 @@ const isRetryable = (error: unknown) =>
 // Every view that shows what is owed or paid. A payment, an allocation, a
 // write-off or a credit changes all of them: balances and unapplied credit,
 // the dashboard and aging (["accounts", …]), statements, reports, reminders
-// and the invoice pages. Refresh them together, so no screen keeps an old
+// and the invoice pages, and installment plans (their paid and remaining
+// come from the invoices). Refresh them together, so no screen keeps an old
 // amount after a change.
 const MONEY_VIEWS = [
   "invoices",
@@ -34,6 +35,7 @@ const MONEY_VIEWS = [
   "reminders",
   "write-offs",
   "disputes",
+  "installment-plans",
 ];
 
 export const refreshMoneyViews = (client: QueryClient) =>
