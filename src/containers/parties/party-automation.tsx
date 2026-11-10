@@ -10,15 +10,17 @@ import { AgreementView, AutomationRule, PartyAutomation } from "@/lib/interfaces
 import { torontoToday } from "@/lib/utils";
 import { errorMessage, saveAutomation } from "@/services";
 import {
+  automationFor,
   AutomationSpec,
   automationSpecs,
+  companyDefault,
   ContactsState,
   describeRule,
   effectiveRule,
   hourText,
   isPaused,
   recipientText,
-  seedAutomation,
+  SettingsDays,
   unavailableReason,
 } from "./automation-rules";
 import AutomationRuleModal from "./party-automation-modal";
@@ -173,6 +175,7 @@ const linkButton = "text-base-primary underline text-xs";
 function RuleRow({
   rule,
   spec,
+  days,
   contacts,
   unavailable,
   canEdit,
@@ -181,14 +184,15 @@ function RuleRow({
 }: {
   rule: AutomationRule;
   spec: AutomationSpec;
+  days: SettingsDays;
   contacts: ContactsState;
-  // Why the rule can't be switched on, or null when it can.
+  // Why the rule can't run for this party, or null when it can.
   unavailable: string | null;
   canEdit: boolean;
   onToggle: () => void;
   onCustomise: () => void;
 }) {
-  const effective = effectiveRule(rule);
+  const effective = effectiveRule(rule, days);
   const description = describeRule(effective, spec);
   // Until the contacts load, a party message's recipients aren't known; saying
   // "the accounts team" alone would read as "no contacts get it".
@@ -223,10 +227,16 @@ function RuleRow({
           )}
         </div>
         <p className="text-xs text-content-5 mt-0.5">{spec.help}</p>
-        {unavailable && !rule.enabled && (
-          <p className="text-xs text-content-5 mt-1">Unavailable: {unavailable}.</p>
+        {/* Also when it is still switched on: the agreement in force changed
+            after it was saved, so it can't run (decision pending on whether
+            a new agreement should switch it off). */}
+        {unavailable && (
+          <p className={`text-xs mt-1 ${rule.enabled ? "text-base-danger" : "text-content-5"}`}>
+            Unavailable: {unavailable}.
+            {rule.enabled && " It is switched on but won't run."}
+          </p>
         )}
-        {rule.enabled && (
+        {rule.enabled && !unavailable && (
           <p className="text-xs text-[#343A40] mt-1">
             {description}
             {contacts.status === "pending" && contactsUnknown ? (
@@ -261,16 +271,22 @@ function RuleRow({
 // The card
 
 // Starts from the settings saved on the API (`saved`), or, until there are
-// any, seeded from the agreement in force; mount it with `key` set to that
-// agreement's id so a different agreement re-seeds unsaved settings. Every
-// change saves the whole settings (PUT /party/automation); a save that fails
-// puts the card back as it was. Without `canEdit` (parties.edit) the
-// settings are shown read-only.
+// any, seeded from the agreement in force and the days in Settings; mount it
+// with `key` set to that agreement's id so a different agreement re-seeds
+// unsaved settings. Saved settings are kept as saved: a later agreement
+// doesn't change them, and a rule it no longer supports shows as
+// unavailable. Every change saves the whole settings (PUT /party/automation),
+// one save at a time: the controls wait while one is pending, and a save that
+// fails puts the card back to what the server last confirmed. A newer save
+// from elsewhere (a refetch) is taken in when nothing is pending or open.
+// Without `canEdit` (parties.edit) the settings are shown read-only.
 export default function PartyAutomationCard({
   partyId,
   type,
   agreement,
   saved,
+  savedAt,
+  days,
   contacts,
   canEdit,
 }: {
@@ -278,36 +294,60 @@ export default function PartyAutomationCard({
   type: PartyType;
   agreement: AgreementView | undefined;
   saved: PartyAutomation | null;
+  // When `saved` was saved; a change means newer settings arrived.
+  savedAt: string | null;
+  days: SettingsDays;
   contacts: ContactsState;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [automation, setAutomation] = useState<PartyAutomation>(
-    () => saved ?? seedAutomation(type, agreement)
+  const queryKey = ["parties", "automation", partyId];
+  const [automation, setAutomation] = useState<PartyAutomation>(() =>
+    automationFor(type, agreement, saved, days)
   );
-
+  // What the server last confirmed: where a failed save goes back to.
+  const [confirmed, setConfirmed] = useState(automation);
+  const [seenSavedAt, setSeenSavedAt] = useState(savedAt);
   const [editingKind, setEditingKind] = useState<AutomationKind | null>(null);
 
   const save = useMutation({
-    mutationFn: ({ next }: { next: PartyAutomation; previous: PartyAutomation; what: string }) =>
+    // A GET already in flight would put the settings from before this save
+    // back into the cache when it lands.
+    onMutate: () => queryClient.cancelQueries({ queryKey }),
+    mutationFn: ({ next }: { next: PartyAutomation; what: string }) =>
       saveAutomation(partyId, next),
     onSuccess: (view, { what }) => {
-      queryClient.setQueryData(["parties", "automation", partyId], view);
+      const now = automationFor(type, agreement, view.automation, days);
+      setConfirmed(now);
+      setAutomation(now);
+      setSeenSavedAt(view.updatedAt);
+      queryClient.setQueryData(queryKey, view);
       toast.success(`${what} saved.`);
     },
-    onError: (error, { previous }) => {
-      setAutomation(previous);
+    onError: (error) => {
+      setAutomation(confirmed);
       toast.error(errorMessage(error));
     },
   });
 
+  // Settings saved elsewhere arrived: take them in, unless a save is pending
+  // or a modal is open, which would lose what the user is doing.
+  if (savedAt !== seenSavedAt && !save.isPending && editingKind === null) {
+    const fresh = automationFor(type, agreement, saved, days);
+    setSeenSavedAt(savedAt);
+    setConfirmed(fresh);
+    setAutomation(fresh);
+  }
+
+  const editable = canEdit && !save.isPending;
+
   const commit = (next: PartyAutomation, what: string) => {
-    const previous = automation;
     setAutomation(next);
-    save.mutate({ next, previous, what });
+    return save.mutateAsync({ next, what });
   };
 
   const updateAutomation = (next: Partial<PartyAutomation>) => {
+    if (save.isPending) return;
     const what =
       "paused" in next
         ? next.paused
@@ -316,11 +356,13 @@ export default function PartyAutomationCard({
         : "sendHour" in next
           ? "Send time"
           : "Weekend setting";
-    commit({ ...automation, ...next }, what);
+    // The error is shown by the mutation's toast.
+    commit({ ...automation, ...next }, what).catch(() => {});
   };
 
   // Switching off is always allowed; switching on only when available.
   const toggleRule = (kind: AutomationKind) => {
+    if (save.isPending) return;
     const rule = automation.rules.find((r) => r.kind === kind);
     if (!rule || (!rule.enabled && unavailableReason(kind, agreement))) return;
     commit(
@@ -331,10 +373,12 @@ export default function PartyAutomationCard({
         ),
       },
       `${automationSpecs[kind].label} ${rule.enabled ? "off" : "on"}`
-    );
+    ).catch(() => {});
   };
 
-  const saveRule = (updated: AutomationRule) => {
+  // Resolves once saved; rejects on failure, so the modal stays open with
+  // what was typed.
+  const saveRule = (updated: AutomationRule) =>
     commit(
       {
         ...automation,
@@ -342,7 +386,6 @@ export default function PartyAutomationCard({
       },
       automationSpecs[updated.kind].label
     );
-  };
 
   const editingRule = editingKind
     ? automation.rules.find((r) => r.kind === editingKind)
@@ -358,8 +401,8 @@ export default function PartyAutomationCard({
           Messages aren&apos;t sent from these settings yet.
         </p>
 
-        <PauseSection automation={automation} canEdit={canEdit} onChange={updateAutomation} />
-        <ScheduleRow automation={automation} canEdit={canEdit} onChange={updateAutomation} />
+        <PauseSection automation={automation} canEdit={editable} onChange={updateAutomation} />
+        <ScheduleRow automation={automation} canEdit={editable} onChange={updateAutomation} />
 
         <div className="flex flex-col">
           {automation.rules.map((rule) => {
@@ -369,9 +412,10 @@ export default function PartyAutomationCard({
                 key={rule.kind}
                 rule={rule}
                 spec={spec}
+                days={days}
                 contacts={contacts}
                 unavailable={unavailableReason(rule.kind, agreement)}
-                canEdit={canEdit}
+                canEdit={editable}
                 onToggle={() => toggleRule(rule.kind)}
                 onCustomise={() => setEditingKind(rule.kind)}
               />
@@ -384,10 +428,11 @@ export default function PartyAutomationCard({
         <AutomationRuleModal
           rule={editingRule}
           spec={automationSpecs[editingKind]}
+          defaults={companyDefault(editingKind, days)}
           contacts={contacts}
           unavailable={unavailableReason(editingKind, agreement)}
-          onSave={(updated) => {
-            saveRule(updated);
+          onSave={async (updated) => {
+            await saveRule(updated);
             setEditingKind(null);
           }}
           onClose={() => setEditingKind(null)}

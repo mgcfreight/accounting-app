@@ -31,6 +31,7 @@ import {
   ApiError,
   errorMessage,
   getAutomation,
+  getNoticeSettings,
   getParty,
   listCarrierInvoices,
   listContacts,
@@ -42,7 +43,7 @@ import {
   AgreementFormModal,
   ContactFormModal,
 } from "./party-modals";
-import { ContactsState } from "./automation-rules";
+import { ContactsState, settingsDays } from "./automation-rules";
 import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -83,6 +84,18 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   const party = useQuery({
     queryKey: ["parties", "detail", id],
     queryFn: ({ signal }) => getParty(id!, signal),
+    enabled: !!id,
+  });
+  // The automation card's data starts loading with the party, not after it
+  // (same keys as PartyAutomationContacts, which reads them).
+  useQuery({
+    queryKey: ["parties", "automation", id],
+    queryFn: ({ signal }) => getAutomation(id!, signal),
+    enabled: !!id,
+  });
+  useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
     enabled: !!id,
   });
 
@@ -513,32 +526,48 @@ function PartyAutomationContacts({
     queryKey: ["parties", "automation", partyId],
     queryFn: ({ signal }) => getAutomation(partyId, signal),
   });
+  // The company's days for the defaults (billing notice, carrier alert).
+  const notices = useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
+  });
 
-  // The card starts from what it's given, so it waits for the saved settings.
-  if (automation.isPending) {
+  // A failed refetch keeps the last good data beside the error: the card
+  // stays, with what is being edited. The error shows only with no data.
+  const failed =
+    (automation.isError && !automation.data) || (notices.isError && !notices.data);
+  if (failed) {
+    return (
+      <BaseCardWrapper heading="Notifications & Automation">
+        <ErrorState
+          message={errorMessage(automation.error ?? notices.error)}
+          onAction={() => {
+            void automation.refetch();
+            void notices.refetch();
+          }}
+        />
+      </BaseCardWrapper>
+    );
+  }
+  // The card starts from what it's given, so it waits for both.
+  if (!automation.data || !notices.data) {
     return (
       <BaseCardWrapper heading="Notifications & Automation">
         <TableSkeleton />
       </BaseCardWrapper>
     );
   }
-  if (automation.isError) {
-    return (
-      <BaseCardWrapper heading="Notifications & Automation">
-        <ErrorState
-          message={errorMessage(automation.error)}
-          onAction={() => void automation.refetch()}
-        />
-      </BaseCardWrapper>
-    );
-  }
   return (
     <PartyAutomationCard
-      key={`${agreement?.id ?? "none"}-${automation.data.updatedAt ?? "unsaved"}`}
+      // Only a different agreement re-seeds it; newer saved settings are
+      // taken in by the card itself, without a remount.
+      key={agreement?.id ?? "none"}
       partyId={partyId}
       type={type}
       agreement={agreement}
       saved={automation.data.automation}
+      savedAt={automation.data.updatedAt}
+      days={settingsDays(notices.data, agreement)}
       canEdit={canEdit}
       contacts={contactsState}
     />
