@@ -23,6 +23,8 @@ import {
   listInvoiceDocuments,
   listInvoicePayments,
   listWriteOffs,
+  readAllPages,
+  refreshMoneyViews,
   removeInvoiceDocument,
   reverseWriteOff,
 } from "@/services";
@@ -189,8 +191,10 @@ export function PaymentsCard({ invoice }: { invoice: InvoiceView }) {
   );
 }
 
-// A shipper invoice's write-offs, reversed ones included, from the
-// shipper's list. Shown only when there are some.
+// A shipper invoice's write-offs, reversed ones included. The API lists them
+// by shipper only, so every page of the shipper's is read and this
+// invoice's kept: an older one is never missed. Shown when there are some,
+// and when they can't be loaded, so a failure never reads as "none".
 export function WriteOffsCard({ invoice }: { invoice: InvoiceView }) {
   const { can } = useCan();
   const [reversing, setReversing] = useState<WriteOff | null>(null);
@@ -198,10 +202,31 @@ export function WriteOffsCard({ invoice }: { invoice: InvoiceView }) {
   const writeOffs = useQuery({
     queryKey: ["write-offs", { customerId }],
     queryFn: ({ signal }) =>
-      listWriteOffs({ page: 1, limit: 100, customerId: customerId! }, signal),
+      readAllPages(
+        (page) =>
+          listWriteOffs({ page, limit: 100, customerId: customerId! }, signal),
+        "This shipper has too many write-offs to list here."
+      ),
     enabled: !!customerId,
-    select: (page) => page.items.filter((item) => item.invoiceId === invoice.id),
+    select: (items) => items.filter((item) => item.invoiceId === invoice.id),
   });
+  if (writeOffs.isError) {
+    return (
+      <BaseCardWrapper heading="Write-offs">
+        <p className="text-sm text-base-danger">
+          Couldn&apos;t load this invoice&apos;s write-offs:{" "}
+          {errorMessage(writeOffs.error)}{" "}
+          <button
+            type="button"
+            className="underline"
+            onClick={() => void writeOffs.refetch()}
+          >
+            Try again
+          </button>
+        </p>
+      </BaseCardWrapper>
+    );
+  }
   if (!writeOffs.data || writeOffs.data.length === 0) return null;
   const canReverse = can(Permission.CustomerInvoicesWriteOff);
 
@@ -257,10 +282,7 @@ function ReverseWriteOffModal({
 }) {
   const { control, handleSubmit } = useForm({ defaultValues: { reason: "" } });
   const queryClient = useQueryClient();
-  const refresh = () =>
-    ["invoices", "write-offs", "accounts", "report", "reminders"].forEach(
-      (key) => void queryClient.invalidateQueries({ queryKey: [key] })
-    );
+  const refresh = () => refreshMoneyViews(queryClient);
   const reverse = useMutation({
     mutationFn: (reason: string) => reverseWriteOff(writeOff.id, reason),
     onSuccess: () => {
