@@ -13,7 +13,12 @@ import {
   Permission,
 } from "@/lib/enums";
 import { torontoToday } from "@/lib/utils";
-import { errorMessage, getParty, recordPayment } from "@/services";
+import {
+  errorMessage,
+  getParty,
+  recordPayment,
+  refreshMoneyViews,
+} from "@/services";
 import PartyPicker from "../shipments/party-picker";
 
 type FormValues = {
@@ -125,7 +130,8 @@ export default function RecordPaymentModal({
       toast.success(
         `${payment.number} recorded. Allocate it from the Unmatched tab.`
       );
-      void queryClient.invalidateQueries({ queryKey: ["payments"] });
+      // Unapplied credit shows on balances, statements and the dashboard.
+      refreshMoneyViews(queryClient);
       onClose();
     },
     onError: (error) => toast.error(errorMessage(error)),

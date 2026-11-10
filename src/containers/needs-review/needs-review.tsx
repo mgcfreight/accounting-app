@@ -48,6 +48,7 @@ import {
   errorMessage,
   listCustomerInvoices,
   listDisputes,
+  refreshMoneyViews,
   resolveDispute,
 } from "@/services";
 import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
@@ -451,11 +452,8 @@ function ResolveDisputeModal({
   ];
 
   const queryClient = useQueryClient();
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["disputes"] });
-    void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-    void queryClient.invalidateQueries({ queryKey: ["accounts"] });
-  };
+  // A write-off outcome moves balances, reports and reminders too.
+  const refresh = () => refreshMoneyViews(queryClient);
   const save = useMutation({
     mutationFn: (values: ResolveValues) =>
       resolveDispute(dispute.direction, dispute.id, {

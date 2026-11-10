@@ -47,6 +47,7 @@ import {
   errorMessage,
   getReminderCounts,
   listReminders,
+  readAllPages,
   ReminderListParams,
   sendReminder,
   skipReminder,
@@ -127,18 +128,14 @@ const exportTable = (rows: Reminder[], subtitle: string): ExportTable<Reminder> 
   ],
 });
 
-// Every reminder the filters match, across pages, for an export.
-const allReminders = async (
-  filters: Omit<ReminderListParams, "page" | "limit">
-) => {
-  const rows: Reminder[] = [];
-  for (let page = 1; page <= EXPORT_MAX_PAGES; page += 1) {
-    const result = await listReminders({ ...filters, page, limit: 100 });
-    rows.push(...result.items);
-    if (page >= result.meta.totalPages) return rows;
-  }
-  throw new Error("Too many reminders to export at once. Narrow the filters and try again.");
-};
+// Every reminder the filters match, across pages, for an export. Too many
+// fails with a message errorMessage shows as it is.
+const allReminders = (filters: Omit<ReminderListParams, "page" | "limit">) =>
+  readAllPages<Reminder>(
+    (page) => listReminders({ ...filters, page, limit: 100 }),
+    "Too many reminders to export at once. Narrow the filters and try again.",
+    EXPORT_MAX_PAGES
+  );
 
 // Payment reminders (requirement 1): an email to the shipper's contacts
 // before an invoice falls due, and again once it is overdue, or an alert to
