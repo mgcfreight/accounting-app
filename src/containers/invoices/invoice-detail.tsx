@@ -28,7 +28,7 @@ import {
   Permission,
 } from "@/lib/enums";
 import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
-import { useFileDownload } from "@/hooks";
+import { listReturnHref, useFileDownload } from "@/hooks";
 import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import {
   ApiError,
@@ -44,6 +44,7 @@ import {
   getParty,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
+import ShipmentLink from "../shipments/shipment-link";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
 import { DocumentsCard, PaymentsCard, WriteOffsCard } from "./invoice-documents";
 import InvoiceExtraActionModal, {
@@ -210,7 +211,7 @@ export default function InvoiceDetail({
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link to={listHref} className="text-base text-[#71717A]">
+          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A] underline">
             {isReceivable ? "Shipper Invoices" : "Carrier Invoices"}
           </Link>
           <ArrowRight />
@@ -264,7 +265,7 @@ export default function InvoiceDetail({
                   {" "}by{" "}
                   <Link
                     to={apiInvoiceHref(replacedBy)}
-                    className="text-base-primary-300 hover:underline"
+                    className="text-base-primary-300 underline"
                   >
                     {invoiceNumberOf(replacedBy) ?? "the new version"} (
                     {versionLabel(replacedBy)})
@@ -292,6 +293,10 @@ export default function InvoiceDetail({
 
       <InfoStrip
         items={[
+          {
+            label: "Shipment",
+            value: <ShipmentLink shipmentId={data.shipmentId} variant="pill" />,
+          },
           { label: "Invoice Date", value: formatDate(data.invoiceDate ?? undefined) ?? "—" },
           { label: "Due Date", value: formatDate(data.dueDate ?? undefined) ?? "—" },
           { label: "Invoice Total", value: <InvoiceTotal invoice={data} /> },
@@ -340,7 +345,7 @@ export default function InvoiceDetail({
                 ).{" "}
                 <Link
                   to="/reminders/"
-                  className="text-base-primary-300 hover:underline"
+                  className="text-base-primary-300 underline"
                 >
                   All reminders
                 </Link>
@@ -355,7 +360,6 @@ export default function InvoiceDetail({
             )}
             <Field label="Kind">{humanize(data.kind)}</Field>
             <Field label="TMS invoice code">{data.tmsInvoiceCode ?? "Not set"}</Field>
-            <Field label="Shipment">{data.shipmentId ?? "—"}</Field>
             <Field label="Reference numbers">
               {references.length > 0
                 ? references.map((ref) => `${ref.label} ${ref.value}`).join(" · ")
@@ -442,7 +446,7 @@ function BillToCard({ invoice, href }: { invoice: CustomerInvoiceView; href: str
     <BaseCardWrapper heading="Bill To">
       <div className="text-sm text-[#343A40] space-y-1">
         <Field label="Name">
-          <Link to={href} className="text-base-primary-300 hover:underline">
+          <Link to={href} className="text-base-primary-300 underline">
             {billTo.name}
           </Link>
         </Field>
@@ -478,7 +482,7 @@ function CarrierCard({
     <BaseCardWrapper heading="Carrier">
       <div className="text-sm text-[#343A40] space-y-1">
         <Field label="Name">
-          <Link to={href} className="text-base-primary-300 hover:underline">
+          <Link to={href} className="text-base-primary-300 underline">
             {name}
           </Link>
         </Field>

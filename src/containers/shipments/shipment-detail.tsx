@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   BaseCardWrapper,
-  BaseTable,
   ErrorState,
   InfoStrip,
   Money,
@@ -12,37 +11,16 @@ import {
 } from "@/components/common";
 import { ArrowRight } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
+import { listReturnHref } from "@/hooks";
 import { paymentTermsLabels } from "@/lib/constants";
 import { InvoiceDirection, Permission, ShipmentSource } from "@/lib/enums";
-import { Paginated, PartyView, ShipmentView } from "@/lib/interfaces";
-import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
-import {
-  ApiError,
-  errorMessage,
-  getShipment,
-  listCarrierInvoices,
-  listCustomerInvoices,
-} from "@/services";
-import InvoiceViewCell, {
-  InvoiceView,
-  InvoiceViewAction,
-  referencesOf,
-} from "../invoices/invoice-view";
+import { ApiError, errorMessage, getShipment } from "@/services";
+import { referencesOf } from "../invoices/invoice-view";
 import { partyHref } from "../parties/party-list";
 import usePartyNames from "../parties/use-party-names";
+import ShipmentInvoices from "./shipment-invoice-cards";
 import { place } from "./shipment-list";
-
-const invoiceColumns: BaseTableColumn[] = [
-  { key: "number", label: "Invoice #" },
-  { key: "party", label: "Party" },
-  { key: "invoiceDate", label: "Invoice Date" },
-  { key: "dueDate", label: "Due Date" },
-  { key: "total", label: "Total", align: "end" },
-  { key: "balance", label: "Balance", align: "end" },
-  { key: "status", label: "Status" },
-  { key: "actions", label: "Actions", align: "center" },
-];
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -55,6 +33,10 @@ export default function ShipmentDetail() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
   const { can } = useCan();
+  // Whether each side's invoice card is open. Each opens on its own; the
+  // two sides are matched in height only while both are open or both closed.
+  const [shipperOpen, setShipperOpen] = useState(false);
+  const [carrierOpen, setCarrierOpen] = useState(false);
 
   const shipment = useQuery({
     queryKey: ["shipments", "detail", id],
@@ -87,7 +69,7 @@ export default function ShipmentDetail() {
   const partyLink = (partyId: string) => {
     const party = parties.get(partyId);
     return party ? (
-      <Link to={partyHref(party)} className="text-base-primary-300 hover:underline">
+      <Link to={partyHref(party)} className="text-base-primary-300 underline">
         {party.name}
       </Link>
     ) : (
@@ -98,7 +80,7 @@ export default function ShipmentDetail() {
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="flex items-center gap-4">
-        <Link to="/shipments/" className="text-base text-[#71717A]">
+        <Link to={listReturnHref("/shipments/")} className="text-base text-[#71717A] underline">
           Shipments
         </Link>
         <ArrowRight />
@@ -184,72 +166,30 @@ export default function ShipmentDetail() {
       </BaseCardWrapper>
 
       {/* Each side only for those who may read its invoices. */}
-      {can(Permission.CustomerInvoicesView) && (
-        <ShipmentInvoices
-          direction={InvoiceDirection.Receivable}
-          shipment={data}
-          parties={parties}
-          heading="Shipper Invoice"
-        />
-      )}
-      {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (
-        <ShipmentInvoices
-          direction={InvoiceDirection.Payable}
-          shipment={data}
-          parties={parties}
-          heading="Carrier Invoice"
-        />
-      )}
+      <div
+        className={`grid grid-cols-1 lg:grid-cols-2 gap-6 ${
+          shipperOpen === carrierOpen ? "" : "items-start"
+        }`}
+      >
+        {can(Permission.CustomerInvoicesView) && (
+          <ShipmentInvoices
+            direction={InvoiceDirection.Receivable}
+            shipment={data}
+            parties={parties}
+            heading="Shipper Invoice"
+            onExpandedChange={setShipperOpen}
+          />
+        )}
+        {data.carrierPartyId && can(Permission.CarrierInvoicesView) && (
+          <ShipmentInvoices
+            direction={InvoiceDirection.Payable}
+            shipment={data}
+            parties={parties}
+            heading="Carrier Invoice"
+            onExpandedChange={setCarrierOpen}
+          />
+        )}
+      </div>
     </div>
-  );
-}
-
-// The shipment's invoices on one side. A shipment rarely has more than a
-// few (the invoice, then any adjustments), so one page of 20 is shown.
-function ShipmentInvoices({
-  direction,
-  shipment,
-  parties,
-  heading,
-}: {
-  direction: InvoiceDirection;
-  shipment: ShipmentView;
-  parties: Map<string, PartyView>;
-  heading: string;
-}) {
-  const params = { page: 1, limit: 20, shipmentId: shipment.id };
-  const invoices = useQuery({
-    queryKey: ["invoices", direction, "shipment", params],
-    queryFn: ({ signal }): Promise<Paginated<InvoiceView>> =>
-      direction === InvoiceDirection.Receivable
-        ? listCustomerInvoices(params, signal)
-        : listCarrierInvoices(params, signal),
-  });
-
-  return (
-    <BaseCardWrapper heading={heading}>
-      {invoices.isError ? (
-        <ErrorState
-          message="We couldn't load the invoices. Please try again."
-          onAction={() => void invoices.refetch()}
-        />
-      ) : (
-        <BaseTable<InvoiceView>
-          ariaLabel={heading}
-          columns={invoiceColumns}
-          data={invoices.data?.items ?? []}
-          loading={invoices.isPending}
-          rowKey={(row) => row.id}
-          renderCell={(row, key) =>
-            key === "actions" ? (
-              <InvoiceViewAction invoice={row} />
-            ) : (
-              <InvoiceViewCell invoice={row} columnKey={key} parties={parties} />
-            )
-          }
-          emptyContent="No invoices"
-        />
-      )}
-    </BaseCardWrapper>
   );
 }
