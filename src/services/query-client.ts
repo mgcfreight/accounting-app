@@ -20,6 +20,27 @@ const isRetryable = (error: unknown) =>
 // When a refetch fails, TanStack keeps the last data beside the error. A
 // screen showing amounts must check `isError` and not present those figures
 // as current.
+// Every view that shows what is owed or paid. A payment, an allocation, a
+// write-off or a credit changes all of them: balances and unapplied credit,
+// the dashboard and aging (["accounts", …]), statements, reports, reminders
+// and the invoice pages. Refresh them together, so no screen keeps an old
+// amount after a change.
+const MONEY_VIEWS = [
+  "invoices",
+  "payments",
+  "accounts",
+  "statements",
+  "report",
+  "reminders",
+  "write-offs",
+  "disputes",
+];
+
+export const refreshMoneyViews = (client: QueryClient) =>
+  MONEY_VIEWS.forEach(
+    (key) => void client.invalidateQueries({ queryKey: [key] })
+  );
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

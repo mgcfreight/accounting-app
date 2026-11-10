@@ -9,10 +9,11 @@ import {
   ErrorState,
   InfoStrip,
   Money,
-  RowActions,
+  MoreActions,
   TableSkeleton,
 } from "@/components/common";
 import { ArrowRight, Send } from "@/components/icons";
+import { useHeaderDetail } from "@/components/providers/header-detail-provider";
 import { useCan } from "@/components/providers/user-provider";
 import {
   billingTriggerLabels,
@@ -24,10 +25,11 @@ import {
   CarrierInvoiceStatus,
   InvoiceDirection,
   InvoiceReviewFlag,
+  Permission,
 } from "@/lib/enums";
 import { CarrierInvoiceView, CustomerInvoiceView } from "@/lib/interfaces";
 import { useFileDownload } from "@/hooks";
-import { formatDate, formatDateTime, humanize } from "@/lib/utils";
+import { formatDate, formatDateTime, humanize, torontoToday } from "@/lib/utils";
 import {
   ApiError,
   downloadInvoicePdf,
@@ -38,6 +40,8 @@ import {
   getCustomerInvoice,
   getCustomerInvoiceByNumber,
   getCustomerInvoiceVersions,
+  getNoticeSettings,
+  getParty,
 } from "@/services";
 import usePartyNames from "../parties/use-party-names";
 import InvoiceActionModal, { InvoiceAction } from "./invoice-action-modal";
@@ -49,7 +53,9 @@ import InvoiceExtraActionModal, {
   extraActionsFor,
 } from "./invoice-extra-actions";
 import InvoiceHistory from "./invoice-history";
+import { versionLabel } from "./invoice-pdf";
 import { availableActions } from "./invoice-row-actions";
+import InvoiceVersions, { VersionSwitcher } from "./invoice-versions";
 import {
   apiInvoiceHref,
   awaitsReview,
@@ -67,6 +73,7 @@ import {
   partyOf,
   referencesOf,
 } from "./invoice-view";
+import { paymentReminder } from "./payment-reminder";
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <p>
@@ -127,6 +134,25 @@ export default function InvoiceDetail({
       `${invoiceNumberOf(target) ?? "invoice"}.pdf`
     )
   );
+  // What sets an owed invoice's payment reminder: its party's agreement (the
+  // same query and key as the party page; needs parties.view) and Settings.
+  const remindable =
+    !!invoice.data && isOwed(invoice.data) && !!invoice.data.dueDate;
+  const partyId = invoice.data ? partyOf(invoice.data).id : null;
+  const reminderParty = useQuery({
+    queryKey: ["parties", "detail", partyId],
+    queryFn: ({ signal }) => getParty(partyId!, signal),
+    staleTime: 5 * 60_000,
+    enabled: remindable && can(Permission.PartiesView),
+  });
+  const noticeSettings = useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
+    enabled: remindable,
+  });
+  // The header shows the invoice number, not the record id in the URL.
+  const headerNumber = invoice.data ? invoiceNumberOf(invoice.data) : null;
+  useHeaderDetail(headerNumber ? `#${headerNumber}` : null);
 
   if (!id) {
     return <ErrorState title="Invoice not found" message="No invoice was chosen." />;
@@ -155,11 +181,27 @@ export default function InvoiceDetail({
     pdf.mutate(data)
   );
   const canVoid = extraActions.some((item) => item.key === "void");
+  // Emailing the invoice is a button of its own; the rest stay under "More".
+  const emailAction = extraActions.find((item) => item.key === "email");
+  const menuActions = extraActions.filter((item) => item.key !== "email");
   const references = referencesOf(data);
   // The TMS cancelled the load: until the invoice is void, point to voiding.
   const loadCancelled =
     data.reviewFlags.includes(InvoiceReviewFlag.TmsCancelled) &&
     canBeVoided(data);
+  const agreement = reminderParty.data?.agreements?.find(
+    (item) => item.id === data.agreementId
+  );
+  const reminder =
+    agreement && noticeSettings.data
+      ? paymentReminder(data, agreement, noticeSettings.data, torontoToday())
+      : null;
+  // Say so rather than drop the line: a missing line reads as "no reminder".
+  const reminderUnknown =
+    remindable &&
+    (reminderParty.isError ||
+      noticeSettings.isError ||
+      (!!reminderParty.data && !agreement));
   const replacedBy = isSuperseded(data)
     ? versions.data?.find((version) => version.parentInvoiceId === data.id)
     : undefined;
@@ -175,6 +217,9 @@ export default function InvoiceDetail({
           <span className="text-base-primary-600 text-sm">
             {number ? `#${number}` : "No number yet"}
           </span>
+          {versions.data && versions.data.length > 1 && (
+            <VersionSwitcher current={data} versions={versions.data} />
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {actions.map((item, index) => (
@@ -187,7 +232,17 @@ export default function InvoiceDetail({
               onPress={() => setAction(item.key)}
             />
           ))}
-          {extraActions.length > 0 && <RowActions actions={extraActions} />}
+          {emailAction && (
+            <BaseButton
+              text="Email invoice"
+              varient={actions.length === 0 ? "solid" : "bordered"}
+              className={`rounded-xl px-4 ${actions.length === 0 ? "" : "text-base-primary"}`}
+              // The icon is drawn white: it shows on a solid button only.
+              startContent={actions.length === 0 ? <Send /> : undefined}
+              onPress={() => setExtraAction("email")}
+            />
+          )}
+          <MoreActions actions={menuActions} />
         </div>
       </div>
 
@@ -202,7 +257,8 @@ export default function InvoiceDetail({
         <AlertBanner
           message={
             <>
-              This version was replaced
+              You are viewing an old version ({versionLabel(data)}). It was
+              replaced
               {replacedBy && (
                 <>
                   {" "}by{" "}
@@ -210,13 +266,14 @@ export default function InvoiceDetail({
                     to={apiInvoiceHref(replacedBy)}
                     className="text-base-primary-300 hover:underline"
                   >
-                    {invoiceNumberOf(replacedBy) ?? "the new version"}
+                    {invoiceNumberOf(replacedBy) ?? "the new version"} (
+                    {versionLabel(replacedBy)})
                   </Link>
                 </>
               )}
               {data.supersededAt && ` on ${formatDateTime(data.supersededAt)}`}
-              . It is kept exactly as it was; what it owed moved to the new
-              version.
+              . It is kept exactly as it was sent; what it owed moved to the
+              new version.
             </>
           }
         />
@@ -256,12 +313,31 @@ export default function InvoiceDetail({
               <Field label="Rate to CAD">{data.fxRateToCad}</Field>
             )}
             <Field label="Terms">{paymentTermsLabels[data.paymentTerms]}</Field>
-            {isOwed(data) && data.dueDate && (
-              <Field label="Payment reminders">
+            {reminderUnknown && (
+              <Field label="Payment reminder">
+                <span className="text-base-danger">
+                  Couldn&apos;t check this invoice&apos;s reminder settings.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => {
+                      void reminderParty.refetch();
+                      void noticeSettings.refetch();
+                    }}
+                  >
+                    Try again
+                  </button>
+                </span>
+              </Field>
+            )}
+            {reminder && (
+              <Field label="Payment reminder">
+                {formatDate(reminder.remindOn)} ({reminder.daysBefore}{" "}
+                {reminder.daysBefore === 1 ? "day" : "days"} before due
                 {isReceivable
-                  ? "Emailed to the shipper before the due date, and again if overdue"
-                  : "An alert to the accounts team before the due date"}
-                , on the days set in Settings.{" "}
+                  ? ", emailed to the shipper's accounts department"
+                  : ", an alert to the accounts team"}
+                ).{" "}
                 <Link
                   to="/reminders/"
                   className="text-base-primary-300 hover:underline"
@@ -312,37 +388,12 @@ export default function InvoiceDetail({
         </BaseCardWrapper>
       ) : (
         versions.data &&
-        versions.data.length > 1 && (
-          <BaseCardWrapper heading="Versions">
-            <ol className="flex flex-col gap-3">
-              {versions.data.map((version) => (
-                <li
-                  key={version.id}
-                  className="flex flex-wrap justify-between items-start gap-3"
-                >
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      {version.id === data.id ? (
-                        <strong>{invoiceNumberOf(version) ?? "This version"}</strong>
-                      ) : (
-                        <Link
-                          to={apiInvoiceHref(version)}
-                          className="text-base-primary-300 hover:underline"
-                        >
-                          {invoiceNumberOf(version) ?? "No number yet"}
-                        </Link>
-                      )}
-                      <InvoiceStatusCell invoice={version} />
-                    </div>
-                    <span className="text-xs text-content-5">
-                      {version.revisionReason ?? "First version"}
-                    </span>
-                  </div>
-                  <InvoiceTotal invoice={version} />
-                </li>
-              ))}
-            </ol>
-          </BaseCardWrapper>
+        versions.data.length > 0 && (
+          <InvoiceVersions
+            current={data}
+            versions={versions.data}
+            onPdf={(version) => pdf.mutate(version)}
+          />
         )
       )}
 
@@ -360,8 +411,12 @@ export default function InvoiceDetail({
         invoice={data}
         partyName={party.name}
         onClose={() => setAction(null)}
+        // The new version takes the replaced one's place in history, so Back
+        // returns to where the user came from, not to the replaced version.
         onRevised={(newId) =>
-          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`)
+          navigate(`${listHref}view/?id=${encodeURIComponent(newId)}`, {
+            replace: true,
+          })
         }
       />
       <InvoiceExtraActionModal
