@@ -28,6 +28,9 @@ export type BaseTableColumn = {
   sortKey?: string;
   // How values compare. Defaults to "string". Money strings sort as "money".
   sortType?: "string" | "number" | "date" | "money";
+  // For "money": the field holding the row's currency, when it isn't
+  // `currency`. Rows sort by currency first, then amount.
+  currencyKey?: string;
   // The value to sort a row by, when no single field holds it.
   sortValue?: (row: never) => unknown;
   // Amounts and counts go "end", so their digits line up down the column.
