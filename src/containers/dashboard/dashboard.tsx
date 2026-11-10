@@ -79,11 +79,11 @@ export default function Dashboard() {
   const canViewCarriers = can(Permission.CarrierInvoicesView);
 
   const dashboard = useQuery({
-    queryKey: ["account", "dashboard"],
+    queryKey: ["accounts", "dashboard"],
     queryFn: ({ signal }) => getDashboard(signal),
   });
   const aging = useQuery({
-    queryKey: ["account", "aging"],
+    queryKey: ["accounts", "aging"],
     queryFn: ({ signal }) => getAging(signal),
   });
   const year = torontoToday().slice(0, 4);
@@ -385,7 +385,7 @@ function CycleCard({ label, days }: { label: string; days: number | null | undef
 function PaymentCycleList({ title, type }: { title: string; type: PartyType }) {
   const params = { page: 1, limit: 100, type, isActive: true };
   const summaries = useQuery({
-    queryKey: ["account", "summaries", params],
+    queryKey: ["accounts", "summaries", params],
     queryFn: ({ signal }) => listAccountSummaries(params, signal),
   });
   const rows: PartyAccountSummary[] = (summaries.data?.items ?? [])

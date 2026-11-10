@@ -20,7 +20,7 @@ import {
   InvoiceKind,
   Permission,
 } from "@/lib/enums";
-import { compareMoney, isZeroMoney } from "@/lib/money";
+import { compareMoney, formatMoney, isZeroMoney } from "@/lib/money";
 import {
   ApiError,
   createCarrierCorrection,
@@ -28,6 +28,7 @@ import {
   emailCustomerInvoice,
   errorMessage,
   openDispute,
+  refreshMoneyViews,
   UPLOADABLE_KINDS,
   uploadInvoiceDocument,
   UploadableKind,
@@ -233,16 +234,22 @@ function Summary({ invoice, partyName }: Omit<ModalProps, "onClose">) {
 
 // Saves through `action`, refetches what it changed and closes. On a 409
 // (someone changed the invoice first) it refetches too, so the page shows
-// what is true now.
+// what is true now. By default every money view: a void, a correction, a
+// dispute or a write-off moves balances, the dashboard, aging, statements,
+// reports and reminders too.
 const useActionMutation = <T, R>(
   action: (values: T) => Promise<R>,
   onDone: (result: R) => void,
   onClose: () => void,
-  refetch: string[][] = [["invoices"]]
+  refetch: string[][] | "money" = "money"
 ) => {
   const queryClient = useQueryClient();
   const refresh = () =>
-    refetch.forEach((queryKey) => void queryClient.invalidateQueries({ queryKey }));
+    refetch === "money"
+      ? refreshMoneyViews(queryClient)
+      : refetch.forEach(
+          (queryKey) => void queryClient.invalidateQueries({ queryKey })
+        );
   return useMutation({
     mutationFn: action,
     onSuccess: (result) => {
@@ -471,8 +478,7 @@ function DisputeInvoiceModal({ invoice, partyName, onClose }: ModalProps) {
         reason: values.reason.trim(),
       }),
     () => toast.success(`${invoiceNumberOf(invoice) ?? "The invoice"} is flagged as disputed.`),
-    onClose,
-    [["invoices"], ["disputes"], ["accounts"]]
+    onClose
   );
 
   return (
@@ -550,10 +556,9 @@ function WriteOffModal({ invoice, partyName, onClose }: ModalProps) {
     },
     (done) =>
       toast.success(
-        `Wrote off ${done.currency} ${done.amount} of ${invoiceNumberOf(invoice) ?? "the invoice"}.`
+        `Wrote off ${formatMoney(done.amount, done.currency) ?? "the amount"} of ${invoiceNumberOf(invoice) ?? "the invoice"}.`
       ),
-    onClose,
-    [["invoices"], ["write-offs"], ["accounts"], ["report"], ["reminders"]]
+    onClose
   );
 
   return (

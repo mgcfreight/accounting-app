@@ -31,6 +31,8 @@ import {
   getAllocationSuggestion,
   listCarrierInvoices,
   listCustomerInvoices,
+  readAllPages,
+  refreshMoneyViews,
   reverseAllocation,
   reversePayment,
 } from "@/services";
@@ -62,18 +64,17 @@ const AMOUNT = /^\d{1,12}\.\d{2}$/;
 
 const isIn = (payment: Payment) => payment.direction === PaymentDirection.In;
 
-// Refetch payments and invoices after a change; on a 409 (someone else
-// changed the payment) refetch so the screen shows what is true now.
+// Refetch every money view after a change (balances, unapplied credit, the
+// dashboard, statements, reports and reminders move with an allocation
+// too); on a 409 (someone else changed the payment) refetch so the screen
+// shows what is true now.
 const usePaymentMutation = <T,>(
   action: (values: T) => Promise<Payment>,
   successMessage: (payment: Payment) => string,
   onClose: () => void
 ) => {
   const queryClient = useQueryClient();
-  const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["payments"] });
-    void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-  };
+  const refresh = () => refreshMoneyViews(queryClient);
   return useMutation({
     mutationFn: action,
     onSuccess: (payment) => {
@@ -211,9 +212,12 @@ type OpenInvoice = {
 
 // The party's invoices that can take money and still owe some, in the
 // payment's currency: issued shipper invoices, approved carrier bills.
+// Every page, so an invoice past the first 100 can be allocated by hand and
+// a suggested one's dispute is seen.
+const TOO_MANY_OPEN =
+  "This party has too many open invoices to list here. Apply the suggested match, or ask for help.";
 const useOpenInvoices = (payment: Payment) => {
   const params = {
-    page: 1,
     limit: 100,
     paymentStatus: PaymentStatus.Unpaid,
   };
@@ -222,25 +226,35 @@ const useOpenInvoices = (payment: Payment) => {
     queryFn: async ({ signal }): Promise<OpenInvoice[]> => {
       const rows = isIn(payment)
         ? (
-            await listCustomerInvoices(
-              {
-                ...params,
-                customerId: payment.partyId,
-                status: CustomerInvoiceStatus.Issued,
-              },
-              signal
+            await readAllPages(
+              (page) =>
+                listCustomerInvoices(
+                  {
+                    ...params,
+                    page,
+                    customerId: payment.partyId,
+                    status: CustomerInvoiceStatus.Issued,
+                  },
+                  signal
+                ),
+              TOO_MANY_OPEN
             )
-          ).items.map((i) => ({ ...i, number: i.invoiceNumber }))
+          ).map((i) => ({ ...i, number: i.invoiceNumber }))
         : (
-            await listCarrierInvoices(
-              {
-                ...params,
-                carrierId: payment.partyId,
-                status: CarrierInvoiceStatus.Approved,
-              },
-              signal
+            await readAllPages(
+              (page) =>
+                listCarrierInvoices(
+                  {
+                    ...params,
+                    page,
+                    carrierId: payment.partyId,
+                    status: CarrierInvoiceStatus.Approved,
+                  },
+                  signal
+                ),
+              TOO_MANY_OPEN
             )
-          ).items.map((i) => ({ ...i, number: i.referenceNumber }));
+          ).map((i) => ({ ...i, number: i.referenceNumber }));
       return rows
         .filter(
           (i) =>
@@ -291,7 +305,7 @@ export function AllocateModal({
     (saved) =>
       isZeroMoney(saved.unapplied)
         ? `${saved.number} allocated in full.`
-        : `${saved.number} allocated; ${saved.unapplied} ${saved.currency} stays as unapplied credit.`,
+        : `${saved.number} allocated; ${formatMoney(saved.unapplied, saved.currency) ?? "the rest"} stays as unapplied credit.`,
     onClose
   );
 
@@ -471,7 +485,8 @@ export function ViewAllocationModal({
       reverseAllocation(payment.direction, allocationId, {
         version: payment.version,
       }),
-    (saved) => `Allocation reversed: ${saved.unapplied} ${saved.currency} unapplied on ${saved.number}.`,
+    (saved) =>
+      `Allocation reversed: ${formatMoney(saved.unapplied, saved.currency) ?? "the amount"} unapplied on ${saved.number}.`,
     onClose
   );
 
