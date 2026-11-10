@@ -46,7 +46,7 @@ export default function StatCard({
               to={card.pageLink}
               className="flex items-center gap-2 cursor-pointer w-fit"
             >
-              <p className="ml-3 text-sm text-[#8F9494]">View</p>
+              <p className="ml-3 text-sm text-[#8F9494] underline">View</p>
               <img src="/icons/export.svg" alt="" width={15} height={15} />
             </Link>
           )

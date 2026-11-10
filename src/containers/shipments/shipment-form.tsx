@@ -216,7 +216,7 @@ export default function ShipmentForm() {
       onSubmit={handleSubmit((values) => save.mutate(values))}
     >
       <div className="flex items-center gap-4">
-        <Link to="/shipments/" className="text-base text-[#71717A]">
+        <Link to="/shipments/" className="text-base text-[#71717A] underline">
           Shipments
         </Link>
         <ArrowRight />
