@@ -17,10 +17,18 @@ import {
 } from "@/components/common";
 import { EyeIcon } from "@/components/icons";
 import { useCurrentUser } from "@/components/providers/user-provider";
-import { useServerPaging } from "@/hooks";
+import { z } from "zod";
+import {
+  limitParam,
+  oneOf,
+  pageParam,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import { AuditEvent } from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDateTime, fullName, torontoDayBounds } from "@/lib/utils";
+import { formatDateTime, fullName, isCalendarDate, torontoDayBounds } from "@/lib/utils";
 import { errorMessage, listAuditEvents, listUsers } from "@/services";
 
 type Filters = { actorId: string; action: string; targetType: string; from: string; to: string };
@@ -87,6 +95,23 @@ const TARGET_TYPES = [
 
 const option = (value: string, label = value) => ({ key: value, label, value });
 
+const BLANK: Filters = { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" };
+const URL_DEFAULTS = { ...BLANK, page: "1", limit: "10" };
+// A date that exists, not just its shape: ?from=2026-13-45 falls back to "".
+const DATE_PARAM = z.string().refine(isCalendarDate).catch("");
+
+// The filters and page as kept in the URL (see useListUrlState): only the
+// actions and targets the API accepts; a user id is checked for its shape.
+const urlSchema = z.object({
+  actorId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).catch(ALL),
+  action: oneOf(ACTIONS, ALL),
+  targetType: oneOf(TARGET_TYPES, ALL),
+  from: DATE_PARAM,
+  to: DATE_PARAM,
+  page: pageParam,
+  limit: limitParam(),
+});
+
 // "auth.2fa_enabled" -> "2fa enabled"; the group shows as the chip's tone.
 const actionLabel = (action: string) => action.split(".").slice(1).join(".").replace(/_/g, " ") || action;
 const isFailure = (action: string) =>
@@ -98,15 +123,35 @@ export default function AuditLog() {
   const me = useCurrentUser();
   const isAdmin = me.isAdmin;
   const [open, setOpen] = useState<AuditEvent | null>(null);
-  const {
-    control,
-    reset,
-    formState: { isDirty },
-  } = useForm<Filters>({
-    defaultValues: { actorId: ALL, action: ALL, targetType: ALL, from: "", to: "" },
+  // Filters and page are in the URL, so Back returns to the same events.
+  const fromUrl = useListUrlState(urlSchema);
+  const { control, reset } = useForm<Filters>({
+    defaultValues: {
+      // Only an Admin can filter by user. For anyone else an actorId from the
+      // URL (an Admin's shared link) is dropped here, so it isn't counted as a
+      // filter, kept in the paging key, or written back to the URL.
+      actorId: isAdmin ? fromUrl.actorId : ALL,
+      action: fromUrl.action,
+      targetType: fromUrl.targetType,
+      from: fromUrl.from,
+      to: fromUrl.to,
+    },
   });
   const filters = useWatch({ control }) as Filters;
-  const paging = useServerPaging(JSON.stringify(filters));
+  // Against the blank filters, not the form's defaults: filters read from
+  // the URL can still be cleared.
+  const filtered = (Object.keys(BLANK) as (keyof Filters)[]).some(
+    (key) => (filters[key] ?? BLANK[key]) !== BLANK[key]
+  );
+  const paging = useServerPaging(
+    JSON.stringify(filters),
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    { ...filters, page: String(paging.page), limit: String(paging.limit) },
+    URL_DEFAULTS
+  );
 
   const users = useQuery({
     queryKey: ["users", "picker"],
@@ -215,7 +260,7 @@ export default function AuditLog() {
         <BaseInput name="from" control={control} type="date" aria-label="From date" startContent={<span className="text-xs text-content-5">From</span>} {...dateInput} />
         <BaseInput name="to" control={control} type="date" aria-label="To date" startContent={<span className="text-xs text-content-5">To</span>} {...dateInput} />
         {!isAdmin && <p className="text-sm text-content-6">Showing your own activity.</p>}
-        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
+        <ClearFiltersButton active={filtered} onClear={() => reset(BLANK)} />
       </FilterBar>
       {events.isError && (
         <AlertBanner

@@ -27,6 +27,16 @@ const TIME_ZONE = "America/Toronto";
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
+// A calendar date that exists: "2026-02-28" yes; "2026-13-45" and
+// "2026-02-30" no. The shape alone lets impossible dates through, and an
+// Invalid Date throws a RangeError when it is formatted. The round trip
+// catches a day that rolls over into the next month as well as NaN.
+export const isCalendarDate = (date: string) => {
+  if (!DATE_ONLY.test(date)) return false;
+  const time = Date.parse(`${date}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === date;
+};
+
 // A date-only value ("2026-10-14": invoice, due and payment dates) is a
 // calendar date, not an instant. `new Date("2026-10-14")` is UTC midnight,
 // which in Toronto is the evening before — formatting it in Toronto time

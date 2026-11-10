@@ -1,5 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysPastDue, torontoLocalToIso } from "./utils";
+import {
+  addDays,
+  daysPastDue,
+  isCalendarDate,
+  torontoDayBounds,
+  torontoLocalToIso,
+} from "./utils";
+
+// The audit log reads ?from= and ?to= from the URL through this; an
+// impossible date that got past it crashed the page in torontoDayBounds.
+describe("isCalendarDate", () => {
+  it("accepts dates that exist, including 29 February in a leap year", () => {
+    expect(isCalendarDate("2026-10-14")).toBe(true);
+    expect(isCalendarDate("2028-02-29")).toBe(true);
+  });
+
+  it("rejects impossible months and days", () => {
+    expect(isCalendarDate("2026-13-45")).toBe(false);
+    expect(isCalendarDate("2026-00-10")).toBe(false);
+    expect(isCalendarDate("2026-10-00")).toBe(false);
+  });
+
+  it("rejects days that would roll over into the next month", () => {
+    expect(isCalendarDate("2026-02-29")).toBe(false);
+    expect(isCalendarDate("2026-02-30")).toBe(false);
+    expect(isCalendarDate("2026-04-31")).toBe(false);
+  });
+
+  it("rejects anything that isn't a bare YYYY-MM-DD", () => {
+    expect(isCalendarDate("")).toBe(false);
+    expect(isCalendarDate("2026-1-5")).toBe(false);
+    expect(isCalendarDate("2026-10-14T00:00")).toBe(false);
+    expect(isCalendarDate("not-a-date")).toBe(false);
+  });
+
+  it("only passes dates torontoDayBounds can format", () => {
+    expect(() => torontoDayBounds("2026-10-14")).not.toThrow();
+    expect(() => torontoDayBounds("2026-13-45")).toThrow(RangeError);
+  });
+});
 
 // The shipment form sends "Created in TMS" through this; the API takes the
 // Toronto date of the result as the invoice date, which picks the tax rate.
