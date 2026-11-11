@@ -30,7 +30,8 @@ import {
 // Not every 409 is that: the API also answers 409 for a change that isn't
 // allowed (a closed month, a draft-only action, a bill number already used).
 // An edit conflict is told apart by the `code` in the API's 409 body (its
-// ErrorCodes), never by the wording of its message.
+// ErrorCodes, sent since mgcfreight/accounting#84), never by the wording of
+// its message.
 const EDIT_CONFLICT_CODES = new Set(["INVOICE_STALE", "INVOICE_ALREADY_REVISED"]);
 
 export const isInvoiceEditConflict = (error: unknown) =>
