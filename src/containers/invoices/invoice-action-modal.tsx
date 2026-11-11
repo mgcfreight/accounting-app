@@ -1077,9 +1077,9 @@ function ShipperCommissionSummary({
 // price (every carrier charge above, added up, before tax), the customer rate
 // (what the shipper is charged, before tax) and the commission between them.
 // Shown only: the charges are what's sent, and nothing here changes them or
-// is saved. A preview, like the shipper side's — agreed in PR #45's review
-// (2026-11-11); see lib/money.ts. A shipper invoice's new version gets
-// ShipperCommissionSummary.
+// is saved. A preview, like the shipper side's: commission is shown on screen
+// only and must never appear on a carrier invoice PDF or anything sent to the
+// carrier. A shipper invoice's new version gets ShipperCommissionSummary.
 function CarrierCommissionSummary({
   invoice,
   control,
