@@ -5,6 +5,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import {
+  AlertBanner,
   BaseButton,
   BaseCheckbox,
   BaseInput,
@@ -24,6 +25,7 @@ import {
   Currency,
   CustomerInvoiceStatus,
   InstallmentFrequency,
+  InstallmentPlanAttention,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceKind,
@@ -34,7 +36,7 @@ import {
 import { Installment, InstallmentPlan, Paginated } from "@/lib/interfaces";
 import { compareMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
-import { formatDate, torontoToday } from "@/lib/utils";
+import { addMonths, formatDate, torontoToday } from "@/lib/utils";
 import { useServerPaging } from "@/hooks";
 import {
   createInstallmentPlan,
@@ -66,9 +68,24 @@ const InstallmentChip = ({ status }: { status: InstallmentStatus }) => (
 const nextInstallment = (plan: InstallmentPlan): Installment | undefined =>
   plan.installments.find((item) => item.status !== InstallmentStatus.Paid);
 
-// A late installment makes the plan late; all paid, it's complete.
+const attentionReason: Record<InstallmentPlanAttention, string> = {
+  [InstallmentPlanAttention.InvoiceVoided]: "An invoice in this plan was voided.",
+  [InstallmentPlanAttention.AmountChanged]: "An invoice in this plan was revised to a different total.",
+};
+
+// Why the plan's figures can't be taken as they stand, in words staff read.
+const attentionText = (plan: InstallmentPlan) =>
+  plan.attention.map((item) => attentionReason[item]).join(" ");
+
+// A voided or re-totalled invoice comes first: the plan's remaining and its
+// late or on-track status no longer mean what they say. Otherwise a late
+// installment makes the plan late; all paid, it's complete.
 const PlanStatus = ({ plan }: { plan: InstallmentPlan }) =>
-  plan.installments.some((item) => item.status === InstallmentStatus.Late) ? (
+  plan.attention.length > 0 ? (
+    <span title={attentionText(plan)}>
+      <StatusChip text="Needs attention" tone="warning" />
+    </span>
+  ) : plan.installments.some((item) => item.status === InstallmentStatus.Late) ? (
     <StatusChip text="Late" tone="danger" />
   ) : nextInstallment(plan) ? (
     <StatusChip text="On track" tone="primary" />
@@ -211,10 +228,15 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
     <FormModal
       isOpen
       onOpenChange={(open) => !open && onClose()}
-      title={`Installment Plan ${plan.id}`}
+      title={`Installment Plan · ${plan.partyName}`}
       confirmText="Done"
       size="xl"
     >
+      {plan.attention.length > 0 && (
+        <AlertBanner
+          message={`Needs attention. ${attentionText(plan)} The paid, remaining and installment figures below may no longer be right.`}
+        />
+      )}
       <div className="text-sm text-[#707070] flex flex-col gap-1">
         <span>
           {plan.partyName} · total <Money amount={plan.total} currency={plan.currency} /> ·
@@ -286,9 +308,15 @@ const frequencyOptions = [
   { key: InstallmentFrequency.Monthly, label: "Monthly", value: InstallmentFrequency.Monthly },
 ];
 
+// The API's limits on a new plan (CreateInstallmentPlanDto and the service
+// in mgcfreight/accounting#78), checked here for a clearer message.
+const MAX_PLAN_INVOICES = 20;
+const MAX_FIRST_DUE_MONTHS = 12;
+
 // The party's invoices a plan can take: owing, not credit notes; issued
-// shipper invoices, or received, on-hold or approved carrier bills. Every
-// page, so a party with more than 100 loses none.
+// shipper invoices, or approved carrier bills (the API refuses an unapproved
+// bill, whose amount is still in question). Every page, so a party with more
+// than 100 loses none.
 const useOwingInvoices = (direction: PaymentDirection, partyId: string) =>
   useQuery({
     queryKey: ["invoices", direction, "owing", partyId],
@@ -308,22 +336,15 @@ const useOwingInvoices = (direction: PaymentDirection, partyId: string) =>
               )
             ).map((i) => ({ ...i, number: i.invoiceNumber }))
           : (
-              await Promise.all(
-                [
-                  CarrierInvoiceStatus.Received,
-                  CarrierInvoiceStatus.OnHold,
-                  CarrierInvoiceStatus.Approved,
-                ].map((status) =>
-                  readAllPages(
-                    (page) =>
-                      listCarrierInvoices({ ...base, page, carrierId: partyId, status }, signal),
-                    TOO_MANY_OWING
-                  )
-                )
+              await readAllPages(
+                (page) =>
+                  listCarrierInvoices(
+                    { ...base, page, carrierId: partyId, status: CarrierInvoiceStatus.Approved },
+                    signal
+                  ),
+                TOO_MANY_OWING
               )
-            )
-              .flat()
-              .map((i) => ({ ...i, number: i.referenceNumber }));
+            ).map((i) => ({ ...i, number: i.referenceNumber }));
       return rows
         .filter((i) => i.kind !== InvoiceKind.CreditNote && compareMoney(i.balanceDue, "0.00") > 0)
         .map((i) => ({
@@ -406,6 +427,10 @@ export function NewPlanModal({
   const submit = handleSubmit((values) => {
     if (chosen.length === 0) {
       setChosenError("Choose at least one invoice");
+      return;
+    }
+    if (chosen.length > MAX_PLAN_INVOICES) {
+      setChosenError(`A plan takes at most ${MAX_PLAN_INVOICES} invoices`);
       return;
     }
     if (currencies.size > 1) {
@@ -513,9 +538,15 @@ export function NewPlanModal({
           label="First installment due"
           placeholder=" "
           min={torontoToday()}
+          max={addMonths(torontoToday(), MAX_FIRST_DUE_MONTHS)}
           rules={{
             required: "Choose the first due date",
-            validate: (value) => value >= torontoToday() || "Today or later",
+            validate: (value) =>
+              value < torontoToday()
+                ? "Today or later"
+                : value > addMonths(torontoToday(), MAX_FIRST_DUE_MONTHS)
+                  ? "No more than a year from today"
+                  : true,
           }}
         />
       </div>

@@ -377,6 +377,13 @@ export enum InstallmentFrequency {
   Monthly = "MONTHLY",
 }
 
+// Why staff should look at a plan: one of its invoices was voided, or
+// revised to a different total. Neither counts as paid.
+export enum InstallmentPlanAttention {
+  InvoiceVoided = "INVOICE_VOIDED",
+  AmountChanged = "AMOUNT_CHANGED",
+}
+
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",

@@ -19,6 +19,8 @@ describe("refreshMoneyViews", () => {
         ["report"],
         ["reminders"],
         ["write-offs"],
+        // A plan's paid and remaining move with every payment on its invoices.
+        ["installment-plans"],
       ])
     );
   });

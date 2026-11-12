@@ -141,3 +141,14 @@ export const daysPastDue = (dueDate: string, today: string) =>
 // A calendar date moved by whole days: ("2026-10-31", -7) -> "2026-10-24".
 export const addDays = (date: string, days: number) =>
   new Date(utcDay(date) + days * DAY_MS).toISOString().slice(0, 10);
+
+// A calendar date moved by whole months, kept to the end of a shorter month:
+// ("2028-02-29", 12) -> "2029-02-28". The same as the Accounts API's
+// addMonths, so a limit checked here matches the one it enforces.
+export const addMonths = (date: string, months: number) => {
+  const [year, month, day] = date.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month + months, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month - 1 + months, Math.min(day, lastDay)))
+    .toISOString()
+    .slice(0, 10);
+};
