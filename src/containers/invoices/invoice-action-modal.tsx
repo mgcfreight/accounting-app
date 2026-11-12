@@ -46,6 +46,7 @@ import {
   listCarrierInvoices,
   listCustomerInvoices,
   receiveCarrierInvoice,
+  refreshMoneyViews,
   reviseCarrierInvoice,
   reviseCustomerInvoice,
   updateCarrierInvoice,
@@ -119,8 +120,11 @@ export default function InvoiceActionModal({
   }
 }
 
-// Saves through `action`, then refetches invoices and their History card
-// (audit events), and closes.
+// Saves through `action`, then refetches every money view (issuing an
+// invoice or approving a bill changes what is owed: balances, the
+// dashboard, aging, statements and reminders) and the History card (audit
+// events), and closes. A 409 refetches the same, so the page shows what is
+// true now.
 const useInvoiceMutation = <T, R = unknown>(
   action: (values: T) => Promise<R>,
   successMessage: string,
@@ -128,12 +132,15 @@ const useInvoiceMutation = <T, R = unknown>(
   onDone?: (result: R) => void
 ) => {
   const queryClient = useQueryClient();
+  const refresh = () => {
+    refreshMoneyViews(queryClient);
+    void queryClient.invalidateQueries({ queryKey: ["audit"] });
+  };
   return useMutation({
     mutationFn: action,
     onSuccess: (result) => {
       toast.success(successMessage);
-      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      void queryClient.invalidateQueries({ queryKey: ["audit"] });
+      refresh();
       onClose();
       onDone?.(result);
     },
@@ -143,9 +150,9 @@ const useInvoiceMutation = <T, R = unknown>(
       // invoice someone has since issued — so every one rereads it. Telling
       // an edit conflict apart (by the API's error code) only picks what to
       // say and whether to close, never whether to refetch.
-      if (error instanceof ApiError && error.status === 409) {
-        void queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      }
+      // The money views and History too: a 409 can mean the invoice moved
+      // on, so balances, the dashboard and Needs Review reread as well.
+      if (error instanceof ApiError && error.status === 409) refresh();
       // Someone else changed the invoice first. The form still holds what
       // was read before their change, so sending it again would undo it.
       // The modal closes instead, and the user reopens the action on what
