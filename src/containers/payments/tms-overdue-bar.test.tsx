@@ -212,6 +212,32 @@ describe("TmsOverdueBar", () => {
       expect(bar()).toHaveTextContent("Prairie Agri Inc. owes CAD 2,320.50");
     });
 
+    it("re-pins when the shown shipper leaves the list (PR #40 review)", async () => {
+      const { rerender } = show();
+      await shownNow();
+      fireEvent.click(screen.getByRole("button", { name: "Next overdue payment" }));
+      expect(bar()).toHaveTextContent(GREAT_LAKES);
+      fireEvent.mouseEnter(bar());
+
+      // Great Lakes pays and leaves; the bar falls back to the first row.
+      const [prairie, greatLakes, northwind] = mockTmsOverdue.shippers;
+      void greatLakes;
+      state.overdue = { ...mockTmsOverdue, shippers: [prairie, northwind] };
+      await act(async () => {
+        await refetchAll();
+      });
+      rerender(<TmsOverdueBar />);
+      expect(bar()).toHaveTextContent("Prairie Agri Inc. owes CAD 2,320.50");
+
+      // A later refresh re-sorts: Prairie stays under the pointer.
+      state.overdue = { ...mockTmsOverdue, shippers: [northwind, prairie] };
+      await act(async () => {
+        await refetchAll();
+      });
+      rerender(<TmsOverdueBar />);
+      expect(bar()).toHaveTextContent("Prairie Agri Inc. owes CAD 2,320.50");
+    });
+
     it("steps back and forward with the arrows", async () => {
       show();
       await shownNow();

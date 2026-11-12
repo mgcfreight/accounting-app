@@ -81,8 +81,11 @@ export default function TmsOverdueBar() {
   // the list never swaps the shipper under the pointer, before the first
   // rotation, while paused or with a single row (PR #40 review).
   // (React's "adjust state while rendering": it runs once, before paint.)
+  // Re-pinned when the shown row leaves the list (paid from the bar, say):
+  // the bar then shows the first row, and keeps showing it.
   const firstKey = count > 0 ? keyOf(shippers[0]) : null;
-  if (shownKey === null && firstKey !== null) setShownKey(firstKey);
+  const shownListed = shippers.some((shipper) => keyOf(shipper) === shownKey);
+  if (!shownListed && firstKey !== null && shownKey !== firstKey) setShownKey(firstKey);
 
   const nextKey = count > 0 ? keyOf(shippers[(position + 1) % count]) : null;
   useEffect(() => {
