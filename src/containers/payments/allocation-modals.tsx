@@ -215,7 +215,7 @@ type OpenInvoice = {
 // Every page, so an invoice past the first 100 can be allocated by hand and
 // a suggested one's dispute is seen.
 const TOO_MANY_OPEN =
-  "This party has too many open invoices to list here. Apply the suggested match, or ask for help.";
+  "This party has too many open invoices to list here, so they can't be allocated by hand or checked for disputes. Ask for help before applying money.";
 const useOpenInvoices = (payment: Payment) => {
   const params = {
     limit: 100,

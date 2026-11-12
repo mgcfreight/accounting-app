@@ -139,6 +139,8 @@ export const reviewFlagLabels: Record<InvoiceReviewFlag, string> = {
   [InvoiceReviewFlag.TmsCancelled]: "The TMS cancelled the shipment",
   [InvoiceReviewFlag.UnknownCharge]:
     "A TMS charge with no matching charge type, entered as Other",
+  [InvoiceReviewFlag.TaxUnconfirmed]:
+    "Copied from the TMS total with tax included: check the tax before issuing",
 };
 
 // The codes the API accepts for a Canadian address (its CANADIAN_PROVINCES).
