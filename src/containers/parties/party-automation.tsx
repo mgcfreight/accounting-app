@@ -58,15 +58,7 @@ function PauseSection({
 }) {
   const today = torontoToday();
   const paused = isPaused(automation, today);
-  const { control, handleSubmit } = useForm<PauseFormValues>({
-    values: { until: automation.pausedUntil ?? "", reason: automation.pauseReason },
-  });
-
   const resume = () => void onChange({ paused: false, pausedUntil: null, pauseReason: "" });
-  const save = handleSubmit(async ({ until, reason }) => {
-    const saved = await onChange({ paused: true, pausedUntil: until || null, pauseReason: reason });
-    if (saved) setEditing(false);
-  });
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -98,38 +90,70 @@ function PauseSection({
       )}
 
       {editing && canEdit && (
-        <FormModal
-          isOpen
-          onOpenChange={(open) => !open && setEditing(false)}
-          title="Pause notifications"
-          confirmText="Save"
-          onConfirm={save}
-          isConfirming={busy}
-          size="sm"
-        >
-          <p className="text-xs text-content-5">
-            No automated messages go out while paused. Leave the date blank to
-            pause indefinitely.
-          </p>
-          <div className="flex flex-col gap-3">
-            <BaseInput
-              name="until"
-              control={control}
-              type="date"
-              label="Pause until (inclusive)"
-              min={today}
-            />
-            <BaseTextArea
-              name="reason"
-              control={control}
-              label="Reason (optional)"
-              minRows={2}
-              maxLength={200}
-            />
-          </div>
-        </FormModal>
+        <PauseModal
+          automation={automation}
+          busy={busy}
+          onSave={async (until, reason) => {
+            const saved = await onChange({ paused: true, pausedUntil: until || null, pauseReason: reason });
+            if (saved) setEditing(false);
+          }}
+          onClose={() => setEditing(false)}
+        />
       )}
     </div>
+  );
+}
+
+// Mounted with the modal and filled once, from `defaultValues`: the
+// optimistic update and its rollback change `automation` while it is open,
+// and following them (`values`) would wipe what was typed, so a second Save
+// would pause indefinitely (PR #41 review).
+function PauseModal({
+  automation,
+  busy,
+  onSave,
+  onClose,
+}: {
+  automation: PartyAutomation;
+  busy: boolean;
+  onSave: (until: string, reason: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const today = torontoToday();
+  const { control, handleSubmit } = useForm<PauseFormValues>({
+    defaultValues: { until: automation.pausedUntil ?? "", reason: automation.pauseReason },
+  });
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Pause notifications"
+      confirmText="Save"
+      onConfirm={handleSubmit(({ until, reason }) => onSave(until, reason))}
+      isConfirming={busy}
+      size="sm"
+    >
+      <p className="text-xs text-content-5">
+        No automated messages go out while paused. Leave the date blank to
+        pause indefinitely.
+      </p>
+      <div className="flex flex-col gap-3">
+        <BaseInput
+          name="until"
+          control={control}
+          type="date"
+          label="Pause until (inclusive)"
+          min={today}
+        />
+        <BaseTextArea
+          name="reason"
+          control={control}
+          label="Reason (optional)"
+          minRows={2}
+          maxLength={200}
+        />
+      </div>
+    </FormModal>
   );
 }
 
@@ -270,7 +294,7 @@ function RuleRow({
               ? "A contact chosen here is no longer active."
               : `${goneContacts.length} contacts chosen here are no longer active.`}{" "}
             {goneContacts.length === rule.contactIds.length
-              ? "They are removed at the next save, and the contacts flagged for this message get it instead."
+              ? "With none left, the message is switched off at the next save, so nobody is sent it unasked. Choose contacts again to send it."
               : "They are removed at the next save."}
           </p>
         )}
@@ -398,27 +422,37 @@ export default function PartyAutomationCard({
   // What a change saves: every rule as it is in force, so a rule left at the
   // company default carries today's Settings days rather than those from
   // when the card loaded; and no contact that is no longer active, which the
-  // API would refuse (it isn't known until the contacts load).
-  const toSave = (next: PartyAutomation): PartyAutomation => {
+  // API would refuse (it isn't known until the contacts load). A message
+  // whose chosen contacts are all gone is switched off rather than sent to
+  // the flagged contacts (product answer Q11: stop and warn staff).
+  const toSave = (next: PartyAutomation) => {
     const active =
       contacts.status === "success"
         ? new Set(contacts.contacts.map((contact) => contact.id))
         : null;
-    return {
-      ...next,
-      rules: next.rules.map((rule) => {
-        const effective = effectiveRule(rule, days);
-        return active
-          ? { ...effective, contactIds: effective.contactIds.filter((id) => active.has(id)) }
-          : effective;
-      }),
-    };
+    const switchedOff: string[] = [];
+    const rules = next.rules.map((rule) => {
+      const effective = effectiveRule(rule, days);
+      if (!active) return effective;
+      const contactIds = effective.contactIds.filter((id) => active.has(id));
+      const noneLeft = effective.contactIds.length > 0 && contactIds.length === 0;
+      if (noneLeft && effective.enabled) switchedOff.push(automationSpecs[rule.kind].label);
+      return { ...effective, contactIds, enabled: effective.enabled && !noneLeft };
+    });
+    return { automation: { ...next, rules }, switchedOff };
   };
 
   const commit = (next: PartyAutomation, what: string) => {
-    const sent = toSave(next);
+    const { automation: sent, switchedOff } = toSave(next);
     setAutomation(sent);
-    return save.mutateAsync({ next: sent, what });
+    return save.mutateAsync({ next: sent, what }).then((view) => {
+      if (switchedOff.length) {
+        toast.warning(
+          `Switched off, as none of their chosen contacts is active: ${switchedOff.join(", ")}. Choose contacts again to send them.`
+        );
+      }
+      return view;
+    });
   };
 
   // Resolves true once saved, false if it wasn't (the toast says why).

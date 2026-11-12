@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -200,17 +200,55 @@ describe("PartyAutomationCard after the PR #41 re-review", () => {
     expect(screen.getAllByText("Built-in default").length).toBeGreaterThan(0);
   });
 
-  it("keeps the pause form open, with the reason, when its save fails", async () => {
-    saveAutomation.mockRejectedValueOnce(new Error("Network Error"));
+  it("keeps the pause form open, with the date and reason, when its save fails", async () => {
+    // Fails a moment later, as the API would: the optimistic update renders
+    // first, then the rollback (PR #41 review).
+    let fail: () => void = () => {};
+    saveAutomation.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = () => reject(new Error("Network Error"))))
+    );
     mount();
     await userEvent.click(screen.getByRole("switch", { name: /Pause all notifications/ }));
     const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Pause until (inclusive)"), "2099-12-31");
     await userEvent.type(within(dialog).getByLabelText("Reason (optional)"), "Account review");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-
     await waitFor(() => expect(saveAutomation).toHaveBeenCalledTimes(1));
+    await act(async () => fail());
+
+    // The rollback has rendered once the save stops loading.
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Save" })).not.toHaveAttribute("data-loading")
+    );
     expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(within(dialog).getByLabelText("Pause until (inclusive)")).toHaveValue("2099-12-31");
     expect(within(dialog).getByLabelText("Reason (optional)")).toHaveValue("Account review");
+
+    // Saving again sends the typed date, not an indefinite pause.
+    saveAutomation.mockImplementationOnce(async (_id: string, next: PartyAutomation) => answer(next));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveAutomation).toHaveBeenCalledTimes(2));
+    expect(sent(1).pausedUntil).toBe("2099-12-31");
+  });
+
+  it("switches a message off when none of its chosen contacts is active (product Q11)", async () => {
+    saveAutomation.mockImplementation(async (_id: string, next: PartyAutomation) => answer(next));
+    const saved = seedAutomation(PartyType.Shipper, undefined, NO_DAYS);
+    saved.rules = saved.rules.map((rule) =>
+      rule.kind === AutomationKind.Overdue
+        ? { ...rule, custom: true, enabled: true, contactIds: ["con_gone"] }
+        : rule
+    );
+    mount({
+      saved,
+      savedAt: "2026-11-10T10:00:00.000Z",
+      contacts: { status: "success", contacts: [contact("con_active")] },
+    });
+    expect(screen.getByText(/switched off at the next save/)).toBeInTheDocument();
+
+    await userEvent.click(reminders());
+    await waitFor(() => expect(saveAutomation).toHaveBeenCalled());
+    expect(sentRule(AutomationKind.Overdue)).toMatchObject({ enabled: false, contactIds: [] });
   });
 
   it("keeps the Customise buttons in place, disabled, while a save is pending", async () => {
