@@ -29,6 +29,7 @@ import { SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { useDebouncedValue, useServerPaging } from "@/hooks";
 import {
+  CarrierInvoiceStatus,
   CustomerInvoiceStatus,
   DisputeOutcome,
   DisputeStatus,
@@ -108,7 +109,7 @@ const invoiceLabel = (dispute: Dispute) =>
 
 // Not issued yet (a draft, or a carrier bill still awaited): it is fixed by
 // editing or voiding it on its page, so the action only opens it.
-const NOT_ISSUED = ["DRAFT", "EXPECTED"];
+const NOT_ISSUED: string[] = [CustomerInvoiceStatus.Draft, CarrierInvoiceStatus.Expected];
 
 // What the invoice page offers for this change, for a role that may act on
 // the side; "View invoice" for one that may only look.
@@ -484,8 +485,10 @@ function ResolveChangeModal({
     mutationFn: (note: string) => resolveReviewItem(item, note.trim()),
     onSuccess: () => {
       toast.success(`Change on ${item.invoiceNumber ?? "the invoice"} resolved.`);
-      void queryClient.invalidateQueries({ queryKey: ["reviews"] });
-      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      // Reviews and invoices, and the dashboard's Needs Review count
+      // (["accounts"]); the resolve is in the invoice's audit trail too.
+      refreshMoneyViews(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["audit"] });
       onClose();
     },
     onError: (error) => {
