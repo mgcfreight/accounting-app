@@ -77,11 +77,17 @@ const attentionReason: Record<InstallmentPlanAttention, string> = {
 const attentionText = (plan: InstallmentPlan) =>
   plan.attention.map((item) => attentionReason[item]).join(" ");
 
-// A voided or re-totalled invoice comes first: the plan's remaining and its
-// late or on-track status no longer mean what they say. Otherwise a late
-// installment makes the plan late; all paid, it's complete.
+// Cancelled comes before everything: the API still works out paid, late and
+// due for a cancelled plan, but none of it is agreed any more. Then a voided
+// or re-totalled invoice: the plan's remaining and its late or on-track
+// status no longer mean what they say. Otherwise a late installment makes
+// the plan late; all paid, it's complete.
 const PlanStatus = ({ plan }: { plan: InstallmentPlan }) =>
-  plan.attention.length > 0 ? (
+  plan.cancelledAt ? (
+    <span title={plan.cancelReason ?? undefined}>
+      <StatusChip text="Cancelled" tone="secondary" />
+    </span>
+  ) : plan.attention.length > 0 ? (
     <span title={attentionText(plan)}>
       <StatusChip text="Needs attention" tone="warning" />
     </span>
@@ -158,10 +164,12 @@ export default function InstallmentPlans({
         return <Money amount={plan.total} currency={plan.currency} />;
       case "paid":
         return <Money amount={plan.paid} currency={plan.currency} />;
+      // A cancelled plan's remaining is still owed, on the invoices' own due
+      // dates (product, Q17); it just has no next installment.
       case "remaining":
         return <Money amount={plan.remaining} currency={plan.currency} className="font-semibold" />;
       case "next": {
-        const next = nextInstallment(plan);
+        const next = plan.cancelledAt ? undefined : nextInstallment(plan);
         return next ? (
           <span className="whitespace-nowrap">
             {formatDate(next.dueDate)} ·{" "}
@@ -232,7 +240,12 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
       confirmText="Done"
       size="xl"
     >
-      {plan.attention.length > 0 && (
+      {plan.cancelledAt && (
+        <AlertBanner
+          message={`Cancelled ${formatDate(plan.cancelledAt)}${plan.cancelReason ? `: ${plan.cancelReason}` : "."} The remaining amount is owed on the invoices' own due dates.`}
+        />
+      )}
+      {!plan.cancelledAt && plan.attention.length > 0 && (
         <AlertBanner
           message={`Needs attention. ${attentionText(plan)} The paid, remaining and installment figures below may no longer be right.`}
         />
@@ -256,7 +269,7 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
             </span>
             <span className="flex items-center gap-2">
               <Money amount={item.amount} currency={plan.currency} />
-              <InstallmentChip status={item.status} />
+              {!plan.cancelledAt && <InstallmentChip status={item.status} />}
             </span>
           </li>
         ))}

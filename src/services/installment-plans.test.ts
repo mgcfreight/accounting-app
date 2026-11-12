@@ -26,6 +26,8 @@ const plan = {
     { number: 3, dueDate: "2026-11-21", amount: "773.50", status: "DUE", paidOn: null },
   ],
   createdAt: "2026-10-17T14:02:11.000Z",
+  cancelledAt: null,
+  cancelReason: null,
 };
 const body = (items: object[]) => ({
   message: "Success",
@@ -69,6 +71,14 @@ describe("installment plan schema", () => {
     const { attention: _omitted, ...withoutAttention } = plan;
     expect(() => parse(body([withoutAttention]))).toThrow();
     expect(() => parse(body([{ ...plan, attention: ["SOMETHING_ELSE"] }]))).toThrow();
+  });
+
+  it("keeps when and why a plan was cancelled (PR #43 review)", () => {
+    const [read] = parse(
+      body([{ ...plan, cancelledAt: "2026-11-02T10:00:00.000Z", cancelReason: "Shipper paid in full" }])
+    );
+    expect(read.cancelledAt).toBe("2026-11-02T10:00:00.000Z");
+    expect(read.cancelReason).toBe("Shipper paid in full");
   });
 
   it("refuses money sent as a number", () => {

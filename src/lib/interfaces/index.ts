@@ -1326,6 +1326,11 @@ export interface InstallmentPlan {
   agreedOn: string;
   installments: Installment[];
   createdAt: string;
+  // When and why it was cancelled (PUT /installment-plan/cancel); null while
+  // it runs. A cancelled plan stays listed, and its invoices are owed again
+  // in full on their own due dates.
+  cancelledAt: string | null;
+  cancelReason: string | null;
 }
 
 // One automated message for a shipper or carrier, as staff set it up.

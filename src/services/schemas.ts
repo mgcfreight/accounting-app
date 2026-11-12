@@ -832,6 +832,8 @@ export const installmentPlanSchema: z.ZodType<InstallmentPlan> = z.object({
     })
   ),
   createdAt: timestamp,
+  cancelledAt: timestamp.nullable(),
+  cancelReason: z.string().nullable(),
 });
 
 export const invoiceDocumentSchema: z.ZodType<InvoiceDocument> = z.object({

@@ -205,6 +205,8 @@ const plan = (overrides: Partial<InstallmentPlan>): InstallmentPlan => ({
     { number: 3, dueDate: "2026-12-15", amount: "100.00", status: InstallmentStatus.Due, paidOn: null },
   ],
   createdAt: "2026-10-01T14:00:00.000Z",
+  cancelledAt: null,
+  cancelReason: null,
   ...overrides,
 });
 
@@ -255,5 +257,32 @@ describe("InstallmentPlans", () => {
     const row = screen.getByRole("row", { name: /Prairie Agri/ });
     expect(within(row).getByText("Late")).toBeInTheDocument();
     expect(within(row).queryByText("Needs attention")).not.toBeInTheDocument();
+  });
+
+  it("shows a cancelled plan as cancelled, ahead of late and attention (PR #43 review)", async () => {
+    showPlans([
+      plan({
+        attention: [InstallmentPlanAttention.AmountChanged],
+        cancelledAt: "2026-11-05T15:00:00.000Z",
+        cancelReason: "Shipper paid in full",
+      }),
+    ]);
+    const row = screen.getByRole("row", { name: /Prairie Agri/ });
+    expect(within(row).getByText("Cancelled")).toBeInTheDocument();
+    for (const status of ["Late", "On track", "Needs attention"]) {
+      expect(within(row).queryByText(status)).not.toBeInTheDocument();
+    }
+    // Still owed (product, Q17), but no next installment.
+    // Total and Remaining, both 300.00.
+    expect(within(row).getAllByText("CAD 300.00")).toHaveLength(2);
+    expect(within(row).queryByText(/Nov 15, 2026/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(row).getByRole("button", { name: "View schedule" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText(/Cancelled Nov 5, 2026: Shipper paid in full/)
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText("Late")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Due")).not.toBeInTheDocument();
   });
 });
