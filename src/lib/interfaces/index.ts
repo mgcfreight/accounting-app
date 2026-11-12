@@ -51,7 +51,9 @@ import { PaginationMeta } from "../types";
 
 // Shapes of the data the screens show. Most arrive from the Accounts API and
 // are checked on arrival (services/schemas.ts); installment plans, Needs
-// Review's MGC changes and the automation rules still come from lib/mock.
+// Review's MGC changes, the automation rules and the TMS overdue bar
+// (mockTmsOverdue) still come from lib/mock, as do the demo invoices the
+// invoice pages fall back on in development (containers/invoices/demo-invoices.ts).
 // Money is always a 2-decimal string beside its currency, never a number;
 // see lib/money.ts.
 
@@ -1290,8 +1292,9 @@ export interface Dispute {
 }
 
 // ---------------------------------------------------------------------------
-// Installment plans: the shape /installment-plan sends, but the screen still
-// reads mockInstallmentPlans (payments.tsx) until it is wired to the API.
+// Installment plans. Provisional: the Accounts API has no installment-plan
+// route yet, so this shape is a guess until it does. The screen reads
+// mockInstallmentPlans (payments.tsx).
 
 export interface Installment {
   number: number;
