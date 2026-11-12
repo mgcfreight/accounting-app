@@ -15,6 +15,7 @@ import {
   automationSpecs,
   companyDefault,
   ContactsState,
+  defaultSource,
   describeRule,
   effectiveRule,
   hourText,
@@ -36,33 +37,42 @@ const hourOptions = Array.from({ length: 24 }, (_, h) => ({
   value: String(h),
 }));
 
+// The pause form stays open until its save is confirmed, so a failure keeps
+// what was typed. The card holds `editing`, so newer settings arriving from
+// elsewhere wait while it is open.
 function PauseSection({
   automation,
   canEdit,
+  busy,
+  editing,
+  setEditing,
   onChange,
 }: {
   automation: PartyAutomation;
   canEdit: boolean;
-  onChange: (next: Partial<PartyAutomation>) => void;
+  // A save is pending: the controls wait.
+  busy: boolean;
+  editing: boolean;
+  setEditing: (editing: boolean) => void;
+  onChange: (next: Partial<PartyAutomation>) => Promise<boolean>;
 }) {
   const today = torontoToday();
   const paused = isPaused(automation, today);
-  const [editing, setEditing] = useState(false);
   const { control, handleSubmit } = useForm<PauseFormValues>({
     values: { until: automation.pausedUntil ?? "", reason: automation.pauseReason },
   });
 
-  const resume = () => onChange({ paused: false, pausedUntil: null, pauseReason: "" });
-  const save = handleSubmit(({ until, reason }) => {
-    onChange({ paused: true, pausedUntil: until || null, pauseReason: reason });
-    setEditing(false);
+  const resume = () => void onChange({ paused: false, pausedUntil: null, pauseReason: "" });
+  const save = handleSubmit(async ({ until, reason }) => {
+    const saved = await onChange({ paused: true, pausedUntil: until || null, pauseReason: reason });
+    if (saved) setEditing(false);
   });
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
       <Switch
         isSelected={paused}
-        isReadOnly={!canEdit}
+        isReadOnly={!canEdit || busy}
         onValueChange={(on) => (on ? setEditing(true) : resume())}
         size="sm"
       >
@@ -79,6 +89,7 @@ function PauseSection({
           varient="light"
           className="h-7 px-2 text-xs"
           text="Edit pause"
+          isDisabled={busy}
           onPress={() => setEditing(true)}
         />
       )}
@@ -93,6 +104,7 @@ function PauseSection({
           title="Pause notifications"
           confirmText="Save"
           onConfirm={save}
+          isConfirming={busy}
           size="sm"
         >
           <p className="text-xs text-content-5">
@@ -131,7 +143,7 @@ function ScheduleRow({
 }: {
   automation: PartyAutomation;
   canEdit: boolean;
-  onChange: (next: Partial<PartyAutomation>) => void;
+  onChange: (next: Partial<PartyAutomation>) => Promise<boolean>;
 }) {
   const { control } = useForm<{ sendHour: string }>({
     values: { sendHour: String(automation.sendHour) },
@@ -151,13 +163,13 @@ function ScheduleRow({
         rules={{
           // Applies the hour as soon as it is picked; there is no Save here.
           onChange: (e: { target: { value: string } }) =>
-            onChange({ sendHour: Number(e.target.value) }),
+            void onChange({ sendHour: Number(e.target.value) }),
         }}
       />
       <Switch
         isSelected={automation.skipWeekends}
         isReadOnly={!canEdit}
-        onValueChange={(on) => onChange({ skipWeekends: on })}
+        onValueChange={(on) => void onChange({ skipWeekends: on })}
         size="sm"
       >
         <span className="text-sm">Skip weekends</span>
@@ -179,6 +191,7 @@ function RuleRow({
   contacts,
   unavailable,
   canEdit,
+  busy,
   onToggle,
   onCustomise,
 }: {
@@ -189,10 +202,19 @@ function RuleRow({
   // Why the rule can't run for this party, or null when it can.
   unavailable: string | null;
   canEdit: boolean;
+  // A save is pending: the controls wait, but stay where they are.
+  busy: boolean;
   onToggle: () => void;
   onCustomise: () => void;
 }) {
   const effective = effectiveRule(rule, days);
+  // Contacts chosen for this message that are no longer active (the list
+  // holds active contacts only). The API refuses a rule naming one, so they
+  // are dropped at the next save.
+  const goneContacts =
+    rule.custom && contacts.status === "success"
+      ? rule.contactIds.filter((id) => !contacts.contacts.some((contact) => contact.id === id))
+      : [];
   const description = describeRule(effective, spec);
   // Until the contacts load, a party message's recipients aren't known; saying
   // "the accounts team" alone would read as "no contacts get it".
@@ -208,7 +230,7 @@ function RuleRow({
       <Switch
         isSelected={rule.enabled}
         isDisabled={!!unavailable && !rule.enabled}
-        isReadOnly={!canEdit}
+        isReadOnly={!canEdit || busy}
         onValueChange={onToggle}
         size="sm"
         className="mt-0.5"
@@ -217,9 +239,15 @@ function RuleRow({
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-[#343A40]">{spec.label}</span>
-          {rule.custom && (
+          {rule.custom ? (
             <span className="text-xs bg-base-primary-50 text-base-primary-600 rounded px-1.5 py-0.5">
               Custom
+            </span>
+          ) : (
+            <span className="text-xs text-content-5">
+              {defaultSource(rule.kind, days) === "settings"
+                ? "Default, days from Settings"
+                : "Built-in default"}
             </span>
           )}
           {spec.audience === "team" && (
@@ -234,6 +262,16 @@ function RuleRow({
           <p className={`text-xs mt-1 ${rule.enabled ? "text-base-danger" : "text-content-5"}`}>
             Unavailable: {unavailable}.
             {rule.enabled && " It is switched on but won't run."}
+          </p>
+        )}
+        {goneContacts.length > 0 && (
+          <p className="text-xs text-base-danger mt-1">
+            {goneContacts.length === 1
+              ? "A contact chosen here is no longer active."
+              : `${goneContacts.length} contacts chosen here are no longer active.`}{" "}
+            {goneContacts.length === rule.contactIds.length
+              ? "They are removed at the next save, and the contacts flagged for this message get it instead."
+              : "They are removed at the next save."}
           </p>
         )}
         {rule.enabled && !unavailable && (
@@ -260,6 +298,7 @@ function RuleRow({
           varient="bordered"
           className="h-7 px-3 text-xs shrink-0"
           text="Customise"
+          isDisabled={busy}
           onPress={onCustomise}
         />
       )}
@@ -269,6 +308,10 @@ function RuleRow({
 
 // ---------------------------------------------------------------------------
 // The card
+
+// Whether `next` is a later save than `seen` (ISO timestamps from the API).
+const isNewer = (next: string | null, seen: string | null) =>
+  next !== null && (seen === null || Date.parse(next) > Date.parse(seen));
 
 // Starts from the settings saved on the API (`saved`), or, until there are
 // any, seeded from the agreement in force and the days in Settings; mount it
@@ -309,6 +352,7 @@ export default function PartyAutomationCard({
   const [confirmed, setConfirmed] = useState(automation);
   const [seenSavedAt, setSeenSavedAt] = useState(savedAt);
   const [editingKind, setEditingKind] = useState<AutomationKind | null>(null);
+  const [editingPause, setEditingPause] = useState(false);
 
   const save = useMutation({
     // A GET already in flight would put the settings from before this save
@@ -316,7 +360,9 @@ export default function PartyAutomationCard({
     onMutate: () => queryClient.cancelQueries({ queryKey }),
     mutationFn: ({ next }: { next: PartyAutomation; what: string }) =>
       saveAutomation(partyId, next),
-    onSuccess: (view, { what }) => {
+    onSuccess: async (view, { what }) => {
+      // And one that started during the save (a refetch on focus, say).
+      await queryClient.cancelQueries({ queryKey });
       const now = automationFor(type, agreement, view.automation, days);
       setConfirmed(now);
       setAutomation(now);
@@ -331,23 +377,53 @@ export default function PartyAutomationCard({
   });
 
   // Settings saved elsewhere arrived: take them in, unless a save is pending
-  // or a modal is open, which would lose what the user is doing.
-  if (savedAt !== seenSavedAt && !save.isPending && editingKind === null) {
+  // or a modal is open, which would lose what the user is doing. Only newer
+  // ones: a GET answered from before the last save carries an older
+  // `savedAt`, and taking it in would write the old settings back with the
+  // next change.
+  if (
+    isNewer(savedAt, seenSavedAt) &&
+    !save.isPending &&
+    editingKind === null &&
+    !editingPause
+  ) {
     const fresh = automationFor(type, agreement, saved, days);
     setSeenSavedAt(savedAt);
     setConfirmed(fresh);
     setAutomation(fresh);
   }
 
-  const editable = canEdit && !save.isPending;
+  const busy = save.isPending;
 
-  const commit = (next: PartyAutomation, what: string) => {
-    setAutomation(next);
-    return save.mutateAsync({ next, what });
+  // What a change saves: every rule as it is in force, so a rule left at the
+  // company default carries today's Settings days rather than those from
+  // when the card loaded; and no contact that is no longer active, which the
+  // API would refuse (it isn't known until the contacts load).
+  const toSave = (next: PartyAutomation): PartyAutomation => {
+    const active =
+      contacts.status === "success"
+        ? new Set(contacts.contacts.map((contact) => contact.id))
+        : null;
+    return {
+      ...next,
+      rules: next.rules.map((rule) => {
+        const effective = effectiveRule(rule, days);
+        return active
+          ? { ...effective, contactIds: effective.contactIds.filter((id) => active.has(id)) }
+          : effective;
+      }),
+    };
   };
 
-  const updateAutomation = (next: Partial<PartyAutomation>) => {
-    if (save.isPending) return;
+  const commit = (next: PartyAutomation, what: string) => {
+    const sent = toSave(next);
+    setAutomation(sent);
+    return save.mutateAsync({ next: sent, what });
+  };
+
+  // Resolves true once saved, false if it wasn't (the toast says why).
+  const updateAutomation = async (next: Partial<PartyAutomation>): Promise<boolean> => {
+    if (save.isPending) return false;
     const what =
       "paused" in next
         ? next.paused
@@ -357,7 +433,10 @@ export default function PartyAutomationCard({
           ? "Send time"
           : "Weekend setting";
     // The error is shown by the mutation's toast.
-    commit({ ...automation, ...next }, what).catch(() => {});
+    return commit({ ...automation, ...next }, what).then(
+      () => true,
+      () => false
+    );
   };
 
   // Switching off is always allowed; switching on only when available.
@@ -401,8 +480,15 @@ export default function PartyAutomationCard({
           Messages aren&apos;t sent from these settings yet.
         </p>
 
-        <PauseSection automation={automation} canEdit={editable} onChange={updateAutomation} />
-        <ScheduleRow automation={automation} canEdit={editable} onChange={updateAutomation} />
+        <PauseSection
+          automation={automation}
+          canEdit={canEdit}
+          busy={busy}
+          editing={editingPause}
+          setEditing={setEditingPause}
+          onChange={updateAutomation}
+        />
+        <ScheduleRow automation={automation} canEdit={canEdit && !busy} onChange={updateAutomation} />
 
         <div className="flex flex-col">
           {automation.rules.map((rule) => {
@@ -415,7 +501,8 @@ export default function PartyAutomationCard({
                 days={days}
                 contacts={contacts}
                 unavailable={unavailableReason(rule.kind, agreement)}
-                canEdit={editable}
+                canEdit={canEdit}
+                busy={busy}
                 onToggle={() => toggleRule(rule.kind)}
                 onCustomise={() => setEditingKind(rule.kind)}
               />

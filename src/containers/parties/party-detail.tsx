@@ -502,7 +502,7 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
 // Loads the party's saved automation settings and its contacts, then renders
 // the automation card: from the saved settings, or seeded from the agreement
 // in force until there are any (a different agreement re-seeds it).
-function PartyAutomationContacts({
+export function PartyAutomationContacts({
   partyId,
   type,
   agreement,
@@ -534,13 +534,15 @@ function PartyAutomationContacts({
 
   // A failed refetch keeps the last good data beside the error: the card
   // stays, with what is being edited. The error shows only with no data.
-  const failed =
-    (automation.isError && !automation.data) || (notices.isError && !notices.data);
-  if (failed) {
+  // The message is the failed query's: the other may hold an older error
+  // beside good data.
+  const automationFailed = automation.isError && !automation.data;
+  const noticesFailed = notices.isError && !notices.data;
+  if (automationFailed || noticesFailed) {
     return (
       <BaseCardWrapper heading="Notifications & Automation">
         <ErrorState
-          message={errorMessage(automation.error ?? notices.error)}
+          message={errorMessage(automationFailed ? automation.error : notices.error)}
           onAction={() => {
             void automation.refetch();
             void notices.refetch();

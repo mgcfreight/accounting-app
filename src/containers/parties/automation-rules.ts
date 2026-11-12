@@ -313,6 +313,16 @@ export function companyDefault(
   return rule;
 }
 
+// Where a default rule's settings come from. Only the billing-notice and
+// carrier-alert days can come from Settings, and only when Settings has them
+// (no billing-notice days for COD, PREPAID or NET_90, for instance); the rest
+// of every default, its texts included, is built into the app.
+export function defaultSource(kind: AutomationKind, days: SettingsDays): "settings" | "built-in" {
+  if (kind === AutomationKind.BillingNotice && days.billingNoticeDays !== null) return "settings";
+  if (kind === AutomationKind.CarrierBillDue && days.carrierAlertDays !== null) return "settings";
+  return "built-in";
+}
+
 // The rule in force: the company default unless customised. On/off is the
 // party's own either way.
 export function effectiveRule(
