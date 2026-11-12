@@ -269,7 +269,10 @@ export enum InvoiceReviewFlag {
   // Set by the Accounts API's TMS sync.
   TmsChanged = "TMS_CHANGED",
   TmsCancelled = "TMS_CANCELLED",
+  // No longer sent (accounting#59 dropped it); kept so older rows still read.
   UnknownCharge = "UNKNOWN_CHARGE",
+  // A synced invoice copies the TMS total as tax-included (accounting#59).
+  TaxUnconfirmed = "TAX_UNCONFIRMED",
 }
 
 // Invoice list sort columns (the API's InvoiceSortBy).
