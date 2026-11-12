@@ -77,6 +77,13 @@ export default function TmsOverdueBar() {
   const step = (by: number) =>
     setShownKey(keyOf(shippers[(position + by + count) % count]));
 
+  // Pinned to a row as soon as there is one, so a refresh that re-sorts
+  // the list never swaps the shipper under the pointer, before the first
+  // rotation, while paused or with a single row (PR #40 review).
+  // (React's "adjust state while rendering": it runs once, before paint.)
+  const firstKey = count > 0 ? keyOf(shippers[0]) : null;
+  if (shownKey === null && firstKey !== null) setShownKey(firstKey);
+
   const nextKey = count > 0 ? keyOf(shippers[(position + 1) % count]) : null;
   useEffect(() => {
     if (!rotating || nextKey === null) return;

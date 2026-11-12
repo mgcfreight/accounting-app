@@ -194,6 +194,24 @@ describe("TmsOverdueBar", () => {
       expect(bar()).toHaveTextContent("Great Lakes Supply owes USD 1,475.00");
     });
 
+    it("keeps the first shipper when a refresh re-sorts before any rotation (PR #40 review)", async () => {
+      const { rerender } = show();
+      expect(await shownNow()).toHaveTextContent(PRAIRIE);
+      fireEvent.mouseEnter(bar());
+
+      // Prairie moves to the end before the bar has moved at all.
+      const [prairie, greatLakes, northwind] = mockTmsOverdue.shippers;
+      state.overdue = {
+        ...mockTmsOverdue,
+        shippers: [greatLakes, northwind, prairie],
+      };
+      await act(async () => {
+        await refetchAll();
+      });
+      rerender(<TmsOverdueBar />);
+      expect(bar()).toHaveTextContent("Prairie Agri Inc. owes CAD 2,320.50");
+    });
+
     it("steps back and forward with the arrows", async () => {
       show();
       await shownNow();

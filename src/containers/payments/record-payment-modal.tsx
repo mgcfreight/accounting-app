@@ -111,7 +111,10 @@ export default function RecordPaymentModal({
     queryFn: ({ signal }) => getParty(partyId, signal),
     enabled: !!partyId,
   });
-  const currency = party.data?.defaultCurrency;
+  // The API's rule: the agreement's currency first, then the party's
+  // default (assertPartyCurrency). A party's agreements share one currency.
+  const currency =
+    party.data?.agreements?.[0]?.currency ?? party.data?.defaultCurrency;
 
   const record = useMutation({
     mutationFn: (values: FormValues) =>
@@ -148,7 +151,12 @@ export default function RecordPaymentModal({
       toast.error("Wait for the party to load, then try again.");
       return;
     }
-    if (currencyMismatch) return;
+    if (currencyMismatch) {
+      toast.error(
+        "This debt's currency doesn't match the party's, so it can't be recorded here."
+      );
+      return;
+    }
     record.mutate(values);
   });
 
@@ -166,7 +174,7 @@ export default function RecordPaymentModal({
     >
       {currencyMismatch && (
         <AlertBanner
-          message={`This debt is in ${shipper.currency}, but ${party.data?.name ?? "this shipper"} is billed in ${currency}. A payment is recorded in the party's currency, so record this one from the Payments page once the currency is sorted out.`}
+          message={`This debt is in ${shipper.currency}, but ${party.data?.name ?? "this shipper"} is billed in ${currency}. A payment is recorded in the party's currency, so check the party's agreement currency before recording it.`}
         />
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
