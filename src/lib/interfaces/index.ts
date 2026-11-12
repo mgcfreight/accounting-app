@@ -14,6 +14,7 @@ import {
   DocumentSource,
   FxRateSource,
   InstallmentFrequency,
+  InstallmentPlanAttention,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceDeliveryMode,
@@ -1299,6 +1300,8 @@ export interface Installment {
   dueDate: string;
   amount: string;
   status: InstallmentStatus;
+  // Always null: the API doesn't track when an installment was paid yet.
+  // Don't build on it.
   paidOn: string | null;
 }
 
@@ -1316,6 +1319,9 @@ export interface InstallmentPlan {
   total: string;
   paid: string;
   remaining: string;
+  // Empty unless a plan invoice was voided or re-totalled since the plan
+  // was agreed; its figures then need a person to look at them.
+  attention: InstallmentPlanAttention[];
   frequency: InstallmentFrequency;
   agreedOn: string;
   installments: Installment[];

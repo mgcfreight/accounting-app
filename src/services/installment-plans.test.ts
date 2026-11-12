@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InstallmentStatus, PaymentDirection } from "@/lib/enums";
+import { InstallmentPlanAttention, InstallmentStatus, PaymentDirection } from "@/lib/enums";
 import { envelope, installmentPlanSchema, paginated } from "./schemas";
 
 // GET /installment-plan/all as the Accounts API sends it
@@ -16,10 +16,12 @@ const plan = {
   total: "2320.50",
   paid: "773.50",
   remaining: "1547.00",
+  attention: [],
   frequency: "BIWEEKLY",
   agreedOn: "2026-10-17",
   installments: [
-    { number: 1, dueDate: "2026-10-24", amount: "773.50", status: "PAID", paidOn: "2026-10-23" },
+    // The API always sends paidOn as null for now.
+    { number: 1, dueDate: "2026-10-24", amount: "773.50", status: "PAID", paidOn: null },
     { number: 2, dueDate: "2026-11-07", amount: "773.50", status: "LATE", paidOn: null },
     { number: 3, dueDate: "2026-11-21", amount: "773.50", status: "DUE", paidOn: null },
   ],
@@ -51,6 +53,22 @@ describe("installment plan schema", () => {
       body([{ ...plan, direction: "OUT", invoices: [{ id: "cri_1", number: null }] }])
     );
     expect(read.invoices[0].number).toBeNull();
+  });
+
+  it("keeps why a plan needs attention, rather than dropping it", () => {
+    const [read] = parse(
+      body([{ ...plan, attention: ["INVOICE_VOIDED", "AMOUNT_CHANGED"] }])
+    );
+    expect(read.attention).toEqual([
+      InstallmentPlanAttention.InvoiceVoided,
+      InstallmentPlanAttention.AmountChanged,
+    ]);
+  });
+
+  it("refuses a plan with no attention list, or a reason it doesn't know", () => {
+    const { attention: _omitted, ...withoutAttention } = plan;
+    expect(() => parse(body([withoutAttention]))).toThrow();
+    expect(() => parse(body([{ ...plan, attention: ["SOMETHING_ELSE"] }]))).toThrow();
   });
 
   it("refuses money sent as a number", () => {

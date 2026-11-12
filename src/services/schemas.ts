@@ -15,6 +15,7 @@ import {
   EmailStatus,
   FxRateSource,
   InstallmentFrequency,
+  InstallmentPlanAttention,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceKind,
@@ -818,6 +819,7 @@ export const installmentPlanSchema: z.ZodType<InstallmentPlan> = z.object({
   total: money,
   paid: money,
   remaining: money,
+  attention: z.array(z.enum(InstallmentPlanAttention)),
   frequency: z.enum(InstallmentFrequency),
   agreedOn: calendarDate,
   installments: z.array(
