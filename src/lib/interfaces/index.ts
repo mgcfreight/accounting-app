@@ -985,7 +985,7 @@ export interface TaxReport {
   };
 }
 
-// One shipper's overdue invoices as the TMS reports them.
+// One shipper's overdue invoices in one currency (GET /account/overdue).
 export interface TmsOverdueShipper {
   partyId: string;
   partyName: string;
@@ -997,8 +997,9 @@ export interface TmsOverdueShipper {
   oldestOverdueDays: number;
 }
 
-// Every shipper with a payment overdue in the TMS, for the "clear the
-// overdue payment" bar above the header. Demo only: no API sends this yet.
+// Every shipper with an overdue invoice in Accounts, for the "clear the
+// overdue payment" bar above the header. Disputed amounts are left out, as
+// on the dashboard. The names keep "Tms" until the TMS sends its own figures.
 export interface TmsOverdueSummary {
   // Most days past due first.
   shippers: TmsOverdueShipper[];

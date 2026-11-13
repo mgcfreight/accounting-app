@@ -161,7 +161,8 @@ export const UNIT_PRICE_PATTERN = /^\d{1,10}(\.\d{1,4})?$/;
 export const LINE_AMOUNT_PATTERN = /^\d{1,10}(\.\d{1,2})?$/;
 // A base price to work commission from: above 0, up to 2 decimals.
 export const BASE_PRICE_PATTERN = /^(?!0+(\.0+)?$)\d{1,10}(\.\d{1,2})?$/;
-// A shipper's credit limit: 0 or more, up to 2 decimals (numeric(14,2)).
-export const CREDIT_LIMIT_PATTERN = /^\d{1,12}(\.\d{1,2})?$/;
+// A shipper's credit limit: above 0, up to 2 decimals (numeric(14,2)), as
+// the API's MONEY_POSITIVE. No credit at all is a block, not a limit of 0.
+export const CREDIT_LIMIT_PATTERN = /^(?!0+(\.0+)?$)\d{1,12}(\.\d{1,2})?$/;
 export const COUNTRY_PATTERN = /^[A-Z]{2}$/;
 export const REGION_PATTERN = /^[A-Z]{2,3}$/;

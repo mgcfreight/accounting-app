@@ -17,6 +17,9 @@ export enum Permission {
   PartiesCreate = "parties.create",
   // Agreed terms.
   PartiesEdit = "parties.edit",
+  // A shipper's credit status and limit, on a new agreement or in place
+  // (product: Admins, plus whoever an Admin grants it to).
+  PartiesEditCredit = "parties.edit_credit",
 
   ShipmentsView = "shipments.view",
   ShipmentsCreate = "shipments.create",

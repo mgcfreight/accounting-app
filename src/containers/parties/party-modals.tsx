@@ -481,11 +481,27 @@ export function ContactFormModal({
   );
 }
 
-const DemoNote = () => (
-  <p className="text-xs text-content-5">
-    Demo only: these settings aren&apos;t saved yet.
-  </p>
-);
+// The credit fields a new shipper agreement sends: none when they match the
+// agreement it replaces, which the API then carries over (so a role without
+// parties.edit_credit can still change the other terms). When they differ,
+// the status, and the limit while credit is allowed; a status sent with no
+// limit means no limit.
+export const creditFields = (
+  values: { creditStatus: string; creditLimit: string },
+  carriedStatus: CreditStatus,
+  carriedLimit: string
+): { creditStatus?: CreditStatus; creditLimit?: string } => {
+  const status = values.creditStatus as CreditStatus;
+  const limit = values.creditLimit.trim();
+  const sameLimit =
+    status !== CreditStatus.Allowed ||
+    (limit === "" ? carriedLimit === "" : carriedLimit !== "" && Number(limit) === Number(carriedLimit));
+  if (status === carriedStatus && sameLimit) return {};
+  return {
+    creditStatus: status,
+    creditLimit: status === CreditStatus.Allowed && limit !== "" ? limit : undefined,
+  };
+};
 
 type AgreementValues = {
   effectiveFrom: string;
@@ -522,8 +538,8 @@ export function AgreementFormModal({
       effectiveFrom: "",
       currency: party.agreements?.[0]?.currency ?? party.defaultCurrency,
       paymentTerms: PaymentTerms.Net30,
-      // Carried over once the API sends them, so new terms for another
-      // reason don't drop the shipper's credit settings.
+      // Carried over, so new terms for another reason don't drop the
+      // shipper's credit settings.
       creditStatus: replacing?.creditStatus ?? CreditStatus.Allowed,
       creditLimit: replacing?.creditLimit ?? "",
       taxTreatment: TaxTreatment.Standard,
@@ -535,6 +551,12 @@ export function AgreementFormModal({
   });
   const creditAllowed =
     useWatch({ control, name: "creditStatus" }) === CreditStatus.Allowed;
+  // Credit is its own permission (accounting#76): without it the fields are
+  // shown, read-only, and carried over.
+  const { can } = useCan();
+  const canEditCredit = can(Permission.PartiesEditCredit);
+  const carriedStatus = replacing?.creditStatus ?? CreditStatus.Allowed;
+  const carriedLimit = replacing?.creditLimit ?? "";
 
   const save = useMutation({
     mutationFn: (values: AgreementValues) => {
@@ -554,19 +576,15 @@ export function AgreementFormModal({
               billingTrigger: values.billingTrigger as BillingTrigger,
               alertDaysBefore: days,
             }
-          : { noticeDaysBefore: days }),
-        // Credit status and limit aren't sent: the API doesn't take them yet.
+          : {
+              noticeDaysBefore: days,
+              ...creditFields(values, carriedStatus, carriedLimit),
+            }),
       };
       return createAgreement(body);
     },
-    onSuccess: (_, values) => {
+    onSuccess: () => {
       toast.success("Agreement added.");
-      if (
-        !isCarrier &&
-        (values.creditStatus !== CreditStatus.Allowed || values.creditLimit.trim())
-      ) {
-        toast.info("Credit settings — demo only, nothing was saved.");
-      }
       void queryClient.invalidateQueries({ queryKey: ["parties"] });
       onClose();
     },
@@ -669,7 +687,12 @@ export function AgreementFormModal({
         <div className="flex flex-col gap-3 border-t border-content-3 pt-4">
           <div>
             <p className="text-sm font-semibold text-base-primary-900">Credit</p>
-            <DemoNote />
+            {!canEditCredit && (
+              <p className="text-xs text-content-5">
+                Carried over from the current agreement. Changing credit needs
+                the credit permission.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <BaseSelect
@@ -678,6 +701,7 @@ export function AgreementFormModal({
               label="Credit status"
               options={creditStatusOptions}
               disallowEmptySelection
+              isDisabled={!canEditCredit}
             />
             {creditAllowed && (
               <BaseInput
@@ -686,6 +710,7 @@ export function AgreementFormModal({
                 label="Credit limit"
                 placeholder="No limit"
                 inputMode="decimal"
+                isReadOnly={!canEditCredit}
                 description="The most this shipper may owe at once, in the currency above. Leave empty for no limit."
                 rules={{
                   // The form also holds the on/off switches, hence the wider type.
@@ -695,7 +720,7 @@ export function AgreementFormModal({
                       values.creditStatus !== CreditStatus.Allowed ||
                       amount === "" ||
                       CREDIT_LIMIT_PATTERN.test(amount) ||
-                      "An amount of 0 or more, up to 2 decimals"
+                      "An amount above 0, up to 2 decimals. To give no credit, block it"
                     );
                   },
                 }}

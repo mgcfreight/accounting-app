@@ -5,6 +5,7 @@ import {
   agingSchema,
   dashboardSchema,
   envelope,
+  overdueSummarySchema,
   paginated,
 } from "./schemas";
 
@@ -36,6 +37,13 @@ export const getAging = (signal?: AbortSignal) =>
   apiClient
     .get("/account/aging", { signal })
     .then((res) => parseBody(envelope(agingSchema), res.data).data);
+
+// Shippers with overdue invoices, per currency, most days past due first;
+// disputed amounts are left out. Needs customer_invoices.view.
+export const getOverdueShippers = (signal?: AbortSignal) =>
+  apiClient
+    .get("/account/overdue", { signal })
+    .then((res) => parseBody(envelope(overdueSummarySchema), res.data).data);
 
 // Shippers and carriers with their account figures, ordered by name.
 export const listAccountSummaries = (
