@@ -164,10 +164,17 @@ export default function InstallmentPlans({
         return <Money amount={plan.total} currency={plan.currency} />;
       case "paid":
         return <Money amount={plan.paid} currency={plan.currency} />;
-      // A cancelled plan's remaining is still owed, on the invoices' own due
-      // dates (product, Q17); it just has no next installment.
+      // A cancelled plan's remaining is shown for information only, muted,
+      // and left out of every total (accounts, 13 Nov 2026); it has no next
+      // installment.
       case "remaining":
-        return <Money amount={plan.remaining} currency={plan.currency} className="font-semibold" />;
+        return plan.cancelledAt ? (
+          <span title="For information only: this plan is cancelled">
+            <Money amount={plan.remaining} currency={plan.currency} className="text-content-5" />
+          </span>
+        ) : (
+          <Money amount={plan.remaining} currency={plan.currency} className="font-semibold" />
+        );
       case "next": {
         const next = plan.cancelledAt ? undefined : nextInstallment(plan);
         return next ? (
@@ -242,7 +249,7 @@ function ScheduleModal({ plan, onClose }: { plan: InstallmentPlan; onClose: () =
     >
       {plan.cancelledAt && (
         <AlertBanner
-          message={`Cancelled ${formatDate(plan.cancelledAt)}${plan.cancelReason ? `: ${plan.cancelReason}` : "."} The remaining amount is owed on the invoices' own due dates.`}
+          message={`Cancelled ${formatDate(plan.cancelledAt)}${plan.cancelReason ? `: ${plan.cancelReason}.` : "."} Its figures stopped there and are for information only: the invoices are owed on their own due dates, or under a new plan.`}
         />
       )}
       {!plan.cancelledAt && plan.attention.length > 0 && (

@@ -22,6 +22,7 @@ import { useCan } from "@/components/providers/user-provider";
 import { useDebouncedValue, useServerPaging } from "@/hooks";
 import { paymentMethodLabel, paymentMethodOptions } from "@/lib/constants";
 import {
+  InstallmentPlanStatus,
   PaymentDirection,
   PaymentMethod,
   PaymentRecordStatus,
@@ -121,7 +122,8 @@ export default function Payments() {
   const canViewIn = can(Permission.CustomerPaymentsView);
   const canViewOut = can(Permission.CarrierPaymentsView);
   // The API lists only the sides the role may view, newest first, a page
-  // at a time (the tab's count is every plan).
+  // at a time. Cancelled plans are listed but left out of the tab's count,
+  // as of every total (accounts, 13 Nov 2026).
   const plansPaging = useServerPaging("plans");
   const plansQuery = useQuery({
     queryKey: ["installment-plans", "list", plansPaging.page, plansPaging.limit],
@@ -129,6 +131,13 @@ export default function Payments() {
       listInstallmentPlans({ page: plansPaging.page, limit: plansPaging.limit }, signal),
     placeholderData: keepPreviousData,
     enabled: canViewIn || canViewOut,
+  });
+  const livePlans = useQuery({
+    queryKey: ["installment-plans", "count", InstallmentPlanStatus.Live],
+    queryFn: ({ signal }) =>
+      listInstallmentPlans({ page: 1, limit: 1, status: InstallmentPlanStatus.Live }, signal),
+    enabled: canViewIn || canViewOut,
+    select: (page) => page.meta.totalItems,
   });
   const isIn = (direction: PaymentDirection) => direction === PaymentDirection.In;
   const canRecord = (direction: PaymentDirection) =>
@@ -283,7 +292,7 @@ export default function Payments() {
         />
         <Tab
           key="plans"
-          title={`Installment plans${plansQuery.data ? ` (${plansQuery.data.meta.totalItems})` : ""}`}
+          title={`Installment plans${livePlans.data !== undefined ? ` (${livePlans.data})` : ""}`}
         />
       </Tabs>
       {view === "plans" ? (

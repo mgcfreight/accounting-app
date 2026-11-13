@@ -273,14 +273,16 @@ describe("InstallmentPlans", () => {
       expect(within(row).queryByText(status)).not.toBeInTheDocument();
     }
     // Still owed (product, Q17), but no next installment.
-    // Total and Remaining, both 300.00.
+    // Total and Remaining, both 300.00; Remaining is for information only
+    // and left out of totals (accounts, 13 Nov 2026).
     expect(within(row).getAllByText("CAD 300.00")).toHaveLength(2);
+    expect(within(row).getByTitle(/For information only/)).toBeInTheDocument();
     expect(within(row).queryByText(/Nov 15, 2026/)).not.toBeInTheDocument();
 
     await userEvent.click(within(row).getByRole("button", { name: "View schedule" }));
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByText(/Cancelled Nov 5, 2026: Shipper paid in full/)
+      within(dialog).getByText(/Cancelled Nov 5, 2026: Shipper paid in full\. Its figures stopped there/)
     ).toBeInTheDocument();
     expect(within(dialog).queryByText("Late")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Due")).not.toBeInTheDocument();

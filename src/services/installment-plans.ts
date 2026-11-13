@@ -1,4 +1,4 @@
-import { InstallmentFrequency, PaymentDirection } from "@/lib/enums";
+import { InstallmentFrequency, InstallmentPlanStatus, PaymentDirection } from "@/lib/enums";
 import { apiClient, parseBody } from "./api-client";
 import { envelope, installmentPlanSchema, paginated } from "./schemas";
 
@@ -12,6 +12,9 @@ export type InstallmentPlanListParams = {
   limit: number;
   // Omitted: both, as far as the role may see.
   direction?: PaymentDirection;
+  // Omitted: running and cancelled. Live for any count or total, which
+  // leave cancelled plans out (accounts, 13 Nov 2026).
+  status?: InstallmentPlanStatus;
 };
 
 export type NewInstallmentPlan = {
@@ -33,7 +36,12 @@ export const listInstallmentPlans = (
 ) =>
   apiClient
     .get("/installment-plan/all", {
-      params: { page: params.page, limit: params.limit, direction: params.direction },
+      params: {
+        page: params.page,
+        limit: params.limit,
+        direction: params.direction,
+        status: params.status,
+      },
       signal,
     })
     .then((res) => parseBody(envelope(paginated(installmentPlanSchema)), res.data).data);
