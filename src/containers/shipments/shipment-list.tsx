@@ -101,7 +101,7 @@ export default function ShipmentList() {
     if (!id) return <span className="text-gray-400">None booked</span>;
     const party = parties.get(id);
     return party ? (
-      <Link to={partyHref(party)} className="hover:underline">
+      <Link to={partyHref(party)} className="underline">
         {party.name}
       </Link>
     ) : (
@@ -115,7 +115,7 @@ export default function ShipmentList() {
         return (
           <Link
             to={shipmentHref(shipment)}
-            className="font-bold text-base-primary-300 hover:underline whitespace-nowrap"
+            className="font-bold text-base-primary-300 underline whitespace-nowrap"
           >
             {shipment.loadNumber}
           </Link>

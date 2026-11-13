@@ -25,7 +25,17 @@ import {
 import { SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
 import { useCurrentUser } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import { z } from "zod";
+import {
+  limitParam,
+  oneOf,
+  pageParam,
+  searchParam,
+  useDebouncedValue,
+  useListUrlState,
+  useServerPaging,
+  useSyncListUrl,
+} from "@/hooks";
 import { PASSWORD_RULE, PASSWORD_RULE_TEXT } from "@/lib/constants";
 import { SystemRoleId } from "@/lib/enums";
 import { User } from "@/lib/interfaces";
@@ -62,6 +72,24 @@ const statusFilter = [
   { key: "false", label: "Disabled", value: "false" },
 ];
 
+const BLANK: Filters = { search: "", role: ALL, status: ALL };
+const URL_DEFAULTS = { ...BLANK, sort: "", order: "", page: "1", limit: "10" };
+
+// The filters, sort and page as kept in the URL (see useListUrlState). Roles
+// come from the API, so a role id is only checked for its shape.
+const urlSchema = z.object({
+  search: searchParam(100),
+  role: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).catch(ALL),
+  status: oneOf(statusFilter.map((option) => option.value), ALL),
+  sort: oneOf(
+    columns.flatMap((column) => (column.sortable ? [column.key] : [])),
+    ""
+  ),
+  order: oneOf(["asc", "desc"], "asc"),
+  page: pageParam,
+  limit: limitParam(),
+});
+
 // A confirmation for the row actions that sign someone out or change their
 // sign-in; the password one also takes the new password.
 type Pending =
@@ -76,20 +104,45 @@ export default function UserList() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<User | null | undefined>(undefined);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [sort, setSort] = useState<TableSort | null>(null);
-  const {
-    control,
-    reset,
-    formState: { isDirty },
-  } = useForm<Filters>({
-    defaultValues: { search: "", role: ALL, status: ALL },
-  });
-  const search = useDebouncedValue(
-    useWatch({ control, name: "search" }).trim()
+  // Filters, sort and page are in the URL, so Back from a user's sessions
+  // returns to the list as it was.
+  const fromUrl = useListUrlState(urlSchema);
+  const [sort, setSort] = useState<TableSort | null>(() =>
+    fromUrl.sort
+      ? {
+          column: fromUrl.sort,
+          sortKey: fromUrl.sort,
+          direction: fromUrl.order === "desc" ? "desc" : "asc",
+        }
+      : null
   );
+  const { control, reset } = useForm<Filters>({
+    defaultValues: { search: fromUrl.search, role: fromUrl.role, status: fromUrl.status },
+  });
+  const typed = useWatch({ control, name: "search" });
+  const search = useDebouncedValue(typed.trim());
   const role = useWatch({ control, name: "role" });
   const status = useWatch({ control, name: "status" });
-  const paging = useServerPaging(JSON.stringify([search, role, status, sort]));
+  // Against the blank filters, not the form's defaults: a list opened with
+  // filters from the URL can still clear them.
+  const filtered = typed !== "" || role !== ALL || status !== ALL;
+  const paging = useServerPaging(
+    JSON.stringify([search, role, status, sort]),
+    Number(fromUrl.limit),
+    Number(fromUrl.page)
+  );
+  useSyncListUrl(
+    {
+      search,
+      role,
+      status,
+      sort: sort?.sortKey ?? "",
+      order: sort ? sort.direction : "",
+      page: String(paging.page),
+      limit: String(paging.limit),
+    },
+    URL_DEFAULTS
+  );
 
   useHeaderAction("add-user", () => setEditing(null));
 
@@ -300,7 +353,7 @@ export default function UserList() {
           aria-label="Status"
           disallowEmptySelection
         />
-        <ClearFiltersButton active={isDirty} onClear={() => reset()} />
+        <ClearFiltersButton active={filtered} onClear={() => reset(BLANK)} />
       </FilterBar>
       {users.isError && (
         <AlertBanner

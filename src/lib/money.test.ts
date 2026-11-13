@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { commissionPercent, sumMoney, toAmount } from "./money";
+import { commissionPercent, compareMoney, sumMoney, toAmount } from "./money";
+
+describe("compareMoney", () => {
+  it("orders by value", () => {
+    expect(compareMoney("10.00", "9.99")).toBeGreaterThan(0);
+  });
+});
 
 // The allocation form checks its amounts add up to no more than the payment
 // with this, so it must be exact to the cent.

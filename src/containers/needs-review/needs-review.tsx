@@ -27,7 +27,7 @@ import {
 } from "@/components/common";
 import { SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import { useDebouncedValue, useServerPaging, useUrlTab } from "@/hooks";
 import {
   CustomerInvoiceStatus,
   DisputeOutcome,
@@ -54,7 +54,8 @@ import {
 import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { invoiceListHref } from "../invoices/invoice-view";
 
-type View = "changes" | "disputes";
+const views = ["changes", "disputes"] as const;
+type View = (typeof views)[number];
 type Filters = { status: string; side: string; search: string };
 
 const ALL = "ALL";
@@ -109,7 +110,9 @@ const invoiceLabel = (dispute: Dispute) =>
 // data. And the invoices a shipper or carrier disputes (requirement 3),
 // listed and resolved through the API.
 export default function NeedsReview() {
-  const [view, setView] = useState<View>("disputes");
+  // The tab is in the URL (?view=changes), so it can be linked to and Back
+  // from an invoice returns to it. Anything else shows the disputes.
+  const [view, setView] = useUrlTab<View>(views, "disputes");
   const [resolving, setResolving] = useState<Dispute | null>(null);
   const resolve = (what: string) =>
     toast.info(`${what} — demo only, nothing was saved.`);

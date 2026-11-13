@@ -176,7 +176,7 @@ export default function Dashboard() {
             icon={<LuClock />}
             title="Aging"
             action={
-              <Link to="/reports/" className="text-sm text-[#8F9494]">
+              <Link to="/reports/" className="text-sm text-[#8F9494] underline">
                 Full report
               </Link>
             }
@@ -212,7 +212,7 @@ export default function Dashboard() {
             icon={<LuClock />}
             title="Average Payment Cycle by Party"
             action={
-              <Link to="/statements/" className="text-sm text-[#8F9494]">
+              <Link to="/statements/" className="text-sm text-[#8F9494] underline">
                 Statements
               </Link>
             }

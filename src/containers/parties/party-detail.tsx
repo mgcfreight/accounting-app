@@ -15,7 +15,7 @@ import {
 } from "@/components/common";
 import { Add, ArrowRight } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useServerPaging } from "@/hooks";
+import { listReturnHref, useServerPaging } from "@/hooks";
 import {
   billingTriggerLabels,
   creditStatusLabels,
@@ -36,6 +36,7 @@ import {
   listCustomerInvoices,
 } from "@/services";
 import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
+import ShipmentLink from "../shipments/shipment-link";
 import PartyAccount from "./party-account";
 import {
   AgreementFormModal,
@@ -46,6 +47,7 @@ import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
+  { key: "shipment", label: "Shipment" },
   { key: "reference", label: "Load Ref" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
@@ -111,7 +113,7 @@ export default function PartyDetail({ type }: { type: PartyType }) {
     <div className="grid grid-cols-1 gap-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-4">
-          <Link to={listHref} className="text-base text-[#71717A]">
+          <Link to={listReturnHref(listHref)} className="text-base text-[#71717A] underline">
             {isShipper ? "Shippers" : "Carriers"}
           </Link>
           <ArrowRight />
@@ -408,8 +410,9 @@ const contactTags = (contact: ContactView, isShipper: boolean) =>
 const linkButton = "text-base-primary underline text-sm";
 
 // The party's contacts as Profile lines: who the invoice and document emails
-// go to. Those who may edit parties add and change them here; retired ones
-// are left out.
+// go to. Those who may edit parties add and change them here. Retired ones
+// sit behind a Show/Hide retired toggle, where they can be edited and
+// turned back on.
 function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolean }) {
   const isShipper = party.type === PartyType.Shipper;
   const [editing, setEditing] = useState<ContactView | "new" | null>(null);
@@ -418,6 +421,8 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
     queryFn: ({ signal }) => listContacts(party.id, signal),
   });
   const active = (contacts.data ?? []).filter((contact) => contact.isActive);
+  const retired = (contacts.data ?? []).filter((contact) => !contact.isActive);
+  const [showRetired, setShowRetired] = useState(false);
   const addButton = canEdit && (
     <button type="button" className={linkButton} onClick={() => setEditing("new")}>
       Add contact
@@ -473,6 +478,42 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
           })}
           {addButton && <p>{addButton}</p>}
         </>
+      )}
+      {/* Retired contacts stay listable, so one retired by mistake can be
+          found and turned back on (Edit → Active). */}
+      {retired.length > 0 && (
+        <Field label="Retired">
+          <button
+            type="button"
+            className={linkButton}
+            aria-expanded={showRetired}
+            onClick={() => setShowRetired((shown) => !shown)}
+          >
+            {showRetired ? "Hide" : "Show"} {retired.length} retired
+          </button>
+          {showRetired && (
+            <ul className="mt-1 flex flex-col gap-1">
+              {retired.map((contact) => (
+                <li key={contact.id} className="text-content-5">
+                  {contact.name} · <span className="break-all">{contact.email}</span>
+                  {canEdit && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className={linkButton}
+                        aria-label={`Edit ${contact.name}`}
+                        onClick={() => setEditing(contact)}
+                      >
+                        Edit
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Field>
       )}
       {editing && (
         <ContactFormModal
@@ -556,6 +597,11 @@ function PartyInvoices({ party }: { party: PartyView }) {
           renderCell={(row, key) =>
             key === "actions" ? (
               <InvoiceViewAction invoice={row} />
+            ) : key === "shipment" ? (
+              <ShipmentLink
+                shipmentId={row.shipmentId}
+                loadNumber={row.loadNumber}
+              />
             ) : (
               <InvoiceViewCell invoice={row} columnKey={key} />
             )

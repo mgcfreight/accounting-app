@@ -1,5 +1,4 @@
 import type { SortDescriptor } from "@heroui/react";
-import { compareMoney } from "./money";
 import type { BaseTableColumn, SortDirection, TableSort } from "./types";
 
 // Ported from mokal-app's lib/table-sort.ts (client-side mode only — there is
@@ -65,8 +64,6 @@ const compareValues = (
   sortType: BaseTableColumn["sortType"]
 ): number => {
   switch (sortType) {
-    case "money":
-      return compareMoney(String(a), String(b));
     case "number":
       return Number(a) - Number(b);
     case "date":

@@ -9,8 +9,10 @@ import { Currency } from "./enums";
 // Arithmetic on money does not belong in the frontend. Totals, tax and
 // balances come already calculated. The exceptions are form helpers: sumMoney,
 // which checks a form's amounts before they are sent, and commissionPercent,
-// which shows the commission on a revised invoice's charges. Never display
-// their results as an official total.
+// which previews the commission on a shipper or carrier invoice's new
+// version. Commission is shown on screen only: it must never appear on a
+// carrier invoice PDF or anything sent to the carrier. Never display their
+// results as an official total.
 
 const AMOUNT_PATTERN = /^(-)?(\d+)\.(\d{2})$/;
 

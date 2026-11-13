@@ -155,7 +155,12 @@ export default function AutomationRuleModal({
   const activeContacts =
     contacts.status === "success" ? contacts.contacts.filter((c) => c.isActive) : [];
 
-  const { control, handleSubmit, setValue } = useForm<RuleFormValues>({
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    formState: { isDirty },
+  } = useForm<RuleFormValues>({
     defaultValues: toForm(rule),
   });
 
@@ -176,6 +181,7 @@ export default function AutomationRuleModal({
       onOpenChange={(open) => !open && onClose()}
       title={spec.label}
       confirmText="Save"
+      isDirty={isDirty}
       onConfirm={handleSubmit((values) => onSave(fromForm(values, rule, spec)))}
       size="2xl"
     >

@@ -61,7 +61,12 @@ export default function ChargeTypes() {
       listChargeTypes({ page: paging.page, limit: paging.limit }, signal),
     placeholderData: keepPreviousData,
   });
-  const { control, handleSubmit, reset } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isDirty },
+  } = useForm<Values>({
     mode: "onTouched",
   });
 
@@ -206,6 +211,7 @@ export default function ChargeTypes() {
           title={editing ? `Edit ${editing.code}` : "Add Charge Type"}
           confirmText="Save"
           isConfirming={save.isPending}
+          isDirty={isDirty}
           onConfirm={handleSubmit((values) => save.mutate(values))}
         >
           <BaseInput

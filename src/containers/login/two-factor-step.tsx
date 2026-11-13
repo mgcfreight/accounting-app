@@ -167,7 +167,7 @@ export default function TwoFactorStep({
         {canUseEmail && mode === "app" && (
           <button
             type="button"
-            className="text-base-primary-300 hover:underline"
+            className="text-base-primary-300 underline"
             onClick={emailMe}
             disabled={sending}
           >
@@ -177,7 +177,7 @@ export default function TwoFactorStep({
         {canUseEmail && mode === "email" && sentTo && (
           <button
             type="button"
-            className="text-base-primary-300 hover:underline"
+            className="text-base-primary-300 underline"
             onClick={emailMe}
             disabled={sending}
           >
@@ -187,7 +187,7 @@ export default function TwoFactorStep({
         {canUseApp && mode === "email" && (
           <button
             type="button"
-            className="text-base-primary-300 hover:underline"
+            className="text-base-primary-300 underline"
             onClick={() => {
               setMode("app");
               setFormError(null);
@@ -199,7 +199,7 @@ export default function TwoFactorStep({
         )}
         <button
           type="button"
-          className="text-content-5 hover:underline"
+          className="text-content-5 underline"
           onClick={() => onRestart("")}
         >
           Back to sign in

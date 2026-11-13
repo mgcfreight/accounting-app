@@ -19,7 +19,7 @@ import {
 import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useHeaderAction } from "@/components/providers/header-action-provider";
 import { useCan } from "@/components/providers/user-provider";
-import { useDebouncedValue, useServerPaging } from "@/hooks";
+import { useDebouncedValue, useServerPaging, useUrlTab } from "@/hooks";
 import { paymentMethodLabel, paymentMethodOptions } from "@/lib/constants";
 import {
   PaymentDirection,
@@ -46,7 +46,8 @@ import InstallmentPlans from "./installment-plans";
 import RecordPaymentModal from "./record-payment-modal";
 
 type Filters = { search: string; method: string };
-type View = "all" | "in" | "out" | "unmatched" | "plans";
+const views = ["all", "in", "out", "unmatched", "plans"] as const;
+type View = (typeof views)[number];
 type OpenModal = { modal: "allocate" | "view" | "reverse"; payment: Payment };
 
 const ALL = "ALL";
@@ -99,7 +100,7 @@ const useTabCount = (
 // "Unmatched" list, and installment plans. Payments are listed, filtered,
 // sorted and paged by the API; installment plans are still a demo.
 export default function Payments() {
-  const [view, setView] = useState<View>("all");
+  const [view, setView] = useUrlTab<View>(views, "all");
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<OpenModal | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);

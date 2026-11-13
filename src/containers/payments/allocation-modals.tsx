@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import {
   AlertBanner,
@@ -295,6 +295,11 @@ export function AllocateModal({
   const invoices = useOpenInvoices(payment);
   const open = invoices.data ?? [];
   const { control, handleSubmit, setError } = useForm<Amounts>();
+  // The open invoices arrive after the form is made, so there are no
+  // default values to compare with: any amount typed counts as an edit.
+  const typedAny = Object.values(useWatch({ control })).some((value) =>
+    String(value ?? "").trim()
+  );
 
   const allocate = usePaymentMutation(
     (allocations: AllocationLine[]) =>
@@ -370,6 +375,7 @@ export function AllocateModal({
       confirmText="Allocate"
       onConfirm={submit}
       isConfirming={allocate.isPending}
+      isDirty={typedAny}
       size="2xl"
     >
       <PaymentSummary payment={payment} />
@@ -535,7 +541,11 @@ export function ReversePaymentModal({
   payment: Payment;
   onClose: () => void;
 }) {
-  const { control, handleSubmit } = useForm<{ reason: string }>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<{ reason: string }>({
     defaultValues: { reason: "" },
   });
   const reverse = usePaymentMutation(
@@ -557,6 +567,7 @@ export function ReversePaymentModal({
       confirmText="Reverse Payment"
       onConfirm={handleSubmit((values) => reverse.mutate(values.reason.trim()))}
       isConfirming={reverse.isPending}
+      isDirty={isDirty}
     >
       <PaymentSummary payment={payment} />
       <p className="text-sm">

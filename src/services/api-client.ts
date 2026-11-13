@@ -1,5 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { z } from "zod";
+import { apiErrorBodySchema } from "./schemas";
 
 // The one path to the Accounts API: every request goes through `apiClient`.
 // Each endpoint gets a typed function in services/ built on it; nothing else
@@ -52,6 +53,14 @@ const messageFrom = (body: unknown): string | undefined => {
     return message.join(" ");
   }
   return undefined;
+};
+
+// The API's machine-readable `code` on a refusal (its ErrorCodes), or
+// undefined when there is none or the body isn't the API's error shape.
+export const apiErrorCode = (error: unknown): string | undefined => {
+  if (!(error instanceof ApiError)) return undefined;
+  const body = apiErrorBodySchema.safeParse(error.body);
+  return body.success ? body.data.code : undefined;
 };
 
 // Thrown when a response arrives but isn't the shape the screen expects —

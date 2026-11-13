@@ -59,7 +59,11 @@ export default function RoleFormModal({
     () => new Set(role?.permissions ?? [])
   );
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const { control, handleSubmit } = useForm<Values>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty: fieldsChanged },
+  } = useForm<Values>({
     mode: "onTouched",
     defaultValues: {
       name: role?.name ?? "",
@@ -69,6 +73,11 @@ export default function RoleFormModal({
 
   const isLocked = !!role && !role.permissionsEditable;
   const nameLocked = !!role?.isSystem;
+  // The ticks live outside the form, so they're compared to what was loaded:
+  // Esc after setting 30 permissions asks before throwing them away.
+  const isDirty =
+    !isLocked &&
+    (fieldsChanged || !sameSet(selected, new Set(role?.permissions ?? [])));
 
   // Only the fields that changed; null clears a description.
   const changesFrom = (values: Values): RoleChanges => {
@@ -160,7 +169,10 @@ export default function RoleFormModal({
       title={role ? (isLocked ? role.name : `Edit ${role.name}`) : "Add Role"}
       confirmText={isLocked ? "Close" : role ? "Save" : "Add Role"}
       isConfirming={save.isPending}
-      onConfirm={isLocked ? onClose : submit}
+      isDirty={isDirty}
+      // Read-only (the Admin role): no onConfirm, so the footer is one Close
+      // button rather than a Cancel and a Close that do the same thing.
+      onConfirm={isLocked ? undefined : submit}
       size="5xl"
     >
       {isLocked && (

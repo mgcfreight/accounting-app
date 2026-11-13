@@ -67,7 +67,13 @@ export default function RecordPaymentModal({
   const directionOptions = allDirections.filter((option) =>
     can(option.permission)
   );
-  const { control, handleSubmit, reset, setValue } = useForm<FormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isDirty },
+  } = useForm<FormValues>({
     // Read once, on mount: render this with `shipper` already set.
     defaultValues: {
       direction: shipper
@@ -155,6 +161,7 @@ export default function RecordPaymentModal({
       confirmText="Record Payment"
       onConfirm={submit}
       isConfirming={record.isPending}
+      isDirty={isDirty}
       size="xl"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

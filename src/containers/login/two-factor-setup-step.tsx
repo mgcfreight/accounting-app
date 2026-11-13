@@ -187,7 +187,7 @@ export default function TwoFactorSetupStep({
       )}
       <button
         type="button"
-        className="text-xs text-content-5 hover:underline"
+        className="text-xs text-content-5 underline"
         onClick={() => onRestart("")}
       >
         Back to sign in
