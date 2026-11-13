@@ -10,22 +10,29 @@ import {
   TableSkeleton,
 } from "@/components/common";
 import { DownArrow } from "@/components/icons";
+import { noticeTermsList, paymentTermsLabels } from "@/lib/constants";
 import { NoticeSettings, NoticeTerms } from "@/lib/interfaces";
 import { formatDateTime, fullName } from "@/lib/utils";
 import { errorMessage, getNoticeSettings, saveNoticeSettings } from "@/services";
 
-const TERMS: NoticeTerms[] = ["NET_7", "NET_15", "NET_30", "NET_60"];
+// Every term with a notice default, derived from PaymentTerms. The form and
+// the save payload are built from this list, so a new term can't be shown
+// but left out of either.
+const TERMS = noticeTermsList;
 
 // Text fields in the form; sent as whole numbers.
 type Values = Record<NoticeTerms, string> & { carrierAlertDaysBefore: string };
 
 const QUERY_KEY = ["settings", "notices"];
 
+const byTerms = <T,>(value: (terms: NoticeTerms) => T) =>
+  Object.fromEntries(TERMS.map((terms) => [terms, value(terms)])) as Record<
+    NoticeTerms,
+    T
+  >;
+
 const toForm = (settings: NoticeSettings): Values => ({
-  NET_7: String(settings.defaultNoticeDays.NET_7),
-  NET_15: String(settings.defaultNoticeDays.NET_15),
-  NET_30: String(settings.defaultNoticeDays.NET_30),
-  NET_60: String(settings.defaultNoticeDays.NET_60),
+  ...byTerms((terms) => String(settings.defaultNoticeDays[terms])),
   carrierAlertDaysBefore:
     settings.carrierAlertDaysBefore === null
       ? ""
@@ -35,10 +42,11 @@ const toForm = (settings: NoticeSettings): Values => ({
 const wholeDays = (max: number) => (value: string) =>
   (/^\d+$/.test(value) && +value <= max) || `A whole number from 0 to ${max}`;
 
-// Default billing-period notice days by payment terms (v5: 2/4/7/7; COD and
-// PREPAID get no notice), and the default for the carrier "payment due soon"
-// alert to the accounts team. Each customer's or carrier's agreement can set
-// its own. Saved only: nothing sends notices yet.
+// Default billing-period notice days by payment terms (v5 sets 2/4/7/7 for
+// Net 7 to Net 60; Net 90's 7 was added in #29; COD and PREPAID get no
+// notice), and the default for the carrier "payment due soon" alert to the
+// accounts team. Each customer's or carrier's agreement can set its own.
+// Saved only: nothing sends notices yet.
 // The Settings page asks before leaving with unsaved edits; this section
 // reports them through `onDirtyChange`.
 export default function NoticeSettingsSection({
@@ -67,12 +75,9 @@ export default function NoticeSettingsSection({
   const save = useMutation({
     mutationFn: (values: Values) =>
       saveNoticeSettings({
-        defaultNoticeDays: {
-          NET_7: Number.parseInt(values.NET_7, 10),
-          NET_15: Number.parseInt(values.NET_15, 10),
-          NET_30: Number.parseInt(values.NET_30, 10),
-          NET_60: Number.parseInt(values.NET_60, 10),
-        },
+        defaultNoticeDays: byTerms((terms) =>
+          Number.parseInt(values[terms], 10)
+        ),
         carrierAlertDaysBefore: values.carrierAlertDaysBefore.trim()
           ? Number.parseInt(values.carrierAlertDaysBefore, 10)
           : null,
@@ -120,7 +125,7 @@ export default function NoticeSettingsSection({
               name={terms}
               control={control}
               type="number"
-              label={terms.replace("_", " ")}
+              label={paymentTermsLabels[terms]}
               rules={{ required: "Enter days", validate: wholeDays(30) }}
             />
           ))}
@@ -152,7 +157,7 @@ export default function NoticeSettingsSection({
         <p className="text-xs text-content-5">
           {updatedAt
             ? `Last saved ${formatDateTime(updatedAt)}${updatedBy ? ` by ${fullName(updatedBy)}` : ""}.`
-            : "Showing the v5 defaults; not saved yet."}
+            : "Showing the default values; not saved yet."}
         </p>
         <BaseButton
           type="submit"

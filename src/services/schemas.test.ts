@@ -8,6 +8,7 @@ import {
   customerInvoiceSchema,
   exchangeRateSchema,
   meSchema,
+  noticeSettingsSchema,
   permissionCatalogSchema,
   syncEventSchema,
   syncStatusSchema,
@@ -571,5 +572,30 @@ describe("syncEventSchema", () => {
     expect(syncEventSchema.safeParse({ ...held, status: "DONE" }).success).toBe(
       false
     );
+  });
+});
+
+describe("noticeSettingsSchema", () => {
+  // GET /settings/notices as the API sends it once it takes Net 90 (#29).
+  const notices = {
+    defaultNoticeDays: { NET_7: 2, NET_15: 4, NET_30: 7, NET_60: 7, NET_90: 7 },
+    carrierAlertDaysBefore: null,
+    updatedAt: null,
+    updatedBy: null,
+  };
+
+  it("reads Net 90's notice days", () => {
+    expect(noticeSettingsSchema.parse(notices).defaultNoticeDays.NET_90).toBe(7);
+  });
+
+  it("refuses notice days without Net 90 or out of range", () => {
+    const { NET_90: _net90, ...withoutNet90 } = notices.defaultNoticeDays;
+    for (const defaultNoticeDays of [
+      withoutNet90,
+      { ...notices.defaultNoticeDays, NET_90: 31 },
+      { ...notices.defaultNoticeDays, NET_90: "7" },
+    ]) {
+      expect(noticeSettingsSchema.safeParse({ ...notices, defaultNoticeDays }).success).toBe(false);
+    }
   });
 });

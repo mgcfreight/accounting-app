@@ -478,12 +478,16 @@ export interface CompanySettings {
 }
 
 // Payment terms that get a billing-period notice (COD and PREPAID get none).
-export type NoticeTerms = "NET_7" | "NET_15" | "NET_30" | "NET_60";
+// Derived, so a new payment term without a notice default is a type error.
+export type NoticeTerms = Exclude<
+  PaymentTerms,
+  PaymentTerms.COD | PaymentTerms.Prepaid
+>;
 
 // How many days before a period ends its notice goes out, by terms (v5
-// defaults 2/4/7/7), and the default carrier "payment due soon" alert —
-// null until an Admin sets it (open question in v5). Stored only: nothing
-// sends notices yet.
+// defaults 2/4/7/7; Net 90, added in #29, 7), and the default carrier
+// "payment due soon" alert, null until an Admin sets it (open question in
+// v5). Stored only: nothing sends notices yet.
 export interface NoticeSettings {
   defaultNoticeDays: Record<NoticeTerms, number>;
   carrierAlertDaysBefore: number | null;
