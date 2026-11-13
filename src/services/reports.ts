@@ -76,6 +76,18 @@ export const getFxGainLoss = (period: string, signal?: AbortSignal) =>
     .get("/report/fx", { params: { period }, signal })
     .then((res) => parseBody(envelope(fxGainLossReportSchema), res.data).data);
 
+// The accountant export: the period's invoices, adjustments, credit notes and
+// payments as one CSV (reports.export_csv; each side as far as the role may
+// see), in a generic layout. `fileName` is used when the API sends none; the
+// screen names it, as it does the other exports.
+export const exportAccountantCsv = ({
+  period,
+  fileName,
+}: {
+  period: string;
+  fileName: string;
+}) => getFile("/report/accountant/export", { period }, fileName);
+
 // A report as Excel or PDF, made by the API. Aging per party has no period.
 export const exportReport = (
   kind: ReportKind,
