@@ -33,6 +33,7 @@ import {
   accountantExportAccess,
   accountantExportFileName,
   accountantExportNote,
+  periodMonths,
 } from "./accountant-export";
 import {
   exportAccountantCsv,
@@ -44,6 +45,7 @@ import {
   getPartyPnl,
   getReportSummary,
   getTaxReport,
+  listAccountingPeriods,
   listShipmentPnl,
   ReportFormat,
   ReportKind,
@@ -162,7 +164,7 @@ const reportCards: ReportCard[] = [
     // Neutral on purpose: MGC hasn't chosen its accounting software, and the
     // API sends a generic layout.
     description:
-      "Invoices, notes and payments for a period, as one CSV in a generic layout.",
+      "Invoices, notes and payments for a period, as one CSV in a generic layout. Add-only: a void, a revision or a payment reversal is its own negative row on the day it happened, so read it as entries, not a list of current invoices.",
   },
 ];
 
@@ -292,7 +294,21 @@ export default function Reports() {
   const accountantAccess = accountantExportAccess(can);
   // A running period is exported as far as today, and says so.
   const runsTo = chosen?.toDate ? today : null;
-  const accountantNote = accountantExportNote(accountantAccess, runsTo);
+  // Months ever closed (newest first; two years of them fit one page). A
+  // month with no row is open. Until they load, every month counts as open,
+  // so the warning errs on the side of showing.
+  const periods = useQuery({
+    queryKey: ["settings", "accounting-periods", "export"],
+    queryFn: ({ signal }) => listAccountingPeriods({ page: 1, limit: 100 }, signal),
+    enabled: accountantAccess.canExport,
+  });
+  const closed = new Set(
+    (periods.data?.items ?? [])
+      .filter((row) => row.status === "CLOSED")
+      .map((row) => row.period)
+  );
+  const openMonths = periodMonths(period, today).filter((month) => !closed.has(month));
+  const accountantNote = accountantExportNote(accountantAccess, runsTo, openMonths);
 
   const summary = useQuery({
     queryKey: ["report", "summary", period],
@@ -396,7 +412,7 @@ export default function Reports() {
             onPress={() =>
               accountantCsv.mutate({
                 period,
-                fileName: accountantExportFileName(period, runsTo),
+                fileName: accountantExportFileName(period, runsTo, openMonths.length > 0),
               })
             }
           />
