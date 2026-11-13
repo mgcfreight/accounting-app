@@ -4,8 +4,9 @@ import { apiClient, parseBody } from "./api-client";
 import { envelope, paginated, reviewItemSchema } from "./schemas";
 
 // Needs Review's MGC changes (/invoice/review): live invoices the TMS
-// changed or cancelled after they were invoiced. The sync flags them; their
-// amounts never change. Each side is listed only for a role with its invoice
+// changed or cancelled after they were invoiced. The sync flags them; a
+// draft or expected bill nobody edited also takes the TMS's new figure, the
+// rest keep their amounts. Each side is listed only for a role with its invoice
 // view permission; resolving needs the side's invoice edit permission.
 
 export type ReviewListParams = {

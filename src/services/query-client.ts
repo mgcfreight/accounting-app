@@ -9,7 +9,8 @@ const isRetryable = (error: unknown) =>
 // write-off or a credit changes all of them: balances and unapplied credit,
 // the dashboard and aging (["accounts", …]), statements, reports, reminders
 // and the invoice pages, and Needs Review's MGC changes (["reviews"]: a
-// revised or voided invoice leaves that list). Refresh them together, so no
+// voided invoice leaves that list, and a revised one is listed as its new
+// version). Refresh them together, so no
 // screen keeps an old amount or a stale version after a change.
 const MONEY_VIEWS = [
   "invoices",

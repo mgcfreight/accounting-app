@@ -29,6 +29,7 @@ import {
   ReminderKind,
   ReminderSkipReason,
   ReminderStatus,
+  ReviewChange,
   ReviewKind,
   SessionEndReason,
   SessionStatus,
@@ -819,8 +820,12 @@ export const reviewItemSchema: z.ZodType<ReviewItem> = z.object({
   partyId: z.string(),
   partyName: z.string(),
   currency: z.enum(Currency),
+  currentAmount: money,
   previousAmount: money,
   newAmount: money,
+  tmsCurrency: z.enum(Currency),
+  updatedFromTms: z.boolean(),
+  changes: z.array(z.enum(ReviewChange)),
   detectedAt: timestamp,
 });
 

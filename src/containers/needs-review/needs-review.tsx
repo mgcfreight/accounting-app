@@ -29,7 +29,6 @@ import { SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
 import { useDebouncedValue, useServerPaging } from "@/hooks";
 import {
-  CarrierInvoiceStatus,
   CustomerInvoiceStatus,
   DisputeOutcome,
   DisputeStatus,
@@ -54,6 +53,7 @@ import {
   resolveReviewItem,
 } from "@/services";
 import { invoiceListHref } from "../invoices/invoice-view";
+import { changeAction, changedText } from "./review-actions";
 
 type View = "changes" | "disputes";
 type Filters = { status: string; side: string; search: string };
@@ -68,7 +68,7 @@ const columns: BaseTableColumn[] = [
   { key: "party", label: "Party" },
   { key: "side", label: "Side" },
   { key: "previous", label: "On the Invoice", align: "end" },
-  { key: "next", label: "In MGC Now", align: "end" },
+  { key: "next", label: "In MGC Freight Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
   { key: "actions", label: "Actions" },
 ];
@@ -107,21 +107,11 @@ const invoiceHref = (item: { direction: InvoiceDirection; invoiceId: string }) =
 const invoiceLabel = (dispute: Dispute) =>
   dispute.invoiceNumber ?? "No number yet";
 
-// Not issued yet (a draft, or a carrier bill still awaited): it is fixed by
-// editing or voiding it on its page, so the action only opens it.
-const NOT_ISSUED: string[] = [CustomerInvoiceStatus.Draft, CarrierInvoiceStatus.Expected];
-
-// What the invoice page offers for this change, for a role that may act on
-// the side; "View invoice" for one that may only look.
-const changeAction = (item: ReviewItem, canAct: boolean) => {
-  if (!canAct || NOT_ISSUED.includes(item.invoiceStatus)) return "View invoice";
-  return item.kind === ReviewKind.Cancellation ? "Void or Credit" : "Revise or Note";
-};
-
 // Design §6.2 steps 4–5: invoices the TMS changed or cancelled after they
-// were invoiced (the sync flags them; their amounts never change). Staff act
-// on the invoice -- revise it, a credit or debit note, void it -- then
-// resolve the change here with a note. And the invoices a shipper or carrier
+// were invoiced. The sync flags them, and already updates a draft or
+// expected bill nobody edited. Staff act on the invoice -- change a draft's
+// amounts, revise it, a credit or debit note, void it -- or, for a carrier
+// bill in but not approved, just note it; then resolve the change here. And the invoices a shipper or carrier
 // disputes (requirement 3). Both run on the API.
 export default function NeedsReview() {
   const [view, setView] = useState<View>("disputes");
@@ -187,9 +177,14 @@ export default function NeedsReview() {
     switch (key) {
       case "kind":
         return item.kind === ReviewKind.Cancellation ? (
-          <StatusChip text="Cancelled in MGC" tone="danger" />
+          <StatusChip text="Cancelled in MGC Freight" tone="danger" />
         ) : (
-          <StatusChip text="Amount changed" tone="warning" />
+          <div className="flex flex-col items-start gap-1">
+            <StatusChip text="Changed in MGC Freight" tone="warning" />
+            {item.changes.length > 0 && (
+              <span className="text-xs text-content-5">{changedText(item)}</span>
+            )}
+          </div>
         );
       case "shipment":
         return <span className="font-mono">{item.loadNumber}</span>;
@@ -213,36 +208,59 @@ export default function NeedsReview() {
         ) : (
           <StatusChip text="Carrier" tone="primary" />
         );
+      // The amount on the invoice now, with what it was before when the
+      // sync updated it (accounts, 13 Nov 2026).
       case "previous":
-        return <Money amount={item.previousAmount} currency={item.currency} />;
+        return (
+          <div className="flex flex-col items-end">
+            <Money amount={item.currentAmount} currency={item.currency} />
+            {item.previousAmount !== item.currentAmount && (
+              <span className="text-xs text-content-5 whitespace-nowrap">
+                was <Money amount={item.previousAmount} currency={item.currency} />
+              </span>
+            )}
+            {item.updatedFromTms && (
+              <span className="text-xs text-content-5 whitespace-nowrap">
+                Updated from MGC Freight
+              </span>
+            )}
+          </div>
+        );
       case "next":
-        return <Money amount={item.newAmount} currency={item.currency} className="font-semibold" />;
+        return <Money amount={item.newAmount} currency={item.tmsCurrency} className="font-semibold" />;
       case "detectedAt":
         return <span className="whitespace-nowrap">{formatDateTime(item.detectedAt)}</span>;
       // The invoice page holds the fixes (revise, credit or debit note, void
       // with or without a cancellation fee); Resolve records what was done.
-      case "actions":
+      case "actions": {
+        const canAct = canResolveChange(item);
+        const action = changeAction(item, canAct);
         return (
           <div className="flex gap-2">
-            <BaseButton
-              as={Link}
-              to={invoiceHref(item)}
-              text={changeAction(item, canResolveChange(item))}
-              varient={canResolveChange(item) ? "solid" : "bordered"}
-              className={`rounded-full px-3 whitespace-nowrap ${
-                canResolveChange(item) ? "" : "text-base-primary"
-              }`}
-            />
-            {canResolveChange(item) && (
+            {action.link && (
               <BaseButton
-                text="Resolve"
-                varient="bordered"
-                className="rounded-full px-3 text-base-primary"
+                as={Link}
+                to={invoiceHref(item)}
+                text={action.link}
+                varient={canAct ? "solid" : "bordered"}
+                className={`rounded-full px-3 whitespace-nowrap ${
+                  canAct ? "" : "text-base-primary"
+                }`}
+              />
+            )}
+            {canAct && (
+              <BaseButton
+                text={action.resolve}
+                varient={action.link ? "bordered" : "solid"}
+                className={`rounded-full px-3 whitespace-nowrap ${
+                  action.link ? "text-base-primary" : ""
+                }`}
                 onPress={() => setResolvingChange(item)}
               />
             )}
           </div>
         );
+      }
       default:
         return null;
     }
@@ -375,7 +393,7 @@ export default function NeedsReview() {
       </Tabs>
       {view === "changes" ? (
         <>
-          <AlertBanner message="These invoices' amounts are as issued: MGC Freight changed or cancelled the load afterwards. Fix the invoice from its page (revise it, a credit or debit note, or void it), then resolve the change here with a note. Both are in the audit trail." />
+          <AlertBanner message="MGC Freight changed or cancelled these loads after they were invoiced. A draft or expected bill nobody had edited is already updated: check it and confirm. Change any other draft's amounts, or revise, credit or void an issued invoice, from its page. A carrier bill that is in but not approved keeps the carrier's amount: just add a note. Each is resolved here with a note, kept in the audit trail." />
           <Card>
             {changes.isError ? (
               <ErrorState
@@ -515,13 +533,20 @@ function ResolveChangeModal({
         {item.invoiceNumber ?? "No number yet"} · {item.partyName} ·{" "}
         {item.kind === ReviewKind.Cancellation ? (
           <>
-            Cancelled in MGC · invoiced{" "}
-            <Money amount={item.previousAmount} currency={item.currency} />
+            Cancelled in MGC Freight · on the invoice{" "}
+            <Money amount={item.currentAmount} currency={item.currency} />
           </>
         ) : (
           <>
-            MGC now <Money amount={item.newAmount} currency={item.currency} /> ·
-            invoiced <Money amount={item.previousAmount} currency={item.currency} />
+            {item.changes.length > 0 && <>Changed: {changedText(item)} · </>}
+            MGC Freight now <Money amount={item.newAmount} currency={item.tmsCurrency} /> ·
+            on the invoice <Money amount={item.currentAmount} currency={item.currency} />
+            {item.updatedFromTms && (
+              <>
+                {" "}(updated from{" "}
+                <Money amount={item.previousAmount} currency={item.currency} />)
+              </>
+            )}
           </>
         )}
       </p>
