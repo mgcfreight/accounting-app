@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import { Link } from "react-router";
 import { useCurrentUser } from "@/components/providers/user-provider";
 import { findInvoiceByNumber } from "@/lib/mock";
@@ -32,25 +31,5 @@ export function DemoInvoiceLink({
     >
       {number}
     </Link>
-  );
-}
-
-// Several invoice numbers, comma separated.
-export function DemoInvoiceLinks({
-  numbers,
-  className,
-}: {
-  numbers: string[];
-  className?: string;
-}) {
-  return (
-    <span>
-      {numbers.map((number, index) => (
-        <Fragment key={number}>
-          {index > 0 && ", "}
-          <DemoInvoiceLink number={number} className={className} />
-        </Fragment>
-      ))}
-    </span>
   );
 }

@@ -13,6 +13,8 @@ import {
   DocumentKind,
   DocumentSource,
   FxRateSource,
+  InstallmentFrequency,
+  InstallmentPlanAttention,
   InstallmentStatus,
   InvoiceDirection,
   InvoiceDeliveryMode,
@@ -1298,21 +1300,37 @@ export interface Installment {
   dueDate: string;
   amount: string;
   status: InstallmentStatus;
+  // Always null: the API doesn't track when an installment was paid yet.
+  // Don't build on it.
   paidOn: string | null;
 }
 
-// An agreed plan to pay one or more invoices in parts.
+// GET /installment-plan/all: an agreed plan to pay one or more invoices in
+// parts. `paid` is what its invoices came down since it was agreed (up to the
+// total); installments are paid in order. Every figure is the API's.
 export interface InstallmentPlan {
   id: string;
   direction: PaymentDirection;
+  partyId: string;
   partyName: string;
-  invoiceNumbers: string[];
+  // A revised invoice shows as its current version.
+  invoices: { id: string; number: string | null }[];
   currency: Currency;
   total: string;
   paid: string;
   remaining: string;
+  // Empty unless a plan invoice was voided or re-totalled since the plan
+  // was agreed; its figures then need a person to look at them.
+  attention: InstallmentPlanAttention[];
+  frequency: InstallmentFrequency;
   agreedOn: string;
   installments: Installment[];
+  createdAt: string;
+  // When and why it was cancelled (PUT /installment-plan/cancel); null while
+  // it runs. A cancelled plan stays listed, and its invoices are owed again
+  // in full on their own due dates.
+  cancelledAt: string | null;
+  cancelReason: string | null;
 }
 
 // One automated message for a shipper or carrier, as staff set it up.

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysPastDue, torontoLocalToIso } from "./utils";
+import { addDays, addMonths, daysPastDue, torontoLocalToIso } from "./utils";
+
+describe("addMonths", () => {
+  it("moves a date by whole months, across a year end", () => {
+    expect(addMonths("2026-11-12", 12)).toBe("2027-11-12");
+    expect(addMonths("2026-11-30", 2)).toBe("2027-01-30");
+  });
+
+  it("keeps to the end of a shorter month, as the API does", () => {
+    expect(addMonths("2028-02-29", 12)).toBe("2029-02-28");
+    expect(addMonths("2027-01-31", 1)).toBe("2027-02-28");
+  });
+});
 
 // The shipment form sends "Created in TMS" through this; the API takes the
 // Toronto date of the result as the invoice date, which picks the tax rate.

@@ -14,6 +14,9 @@ import {
   DocumentSource,
   EmailStatus,
   FxRateSource,
+  InstallmentFrequency,
+  InstallmentPlanAttention,
+  InstallmentStatus,
   InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
@@ -68,6 +71,7 @@ import {
   ExchangeRateRefresh,
   FxGainLossReport,
   FxGainLossRow,
+  InstallmentPlan,
   InvoiceBillTo,
   InvoiceChargeType,
   InvoiceDocument,
@@ -803,6 +807,33 @@ export const disputeSchema: z.ZodType<Dispute> = z.object({
   resolvedBy: z.string().nullable(),
   creditNoteId: z.string().nullable(),
   creditNoteNumber: z.string().nullable(),
+});
+
+export const installmentPlanSchema: z.ZodType<InstallmentPlan> = z.object({
+  id: z.string(),
+  direction: z.enum(PaymentDirection),
+  partyId: z.string(),
+  partyName: z.string(),
+  invoices: z.array(z.object({ id: z.string(), number: z.string().nullable() })),
+  currency: z.enum(Currency),
+  total: money,
+  paid: money,
+  remaining: money,
+  attention: z.array(z.enum(InstallmentPlanAttention)),
+  frequency: z.enum(InstallmentFrequency),
+  agreedOn: calendarDate,
+  installments: z.array(
+    z.object({
+      number: z.number().int().positive(),
+      dueDate: calendarDate,
+      amount: money,
+      status: z.enum(InstallmentStatus),
+      paidOn: calendarDate.nullable(),
+    })
+  ),
+  createdAt: timestamp,
+  cancelledAt: timestamp.nullable(),
+  cancelReason: z.string().nullable(),
 });
 
 export const invoiceDocumentSchema: z.ZodType<InvoiceDocument> = z.object({

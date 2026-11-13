@@ -374,6 +374,25 @@ export enum InstallmentStatus {
   Late = "LATE",
 }
 
+export enum InstallmentFrequency {
+  Weekly = "WEEKLY",
+  Biweekly = "BIWEEKLY",
+  Monthly = "MONTHLY",
+}
+
+// GET /installment-plan/all `status`: running or cancelled plans only.
+export enum InstallmentPlanStatus {
+  Live = "LIVE",
+  Cancelled = "CANCELLED",
+}
+
+// Why staff should look at a plan: one of its invoices was voided, or
+// revised to a different total. Neither counts as paid.
+export enum InstallmentPlanAttention {
+  InvoiceVoided = "INVOICE_VOIDED",
+  AmountChanged = "AMOUNT_CHANGED",
+}
+
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",
