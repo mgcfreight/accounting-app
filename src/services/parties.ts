@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   BillingTrigger,
   Currency,
@@ -6,7 +7,6 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "@/lib/enums";
-import { z } from "zod";
 import { apiClient, parseBody } from "./api-client";
 import {
   agreementSchema,
@@ -68,22 +68,6 @@ export type NewAgreement = {
   notes?: string;
 };
 
-// A person at the party. The email is unique per party (409 otherwise).
-export type NewContact = {
-  partyId: string;
-  name: string;
-  email: string;
-  phone?: string;
-  receivesInvoices?: boolean;
-  receivesReminders?: boolean;
-  receivesStatements?: boolean;
-};
-
-// Only what changes. phone "" clears it; isActive false retires the contact.
-export type ContactChanges = Partial<Omit<NewContact, "partyId">> & {
-  isActive?: boolean;
-};
-
 export const listParties = (params: PartyListParams, signal?: AbortSignal) =>
   apiClient
     .get("/party/all", {
@@ -116,7 +100,26 @@ export const createAgreement = (agreement: NewAgreement) =>
     .post("/party/agreement", agreement)
     .then((res) => parseBody(envelope(agreementSchema), res.data).data);
 
-// Active ones first, then by name.
+// A person at the party. The email is unique per party and stored
+// lower-case. Statements go to the first active contact with
+// receivesStatements; without one, emailing a statement is refused.
+export type NewContact = {
+  partyId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  receivesInvoices?: boolean;
+  receivesReminders?: boolean;
+  receivesStatements?: boolean;
+};
+
+// Send only what changes. `phone: ""` clears it; `isActive: false` retires
+// the contact.
+export type ContactChanges = Partial<Omit<NewContact, "partyId">> & {
+  isActive?: boolean;
+};
+
+// Active ones first, then by name. Not paged.
 export const listContacts = (partyId: string, signal?: AbortSignal) =>
   apiClient
     .get("/party/contacts", { params: { partyId }, signal })

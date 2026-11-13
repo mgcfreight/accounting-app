@@ -1,0 +1,67 @@
+{
+  "message": "Payment allocated",
+  "data": {
+    "id": "spy_aD4xOHTES8",
+    "number": "SPAY-13",
+    "direction": "IN",
+    "partyId": "pty_OkyQ18fBR6",
+    "partyName": "Capture tm3kfe",
+    "paidOn": "2026-10-29",
+    "amount": "1500.00",
+    "currency": "CAD",
+    "fxRateToCad": "1.000000",
+    "fxRateSource": null,
+    "method": "EFT",
+    "reference": "EFT 88231",
+    "unapplied": "70.00",
+    "source": "MANUAL",
+    "match": "PARTIAL",
+    "status": "POSTED",
+    "reversedAt": null,
+    "reversalReason": null,
+    "notes": null,
+    "version": 2,
+    "createdAt": "2026-10-29T14:01:40.840Z",
+    "suggested": [
+      {
+        "invoiceId": "csi_eAuNeRxpgR",
+        "invoiceNumber": "sin_EGP9wr_32",
+        "dueDate": "2026-11-18",
+        "invoiceBalanceBefore": "830.00",
+        "amount": "70.00",
+        "invoiceBalanceAfter": "760.00",
+        "rule": "OLDEST_OPEN"
+      }
+    ],
+    "allocations": [
+      {
+        "id": "spa_OdqJbwaLHT",
+        "invoiceId": "csi_cNKZUzpMMi",
+        "invoiceNumber": "sin_EGP9wr_31",
+        "creditNoteId": null,
+        "amount": "1130.00",
+        "allocatedOn": "2026-10-29",
+        "invoiceBalanceBefore": "1130.00",
+        "invoiceBalanceAfter": "0.00",
+        "rule": "OLDEST_OPEN",
+        "reversedAt": null,
+        "reversedById": null,
+        "createdAt": "2026-10-29T14:01:40.864Z"
+      },
+      {
+        "id": "spa_Wp1KRK4szY",
+        "invoiceId": "csi_eAuNeRxpgR",
+        "invoiceNumber": "sin_EGP9wr_32",
+        "creditNoteId": null,
+        "amount": "300.00",
+        "allocatedOn": "2026-10-29",
+        "invoiceBalanceBefore": "1130.00",
+        "invoiceBalanceAfter": "830.00",
+        "rule": "MANUAL",
+        "reversedAt": null,
+        "reversedById": null,
+        "createdAt": "2026-10-29T14:01:40.864Z"
+      }
+    ]
+  }
+}

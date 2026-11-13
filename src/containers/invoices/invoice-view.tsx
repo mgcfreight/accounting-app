@@ -46,6 +46,11 @@ export const invoiceListHref = (direction: InvoiceDirection) =>
 export const apiInvoiceHref = (invoice: InvoiceView) =>
   `${invoiceListHref(directionOf(invoice))}view/?id=${encodeURIComponent(invoice.id)}`;
 
+// The detail page's `?id=` is usually the internal id (csi_…/cri_…), but a
+// link from the TMS or an email may carry only the invoice number
+// (sin_…/cin_…). The prefixes never overlap.
+export const isInvoiceNumber = (value: string) => /^(sin|cin)_/.test(value);
+
 // A customer invoice is numbered once it has its TMS code; a carrier
 // invoice by MGC's reference number.
 export const invoiceNumberOf = (invoice: InvoiceView): string | null =>

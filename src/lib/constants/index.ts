@@ -42,9 +42,11 @@ export const paymentMethodOptions = [
   { key: "CARD", label: "Card (Stripe)", value: "CARD" },
   { key: "E_TRANSFER", label: "e-Transfer", value: "E_TRANSFER" },
   { key: "EFT", label: "EFT", value: "EFT" },
+  { key: "ACH", label: "ACH", value: "ACH" },
   { key: "CHEQUE", label: "Cheque", value: "CHEQUE" },
   { key: "WIRE", label: "Wire", value: "WIRE" },
   { key: "CASH", label: "Cash", value: "CASH" },
+  { key: "OTHER", label: "Other", value: "OTHER" },
 ];
 
 export const paymentMethodLabel = (method: string) =>
@@ -139,6 +141,8 @@ export const reviewFlagLabels: Record<InvoiceReviewFlag, string> = {
   [InvoiceReviewFlag.TmsCancelled]: "The TMS cancelled the shipment",
   [InvoiceReviewFlag.UnknownCharge]:
     "A TMS charge with no matching charge type, entered as Other",
+  [InvoiceReviewFlag.TaxUnconfirmed]:
+    "Copied from the TMS total with tax included: check the tax before issuing",
 };
 
 // The codes the API accepts for a Canadian address (its CANADIAN_PROVINCES).

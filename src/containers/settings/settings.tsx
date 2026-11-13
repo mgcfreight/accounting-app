@@ -5,6 +5,7 @@ import { useUnsavedChanges } from "@/hooks";
 import AccountingPeriods from "./accounting-periods";
 import ChargeTypes from "./charge-types";
 import CompanyInformation from "./company-information";
+import ExchangeRates from "./exchange-rates";
 import NoticeSettingsSection from "./notice-settings";
 import TaxRates from "./tax-rates";
 
@@ -28,6 +29,12 @@ const sections: Section[] = [
     title: "Tax Rates",
     subtitle: "Tax codes, their rates and the dates they apply",
     Body: TaxRates,
+  },
+  {
+    key: "fx",
+    title: "Exchange Rates",
+    subtitle: "Bank of Canada USD/CAD rates used on USD invoices",
+    Body: ExchangeRates,
   },
   {
     key: "charges",

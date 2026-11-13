@@ -1,0 +1,80 @@
+{
+  "message": "Success",
+  "data": {
+    "period": {
+      "key": "2026-YTD",
+      "label": "2026 year to date",
+      "from": "2026-01-01",
+      "to": "2026-10-29",
+      "toDate": true
+    },
+    "rows": [
+      {
+        "key": "NB-HST-NB-15.000",
+        "jurisdiction": "NB",
+        "taxCode": "HST-NB",
+        "ratePercent": "15.000",
+        "taxableSales": "0.00",
+        "taxCollected": "0.00",
+        "taxablePurchases": "5400.00",
+        "inputTaxCredits": "810.00",
+        "badDebtRelief": "0.00",
+        "netTax": "-810.00"
+      },
+      {
+        "key": "ON-HST-ON-13.000",
+        "jurisdiction": "ON",
+        "taxCode": "HST-ON",
+        "ratePercent": "13.000",
+        "taxableSales": "15218.00",
+        "taxCollected": "1978.34",
+        "taxablePurchases": "4280.00",
+        "inputTaxCredits": "556.40",
+        "badDebtRelief": "0.00",
+        "netTax": "1421.94"
+      },
+      {
+        "key": "QC-GST-QC-5.000",
+        "jurisdiction": "QC",
+        "taxCode": "GST-QC",
+        "ratePercent": "5.000",
+        "taxableSales": "7200.00",
+        "taxCollected": "360.00",
+        "taxablePurchases": "0.00",
+        "inputTaxCredits": "0.00",
+        "badDebtRelief": "0.00",
+        "netTax": "360.00"
+      },
+      {
+        "key": "QC-QST-QC-9.975",
+        "jurisdiction": "QC",
+        "taxCode": "QST-QC",
+        "ratePercent": "9.975",
+        "taxableSales": "7200.00",
+        "taxCollected": "718.20",
+        "taxablePurchases": "0.00",
+        "inputTaxCredits": "0.00",
+        "badDebtRelief": "0.00",
+        "netTax": "718.20"
+      },
+      {
+        "key": "SK-GST-SK-5.000",
+        "jurisdiction": "SK",
+        "taxCode": "GST-SK",
+        "ratePercent": "5.000",
+        "taxableSales": "1650.00",
+        "taxCollected": "82.50",
+        "taxablePurchases": "0.00",
+        "inputTaxCredits": "0.00",
+        "badDebtRelief": "7.14",
+        "netTax": "75.36"
+      }
+    ],
+    "totals": {
+      "taxCollected": "3139.04",
+      "inputTaxCredits": "1366.40",
+      "badDebtRelief": "7.14",
+      "netTax": "1765.50"
+    }
+  }
+}

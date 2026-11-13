@@ -63,18 +63,100 @@ export class ResponseShapeError extends Error {
   }
 }
 
+// A failure the screen itself detects, with a message written for staff
+// ("Too many reminders to export…"). errorMessage shows it as it is.
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UserFacingError";
+  }
+}
+
 // The text to show for a failed request: the API's own message (they are
 // written for staff), or a generic one for anything else.
 export const errorMessage = (error: unknown) =>
-  error instanceof ApiError || error instanceof ResponseShapeError
+  error instanceof ApiError ||
+  error instanceof ResponseShapeError ||
+  error instanceof UserFacingError
     ? error.message
     : "Something went wrong. Please try again.";
+
+// Every row of a paged list, read 100 at a time, for a screen that must see
+// them all (a write-off further back, an invoice past the first page).
+// Stops with `tooMany` rather than reading for ever.
+export const readAllPages = async <T>(
+  page: (page: number) => Promise<{ items: T[]; meta: { totalPages: number } }>,
+  tooMany: string,
+  maxPages = 50
+): Promise<T[]> => {
+  const rows: T[] = [];
+  for (let n = 1; n <= maxPages; n += 1) {
+    const result = await page(n);
+    rows.push(...result.items);
+    if (n >= result.meta.totalPages) return rows;
+  }
+  throw new UserFacingError(tooMany);
+};
 
 // Checks a response body against its schema, throwing on any mismatch.
 export const parseBody = <T extends z.ZodType>(schema: T, body: unknown) => {
   const result = schema.safeParse(body);
   if (!result.success) throw new ResponseShapeError(result.error);
   return result.data as z.infer<T>;
+};
+
+// The name in a Content-Disposition header: filename* (UTF-8) first, then
+// the plain one. Null when the header is missing or unreadable.
+const attachmentName = (header: unknown): string | null => {
+  if (typeof header !== "string") return null;
+  const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Fall through to the plain name.
+    }
+  }
+  return header.match(/filename="([^"]+)"/i)?.[1] ?? null;
+};
+
+// A generated file (PDF, Excel) from the API, with the name it was sent
+// under. Cross-origin, the browser hides Content-Disposition unless the API
+// exposes it, so the caller gives the name to use then. A failure arrives
+// as a Blob; its JSON message is read out so the ApiError reads as usual.
+export const getFile = async (
+  url: string,
+  params: Record<string, unknown>,
+  fallbackName: string
+): Promise<{ blob: Blob; fileName: string }> => {
+  try {
+    const res = await apiClient.get<Blob>(url, {
+      params,
+      responseType: "blob",
+      headers: { Accept: "*/*" },
+    });
+    return {
+      blob: res.data,
+      fileName:
+        attachmentName(res.headers["content-disposition"]) ?? fallbackName,
+    };
+  } catch (error) {
+    if (error instanceof ApiError && error.body instanceof Blob) {
+      let body: unknown;
+      try {
+        body = JSON.parse(await error.body.text());
+      } catch {
+        throw error;
+      }
+      throw new ApiError(
+        messageFrom(body) ?? error.message,
+        error.status,
+        body,
+        error
+      );
+    }
+    throw error;
+  }
 };
 
 // Called when the session can't be renewed (signed out elsewhere, disabled,

@@ -1,51 +1,119 @@
 import { z } from "zod";
 import {
   AdjustmentMode,
+  AllocationRule,
+  BillingPeriodStatus,
   BillingTrigger,
   CarrierInvoiceStatus,
   CreditStatus,
   Currency,
   CustomerInvoiceStatus,
+  DisputeOutcome,
+  DisputeStatus,
+  DocumentKind,
+  DocumentSource,
+  EmailStatus,
+  FxRateSource,
+  InvoiceDirection,
   InvoiceKind,
   InvoiceReviewFlag,
+  MatchStatus,
   PartyType,
+  PaymentDirection,
+  PaymentMethod,
+  PaymentRecordStatus,
   PaymentStatus,
   PaymentTerms,
   Permission,
+  ReminderChannel,
+  ReminderKind,
+  ReminderSkipReason,
+  ReminderStatus,
   SessionEndReason,
   SessionStatus,
   ShipmentSource,
   SignInStep,
+  StatementEntryType,
+  StatementRunTrigger,
+  StatementTrigger,
+  SyncInboxStatus,
+  SyncTrigger,
   TaxBasis,
   TaxTreatment,
   TwoFactorMethod,
 } from "@/lib/enums";
 import {
   AccountingPeriod,
+  AgingRow,
+  AgingView,
   AgreementView,
+  Allocation,
+  AllocationSuggestion,
   AuditEvent,
-  ContactView,
+  BillingPeriod,
+  BillingPeriodDetail,
+  BillingPeriodInvoice,
+  BillingPeriodRun,
+  BySide,
   CarrierInvoiceView,
   ChargeType,
   CompanySettings,
+  ContactView,
+  CurrencyAmounts,
   CustomerInvoiceView,
+  DashboardSummary,
+  Dispute,
+  ExcludedFromCad,
+  ExchangeRate,
+  ExchangeRateRefresh,
+  FxGainLossReport,
+  FxGainLossRow,
   InvoiceBillTo,
   InvoiceChargeType,
+  InvoiceDocument,
+  InvoiceEmailed,
   InvoiceLineView,
+  InvoicePayment,
   InvoiceTax,
   Me,
+  MonthlyPnl,
+  MonthlyPnlReport,
   NoticeSettings,
   Paginated,
+  PartyAccountSummary,
+  PartyAgingReport,
+  PartyAgingRow,
+  PartyPnl,
+  PartyPnlReport,
+  PartyStatement,
   PartyView,
+  Payment,
   PermissionCatalog,
+  Reminder,
+  ReminderCounts,
+  ReportPeriod,
+  ReportSummary,
   Role,
   RoleRef,
   SettingsEditor,
+  ShipmentPnl,
   ShipmentView,
+  StatementHistoryItem,
+  StatementInvoice,
+  StatementLine,
+  StatementRun,
+  StatementSchedule,
+  SuggestedAllocation,
+  SyncEvent,
+  SyncRun,
+  SyncStatus,
   TaxRate,
+  TaxReport,
+  TaxSummaryRow,
   User,
   UserRef,
   UserSession,
+  WriteOff,
 } from "@/lib/interfaces";
 import { isMoneyString } from "@/lib/money";
 
@@ -259,6 +327,31 @@ export const taxRateSchema: z.ZodType<TaxRate> = z.object({
   effectiveTo: calendarDate.nullable(),
   isRecoverable: z.boolean(),
   createdAt: timestamp,
+});
+
+export const exchangeRateSchema: z.ZodType<ExchangeRate> = z.object({
+  date: calendarDate,
+  currency: z.string(),
+  // A positive rate as text; shown as stored.
+  rateToCad: z.string().regex(/^\d+(\.\d+)?$/),
+  observedOn: calendarDate,
+  source: z.string(),
+  fetchedAt: timestamp,
+});
+
+// `count` is declared further down, after this schema is built.
+const filledCount = z.number().int().nonnegative();
+
+export const exchangeRateRefreshSchema: z.ZodType<ExchangeRateRefresh> = z.object({
+  from: calendarDate,
+  to: calendarDate,
+  stored: filledCount,
+  filled: z.object({
+    customer_invoices: filledCount,
+    carrier_invoices: filledCount,
+    customer_payments: filledCount,
+    carrier_payments: filledCount,
+  }),
 });
 
 export const chargeTypeSchema: z.ZodType<ChargeType> = z.object({
@@ -496,6 +589,7 @@ const invoiceBaseFields = {
   createdAt: timestamp,
   updatedAt: timestamp,
   lines: z.array(invoiceLineSchema).optional(),
+  disputed: z.boolean().optional(),
 };
 
 export const customerInvoiceSchema: z.ZodType<CustomerInvoiceView> = z.object({
@@ -523,9 +617,577 @@ export const carrierInvoiceSchema: z.ZodType<CarrierInvoiceView> = z.object({
   holdReason: z.string().nullable(),
 });
 
+const suggestedAllocationSchema: z.ZodType<SuggestedAllocation> = z.object({
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  dueDate: calendarDate.nullable(),
+  invoiceBalanceBefore: money,
+  amount: money,
+  invoiceBalanceAfter: money,
+  rule: z.enum(AllocationRule),
+});
+
+const allocationSchema: z.ZodType<Allocation> = z.object({
+  id: z.string(),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  creditNoteId: z.string().nullable(),
+  amount: money,
+  allocatedOn: calendarDate,
+  invoiceBalanceBefore: money.nullable(),
+  invoiceBalanceAfter: money.nullable(),
+  rule: z.enum(AllocationRule),
+  reversedAt: timestamp.nullable(),
+  reversedById: z.string().nullable(),
+  createdAt: timestamp,
+});
+
+export const paymentSchema: z.ZodType<Payment> = z.object({
+  id: z.string(),
+  number: z.string(),
+  direction: z.enum(PaymentDirection),
+  partyId: z.string(),
+  partyName: z.string().nullable(),
+  paidOn: calendarDate,
+  amount: money,
+  currency: z.enum(Currency),
+  fxRateToCad: decimalText.nullable(),
+  fxRateSource: z.enum(FxRateSource).nullable(),
+  method: z.enum(PaymentMethod),
+  reference: z.string().nullable(),
+  unapplied: money,
+  source: z.enum(["MANUAL", "MGC_STRIPE"]),
+  match: z.enum(MatchStatus),
+  status: z.enum(PaymentRecordStatus),
+  reversedAt: timestamp.nullable(),
+  reversalReason: z.string().nullable(),
+  notes: z.string().nullable(),
+  version: z.number().int().positive(),
+  createdAt: timestamp,
+  suggested: z.array(suggestedAllocationSchema),
+  allocations: z.array(allocationSchema),
+});
+
+export const invoicePaymentSchema: z.ZodType<InvoicePayment> = z.object({
+  allocationId: z.string(),
+  paymentId: z.string(),
+  paymentNumber: z.string(),
+  method: z.enum(PaymentMethod),
+  paidOn: calendarDate,
+  reference: z.string().nullable(),
+  amount: money,
+  rule: z.enum(AllocationRule),
+  allocatedOn: calendarDate,
+  reversedAt: timestamp.nullable(),
+});
+
+export const allocationSuggestionSchema: z.ZodType<AllocationSuggestion> =
+  z.object({
+    paymentId: z.string(),
+    currency: z.enum(Currency),
+    unapplied: money,
+    allocations: z.array(suggestedAllocationSchema),
+    leftOver: money,
+  });
+
+const currencyAmountsSchema: z.ZodType<CurrencyAmounts> = z.object({
+  CAD: money,
+  USD: money,
+});
+
+const excludedFromCadSchema: z.ZodType<ExcludedFromCad> = z.object({
+  invoiceCount: z.number().int().nonnegative(),
+  amount: money,
+});
+
+const bySide = <T>(value: z.ZodType<T>): z.ZodType<BySide<T>> =>
+  z.object({ shipper: value.nullable(), carrier: value.nullable() });
+
+const count = z.number().int().nonnegative();
+
+export const dashboardSchema: z.ZodType<DashboardSummary> = z.object({
+  receivable: currencyAmountsSchema.nullable(),
+  payable: currencyAmountsSchema.nullable(),
+  payableOnHold: currencyAmountsSchema.nullable(),
+  receivableInCad: money.nullable(),
+  payableInCad: money.nullable(),
+  receivableExcludedFromCad: excludedFromCadSchema.nullable(),
+  payableExcludedFromCad: excludedFromCadSchema.nullable(),
+  overdueCount: bySide(count),
+  collectedThisMonth: currencyAmountsSchema.nullable(),
+  needsReview: count,
+  unmatchedPayments: count,
+  disputed: count,
+  averagePaymentCycleDays: bySide(count),
+});
+
+const agingRowSchema: z.ZodType<AgingRow> = z.object({
+  label: z.string(),
+  current: money,
+  days1to30: money,
+  days31to60: money,
+  days61to90: money,
+  days90plus: money,
+  disputed: money,
+  total: money,
+  currency: z.enum(Currency),
+});
+
+export const agingSchema: z.ZodType<AgingView> = z.object({
+  receivable: z.array(agingRowSchema).nullable(),
+  payable: z.array(agingRowSchema).nullable(),
+});
+
+export const accountSummarySchema: z.ZodType<PartyAccountSummary> = z.object({
+  partyId: z.string(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  currency: z.enum(Currency),
+  businessVolume: money,
+  shipmentCount: count,
+  balance: money,
+  // Null without the side's payments view. An API from before the field
+  // existed leaves it out, read the same way: not shown, never "0.00".
+  unapplied: money.nullable().default(null),
+  overdue: money,
+  oldestOverdueDays: count,
+  lastPayment: z
+    .object({
+      paidOn: calendarDate,
+      paymentNumber: z.string(),
+      invoiceRef: z.string().nullable(),
+      amount: money,
+    })
+    .nullable(),
+  averagePaymentDays: count.nullable(),
+  weeklyStatement: z.boolean(),
+  statementEmail: z.string().nullable(),
+});
+
+export const reminderSchema: z.ZodType<Reminder> = z.object({
+  id: z.string(),
+  direction: z.enum(InvoiceDirection),
+  kind: z.enum(ReminderKind),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  dueDate: calendarDate,
+  remindOn: calendarDate,
+  currency: z.enum(Currency),
+  balance: money,
+  channel: z.enum(ReminderChannel),
+  recipient: z.string().nullable(),
+  status: z.enum(ReminderStatus),
+  skipReason: z.enum(ReminderSkipReason).nullable(),
+  sentAt: timestamp.nullable(),
+  note: z.string().nullable(),
+});
+
+export const disputeSchema: z.ZodType<Dispute> = z.object({
+  id: z.string(),
+  direction: z.enum(InvoiceDirection),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  currency: z.enum(Currency),
+  disputedAmount: money,
+  invoiceBalance: money,
+  reason: z.string(),
+  openedOn: timestamp,
+  openedBy: z.string(),
+  status: z.enum(DisputeStatus),
+  outcome: z.enum(DisputeOutcome).nullable(),
+  resolution: z.string().nullable(),
+  resolvedOn: timestamp.nullable(),
+  resolvedBy: z.string().nullable(),
+  creditNoteId: z.string().nullable(),
+  creditNoteNumber: z.string().nullable(),
+});
+
+export const invoiceDocumentSchema: z.ZodType<InvoiceDocument> = z.object({
+  id: z.string(),
+  kind: z.enum(DocumentKind),
+  source: z.enum(DocumentSource),
+  fileName: z.string(),
+  mimeType: z.string(),
+  sizeBytes: count,
+  uploadedBy: z.string().nullable(),
+  createdAt: timestamp,
+});
+
+export const invoiceEmailedSchema: z.ZodType<InvoiceEmailed> = z.object({
+  emailId: z.string(),
+  to: z.array(z.string()),
+  cc: z.array(z.string()),
+  sentAt: timestamp,
+});
+
+export const writeOffSchema: z.ZodType<WriteOff> = z.object({
+  id: z.string(),
+  invoiceId: z.string(),
+  invoiceNumber: z.string().nullable(),
+  customerId: z.string(),
+  customerName: z.string().nullable(),
+  currency: z.enum(Currency),
+  amount: money,
+  taxRelief: money,
+  badDebt: money,
+  taxes: z.array(
+    z.object({
+      code: z.string(),
+      jurisdiction: z.string(),
+      rate_percent: decimalText,
+      tax_relief: money,
+    })
+  ),
+  writtenOffOn: calendarDate,
+  reason: z.string(),
+  disputeId: z.string().nullable(),
+  createdById: z.string(),
+  createdAt: timestamp,
+  reversedAt: timestamp.nullable(),
+  reversedById: z.string().nullable(),
+  reversalReason: z.string().nullable(),
+});
+
+export const reminderCountsSchema: z.ZodType<ReminderCounts> = z.object({
+  scheduled: count,
+  sent: count,
+  skipped: count,
+});
+
+export const statementScheduleSchema: z.ZodType<StatementSchedule> = z.object({
+  asOf: timestamp,
+  nextWeeklyRun: timestamp,
+  weeklyShipperCount: count,
+  emailEnabled: z.boolean(),
+});
+
+export const statementRunSchema: z.ZodType<StatementRun> = z.object({
+  id: z.string(),
+  trigger: z.enum(StatementRunTrigger),
+  ranAt: timestamp,
+  finishedAt: timestamp.nullable(),
+  periodFrom: calendarDate,
+  periodTo: calendarDate,
+  partyCount: count,
+  sentCount: count,
+  queuedCount: count,
+  failedCount: count,
+  skippedCount: count,
+  failures: z.array(z.object({ partyId: z.string(), reason: z.string() })),
+});
+
+const billingPeriodFields = {
+  id: z.string(),
+  partyId: z.string(),
+  partyName: z.string().nullable(),
+  paymentTerms: z.enum(PaymentTerms),
+  currency: z.enum(Currency),
+  periodStart: calendarDate,
+  periodEnd: calendarDate,
+  noticeDate: calendarDate,
+  status: z.enum(BillingPeriodStatus),
+  notifiedAt: timestamp.nullable(),
+  statementId: z.string().nullable(),
+  invoiceCount: count,
+  total: money,
+  balanceDue: money,
+};
+
+export const billingPeriodSchema: z.ZodType<BillingPeriod> =
+  z.object(billingPeriodFields);
+
+const billingPeriodInvoiceSchema: z.ZodType<BillingPeriodInvoice> = z.object({
+  id: z.string(),
+  invoiceNumber: z.string().nullable(),
+  kind: z.enum(InvoiceKind),
+  status: z.enum(CustomerInvoiceStatus),
+  invoiceDate: calendarDate,
+  dueDate: calendarDate.nullable(),
+  total: money,
+  balanceDue: money,
+  paymentStatus: z.enum(PaymentStatus),
+});
+
+export const billingPeriodDetailSchema: z.ZodType<BillingPeriodDetail> = z.object({
+  ...billingPeriodFields,
+  invoices: z.array(billingPeriodInvoiceSchema),
+});
+
+export const billingPeriodRunSchema: z.ZodType<BillingPeriodRun> = z.object({
+  assigned: count,
+  opened: count,
+  unplaced: count,
+  notified: count,
+  failed: count,
+  closed: count,
+});
+
+export const statementHistoryItemSchema: z.ZodType<StatementHistoryItem> =
+  z.object({
+    id: z.string(),
+    statementId: z.string(),
+    periodFrom: calendarDate,
+    periodTo: calendarDate,
+    sentAt: timestamp,
+    closingBalance: money,
+    currency: z.enum(Currency),
+    trigger: z.enum(StatementTrigger),
+    emailStatus: z.enum(EmailStatus).nullable(),
+  });
+
+const statementInvoiceSchema: z.ZodType<StatementInvoice> = z.object({
+  id: z.string(),
+  number: z.string().nullable(),
+  entryType: z.enum(StatementEntryType),
+  invoiceDate: calendarDate,
+  dueDate: calendarDate.nullable(),
+  total: money,
+  balance: money,
+  paymentStatus: z.enum(PaymentStatus).nullable(),
+  overdueDays: count,
+  currency: z.enum(Currency),
+  previousDue: z.boolean(),
+});
+
+const statementLineSchema: z.ZodType<StatementLine> = z.object({
+  entryDate: calendarDate,
+  entryType: z.enum(StatementEntryType),
+  sourceId: z.string(),
+  reference: z.string().nullable(),
+  loadNumber: z.string().nullable(),
+  quoteNumber: z.string().nullable(),
+  dueDate: calendarDate.nullable(),
+  paymentReference: z.string().nullable(),
+  paidAt: calendarDate.nullable(),
+  previousDue: z.boolean(),
+  debit: money,
+  credit: money,
+  runningBalance: money,
+});
+
+export const statementSchema: z.ZodType<PartyStatement> = z.object({
+  number: z.string().nullable(),
+  statementId: z.string().nullable(),
+  partyId: z.string(),
+  partyName: z.string(),
+  partyType: z.enum(PartyType),
+  currency: z.enum(Currency),
+  statementDate: calendarDate,
+  periodFrom: calendarDate,
+  periodTo: calendarDate,
+  asOf: timestamp,
+  openingBalance: money,
+  previousDues: money,
+  invoiced: money,
+  paidAndCredited: money,
+  totalPaid: money,
+  totalUnpaid: money,
+  closingBalance: money,
+  overdue: z.object({
+    days1to30: money,
+    days31to60: money,
+    days61to90: money,
+    days90plus: money,
+  }),
+  invoices: z.array(statementInvoiceSchema),
+  lines: z.array(statementLineSchema),
+  trigger: z.enum(StatementTrigger).nullable(),
+  emailStatus: z.enum(EmailStatus).nullable(),
+  sentTo: z.array(z.string()).nullable(),
+});
+
+const reportPeriodSchema: z.ZodType<ReportPeriod> = z.object({
+  key: z.string(),
+  label: z.string(),
+  from: calendarDate,
+  to: calendarDate,
+  toDate: z.boolean(),
+});
+
+const monthlyPnlSchema: z.ZodType<MonthlyPnl> = z.object({
+  month: z.string(),
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  // "12.5", "-3.0": a percent with one decimal, kept as text.
+  marginPercent: decimalText,
+});
+
+export const monthlyPnlReportSchema: z.ZodType<MonthlyPnlReport> = z.object({
+  period: reportPeriodSchema,
+  months: z.array(monthlyPnlSchema),
+  total: monthlyPnlSchema,
+});
+
+export const reportSummarySchema: z.ZodType<ReportSummary> = z.object({
+  period: reportPeriodSchema,
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+  taxCollected: money,
+  inputTaxCredits: money,
+  collected: money,
+  paidOut: money,
+  expectedBills: z.object({ count, amount: money }),
+  badDebts: money,
+  badDebtRelief: money,
+  fxGainLoss: money,
+  leftOutNoRate: z.object({
+    shipperInvoices: count,
+    carrierBills: count,
+    payments: count,
+    writeOffs: count,
+  }),
+});
+
+const partyPnlSchema: z.ZodType<PartyPnl> = z.object({
+  partyId: z.string().nullable(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  shipmentCount: count,
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+});
+
+export const partyPnlReportSchema: z.ZodType<PartyPnlReport> = z.object({
+  period: reportPeriodSchema,
+  shippers: z.array(partyPnlSchema),
+  carriers: z.array(partyPnlSchema),
+});
+
+export const shipmentPnlSchema: z.ZodType<ShipmentPnl> = z.object({
+  shipmentId: z.string(),
+  mgcShipmentId: z.string(),
+  loadNumber: z.string(),
+  shipperId: z.string(),
+  shipperName: z.string(),
+  carrierId: z.string().nullable(),
+  carrierName: z.string().nullable(),
+  revenue: money,
+  carrierCost: money,
+  grossMargin: money,
+  marginPercent: decimalText,
+});
+
+const partyAgingRowSchema: z.ZodType<PartyAgingRow> = z.object({
+  partyId: z.string(),
+  partyName: z.string(),
+  type: z.enum(PartyType),
+  currency: z.enum(Currency),
+  current: money,
+  days1to30: money,
+  days31to60: money,
+  days61to90: money,
+  days90plus: money,
+  disputed: money,
+  total: money,
+});
+
+export const partyAgingReportSchema: z.ZodType<PartyAgingReport> = z.object({
+  asOf: calendarDate,
+  receivable: z.array(partyAgingRowSchema),
+  payable: z.array(partyAgingRowSchema),
+});
+
+const taxSummaryRowSchema: z.ZodType<TaxSummaryRow> = z.object({
+  key: z.string(),
+  jurisdiction: z.string(),
+  taxCode: z.string(),
+  ratePercent: decimalText,
+  taxableSales: money,
+  taxCollected: money,
+  taxablePurchases: money,
+  inputTaxCredits: money,
+  badDebtRelief: money,
+  netTax: money,
+});
+
+export const taxReportSchema: z.ZodType<TaxReport> = z.object({
+  period: reportPeriodSchema,
+  rows: z.array(taxSummaryRowSchema),
+  totals: z.object({
+    taxCollected: money,
+    inputTaxCredits: money,
+    badDebtRelief: money,
+    netTax: money,
+  }),
+});
+
+const fxGainLossRowSchema: z.ZodType<FxGainLossRow> = z.object({
+  type: z.enum(PartyType),
+  allocationId: z.string(),
+  allocatedOn: calendarDate,
+  partyId: z.string(),
+  partyName: z.string(),
+  invoiceNumber: z.string().nullable(),
+  paymentNumber: z.string(),
+  currency: z.enum(Currency),
+  amount: money,
+  invoiceRate: decimalText,
+  paymentRate: decimalText,
+  billedCad: money,
+  settledCad: money,
+  gainLoss: money,
+});
+
+export const fxGainLossReportSchema: z.ZodType<FxGainLossReport> = z.object({
+  period: reportPeriodSchema,
+  rows: z.array(fxGainLossRowSchema),
+  totals: z.object({ shippers: money, carriers: money, net: money }),
+  leftOutNoRate: count,
+});
+
 // POST /shipment: the shipment and the invoices it made.
 export const createdShipmentSchema = z.object({
   shipment: shipmentSchema,
   customerInvoice: customerInvoiceSchema,
   carrierInvoice: carrierInvoiceSchema.nullable(),
+});
+
+// ------------------------------------------------------------- TMS sync
+
+export const syncRunSchema: z.ZodType<SyncRun> = z.object({
+  trigger: z.enum(SyncTrigger),
+  startedAt: timestamp,
+  finishedAt: timestamp,
+  pulled: count,
+  applied: count,
+  failed: count,
+  skipped: count,
+  error: z.string().nullable(),
+});
+
+export const syncStatusSchema: z.ZodType<SyncStatus> = z.object({
+  enabled: z.boolean(),
+  running: z.boolean(),
+  cursor: z.string().regex(/^\d{1,19}:\d{1,19}$/),
+  cursorUpdatedAt: timestamp,
+  inbox: z.object({
+    [SyncInboxStatus.Received]: count,
+    [SyncInboxStatus.Applied]: count,
+    [SyncInboxStatus.Skipped]: count,
+    [SyncInboxStatus.Failed]: count,
+  }),
+  outbox: z.object({ pending: count, rejected: count }),
+  lastRun: syncRunSchema.nullable(),
+});
+
+export const syncEventSchema: z.ZodType<SyncEvent> = z.object({
+  eventId: z.string(),
+  seq: z.string(),
+  type: z.string(),
+  aggregateId: z.string(),
+  status: z.enum(SyncInboxStatus),
+  error: z.string().nullable(),
+  attempts: count,
+  occurredAt: timestamp,
+  receivedAt: timestamp,
+  appliedAt: timestamp.nullable(),
 });

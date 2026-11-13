@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { CreditStatus, PaymentTerms, Permission, SystemRoleId } from "@/lib/enums";
 import {
+  billingPeriodDetailSchema,
   agreementSchema,
   carrierInvoiceSchema,
   contactSchema,
   customerInvoiceSchema,
+  exchangeRateSchema,
   meSchema,
   noticeSettingsSchema,
   permissionCatalogSchema,
+  syncEventSchema,
+  syncStatusSchema,
   roleSchema,
   userSchema,
 } from "./schemas";
@@ -387,6 +391,187 @@ describe("carrierInvoiceSchema", () => {
       carrierInvoiceSchema.safeParse({ ...expected, varianceAmount: "-5" })
         .success
     ).toBe(false);
+  });
+});
+
+// GET /party/contacts, one item, as the API's ContactView sends it.
+const contact = {
+  id: "pcn_7hQ2mX9aL1",
+  partyId: "pty_4fK9qZ0aB1",
+  name: "Accounts Payable",
+  email: "ap@acmefoods.com",
+  phone: null,
+  receivesInvoices: true,
+  receivesReminders: true,
+  receivesStatements: true,
+  isActive: true,
+  createdAt: "2026-10-29T15:02:11.000Z",
+  updatedAt: "2026-10-29T15:02:11.000Z",
+};
+
+describe("contactSchema", () => {
+  it("reads a contact without a phone", () => {
+    const parsed = contactSchema.parse(contact);
+    expect(parsed.phone).toBeNull();
+    expect(parsed.receivesStatements).toBe(true);
+  });
+
+  it("refuses a contact missing what it receives", () => {
+    const { receivesStatements: _statements, ...partial } = contact;
+    expect(contactSchema.safeParse(partial).success).toBe(false);
+  });
+});
+
+// GET /billing-period, as the API's BillingPeriodDetailView sends it.
+const billingPeriod = {
+  id: "bpd_3kT8wQ1zN5",
+  partyId: "pty_4fK9qZ0aB1",
+  partyName: "Northwind Distribution",
+  paymentTerms: "NET_30",
+  currency: "CAD",
+  periodStart: "2026-10-01",
+  periodEnd: "2026-10-31",
+  noticeDate: "2026-10-24",
+  status: "NOTIFIED",
+  notifiedAt: "2026-10-24T12:00:03.000Z",
+  statementId: "stm_9pL2xV6cR0",
+  invoiceCount: 2,
+  total: "2610.00",
+  balanceDue: "1130.00",
+  invoices: [
+    {
+      id: "cin_8cR1tY4uI7",
+      invoiceNumber: "sin_EGP9wr_230",
+      kind: "STANDARD",
+      status: "ISSUED",
+      invoiceDate: "2026-10-03",
+      dueDate: "2026-11-02",
+      total: "1480.00",
+      balanceDue: "0.00",
+      paymentStatus: "PAID",
+    },
+    {
+      id: "cin_2vB7nM5kJ3",
+      invoiceNumber: null,
+      kind: "STANDARD",
+      status: "ISSUED",
+      invoiceDate: "2026-10-14",
+      dueDate: null,
+      total: "1130.00",
+      balanceDue: "1130.00",
+      paymentStatus: "UNPAID",
+    },
+  ],
+};
+
+describe("billingPeriodDetailSchema", () => {
+  it("reads a period with its invoices", () => {
+    const parsed = billingPeriodDetailSchema.parse(billingPeriod);
+    expect(parsed.balanceDue).toBe("1130.00");
+    expect(parsed.invoices[1].invoiceNumber).toBeNull();
+  });
+
+  it("refuses a total that isn't a 2-decimal string", () => {
+    expect(
+      billingPeriodDetailSchema.safeParse({ ...billingPeriod, total: 2610 }).success
+    ).toBe(false);
+  });
+});
+
+// GET /exchange-rate/all, one Saturday row; the values are a stored row
+// from a local Accounts API database.
+const saturdayRate = {
+  date: "2026-10-31",
+  currency: "USD",
+  rateToCad: "1.396000",
+  observedOn: "2026-10-30",
+  source: "BANK_OF_CANADA",
+  fetchedAt: "2026-10-31T21:30:02.000Z",
+};
+
+describe("exchangeRateSchema", () => {
+  it("keeps the rate as text, exactly as sent", () => {
+    const parsed = exchangeRateSchema.parse(saturdayRate);
+    expect(parsed.rateToCad).toBe("1.396000");
+    expect(parsed.observedOn).toBe("2026-10-30");
+  });
+
+  it("refuses a rate sent as a number", () => {
+    expect(
+      exchangeRateSchema.safeParse({ ...saturdayRate, rateToCad: 1.3912 }).success
+    ).toBe(false);
+  });
+});
+
+// GET /sync/status as mgc-accounts-backend sends it.
+const syncStatus = {
+  enabled: true,
+  running: false,
+  cursor: "1043:2058",
+  cursorUpdatedAt: "2026-10-26T15:02:11.000Z",
+  inbox: { RECEIVED: 0, APPLIED: 2050, SKIPPED: 2, FAILED: 6 },
+  outbox: { pending: 0, rejected: 0 },
+  lastRun: {
+    trigger: "MANUAL",
+    startedAt: "2026-10-26T15:02:10.000Z",
+    finishedAt: "2026-10-26T15:02:11.000Z",
+    pulled: 1,
+    applied: 1,
+    failed: 0,
+    skipped: 0,
+    error: null,
+  },
+};
+
+describe("syncStatusSchema", () => {
+  it("reads the counts and the last run", () => {
+    const parsed = syncStatusSchema.parse(syncStatus);
+    expect(parsed.inbox.FAILED).toBe(6);
+    expect(parsed.lastRun?.applied).toBe(1);
+  });
+
+  it("reads a server that hasn't run yet", () => {
+    expect(
+      syncStatusSchema.parse({ ...syncStatus, lastRun: null }).lastRun
+    ).toBeNull();
+  });
+
+  it("refuses a cursor that isn't txId:seq", () => {
+    expect(
+      syncStatusSchema.safeParse({ ...syncStatus, cursor: "2058" }).success
+    ).toBe(false);
+  });
+
+  it("refuses a missing count rather than showing 0", () => {
+    const { FAILED: _failed, ...inbox } = syncStatus.inbox;
+    expect(syncStatusSchema.safeParse({ ...syncStatus, inbox }).success).toBe(
+      false
+    );
+  });
+});
+
+describe("syncEventSchema", () => {
+  const held = {
+    eventId: "0d6c5a52-6f2e-4c1a-9a43-0d6b1fb1f0a1",
+    seq: "938",
+    type: "shipment.upserted",
+    aggregateId: "6650",
+    status: "FAILED",
+    error: "No Accounts payment terms for a 90-day credit period",
+    attempts: 3,
+    occurredAt: "2026-10-26T14:00:00.000Z",
+    receivedAt: "2026-10-26T14:01:00.000Z",
+    appliedAt: null,
+  };
+
+  it("reads a held event with its reason", () => {
+    expect(syncEventSchema.parse(held).error).toContain("90-day");
+  });
+
+  it("refuses a status it doesn't know", () => {
+    expect(syncEventSchema.safeParse({ ...held, status: "DONE" }).success).toBe(
+      false
+    );
   });
 });
 

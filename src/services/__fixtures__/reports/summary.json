@@ -1,0 +1,33 @@
+{
+  "message": "Success",
+  "data": {
+    "period": {
+      "key": "2026-YTD",
+      "label": "2026 year to date",
+      "from": "2026-01-01",
+      "to": "2026-10-29",
+      "toDate": true
+    },
+    "revenue": "24068.00",
+    "carrierCost": "9680.00",
+    "grossMargin": "14388.00",
+    "marginPercent": "59.8",
+    "taxCollected": "3139.04",
+    "inputTaxCredits": "1366.40",
+    "collected": "5935.00",
+    "paidOut": "1265.00",
+    "expectedBills": {
+      "count": 1,
+      "amount": "2000.00"
+    },
+    "badDebts": "142.86",
+    "badDebtRelief": "7.14",
+    "fxGainLoss": "0.00",
+    "leftOutNoRate": {
+      "shipperInvoices": 0,
+      "carrierBills": 0,
+      "payments": 0,
+      "writeOffs": 0
+    }
+  }
+}

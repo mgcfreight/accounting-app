@@ -141,7 +141,7 @@ export const routeConfig: Record<string, RouteConfig> = {
       anyOf: [Permission.CustomerInvoicesView, Permission.CarrierInvoicesView],
     },
   },
-  // No permission covers sync yet; revisit with the sync feature.
+  // Admin only, as the API decided (2026-10-26); no permission covers sync.
   "sync-status": { header: "Sync Status", access: ADMIN_ONLY },
   // Staff accounts are Admin only. Sessions is open to everyone: the API
   // returns everyone's sessions to an Admin and only their own to others.

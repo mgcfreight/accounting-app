@@ -36,6 +36,7 @@ import {
   listCustomerInvoices,
 } from "@/services";
 import InvoiceViewCell, { InvoiceView, InvoiceViewAction } from "../invoices/invoice-view";
+import PartyAccount from "./party-account";
 import {
   AgreementFormModal,
   ContactFormModal,
@@ -67,9 +68,8 @@ const agreementState = (agreement: AgreementView, today: string) => {
   return "current";
 };
 
-// A shipper's or carrier's page: profile, agreed terms and invoices, from
-// the API's /party and /invoice routes. Balances and statements arrive with
-// payments.
+// A shipper's or carrier's page: account figures, profile, contacts, agreed
+// terms and invoices, from the API's /account, /party and /invoice routes.
 export default function PartyDetail({ type }: { type: PartyType }) {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
@@ -138,6 +138,12 @@ export default function PartyDetail({ type }: { type: PartyType }) {
           { label: "Added", value: formatDate(data.createdAt) },
         ]}
       />
+
+      {can(
+        isShipper
+          ? Permission.CustomerInvoicesView
+          : Permission.CarrierInvoicesView
+      ) && <PartyAccount party={data} />}
 
       <BaseCardWrapper heading="Profile">
         <div className="text-sm text-[#343A40] space-y-1">

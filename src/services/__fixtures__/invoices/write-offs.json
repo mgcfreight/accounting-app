@@ -1,0 +1,41 @@
+{
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "id": "wof_2oNsL0nWtx",
+        "invoiceId": "csi_1mIXFCCKsY",
+        "invoiceNumber": "sin_DEMO01_30",
+        "customerId": "pty_73rWWVZcDU",
+        "customerName": "Demo Prairie Agri",
+        "currency": "CAD",
+        "amount": "150.00",
+        "taxRelief": "7.14",
+        "badDebt": "142.86",
+        "taxes": [
+          {
+            "code": "GST-SK",
+            "tax_relief": "7.14",
+            "jurisdiction": "SK",
+            "rate_percent": "5.000"
+          }
+        ],
+        "writtenOffOn": "2026-10-29",
+        "reason": "Not worth pursuing; written off as agreed with the controller",
+        "disputeId": "dsp_ES7jVBrvwJ",
+        "createdById": "usr_cReYsNymCQ",
+        "createdAt": "2026-10-29T19:30:24.424Z",
+        "reversedAt": null,
+        "reversedById": null,
+        "reversalReason": null
+      }
+    ],
+    "meta": {
+      "totalItems": 1,
+      "itemCount": 1,
+      "itemsPerPage": 20,
+      "totalPages": 1,
+      "currentPage": 1
+    }
+  }
+}

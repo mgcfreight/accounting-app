@@ -1,37 +1,62 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { PiFilePdf, PiFileXls } from "react-icons/pi";
 import { toast } from "sonner";
 import {
   BaseButton,
   BaseTable,
   DetailRow,
+  ErrorState,
   FormModal,
   InvoiceFlags,
-  InvoiceStatusChip,
   Money,
+  StatusChip,
 } from "@/components/common";
 import { useCan } from "@/components/providers/user-provider";
+import { useFileDownload } from "@/hooks";
 import {
-  Currency,
-  InvoiceStatus,
+  EmailStatus,
   PartyType,
+  PaymentStatus,
   Permission,
-  StatementRunKind,
+  StatementEntryType,
 } from "@/lib/enums";
-import { ExportTable } from "@/lib/export";
-import { Invoice, PartyAccountSummary, Payment } from "@/lib/interfaces";
 import {
-  findStatements,
-  mockCarrierInvoices,
-  mockPayments,
-  mockShipperInvoices,
-  statementPeriodFrom,
-} from "@/lib/mock";
+  PartyAccountSummary,
+  PartyStatement,
+  StatementInvoice,
+  StatementLine,
+} from "@/lib/interfaces";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
-import { DemoInvoiceLink, DemoInvoiceLinks } from "../invoices/demo-invoice-link";
-import { exportTable, moneyText } from "../reports/export-table";
+import {
+  downloadStatement,
+  emailStatement,
+  errorMessage,
+  getCurrentStatement,
+  getStatement,
+  listStatementHistory,
+  resendStatement,
+  sendLatestDues,
+  StatementFormat,
+} from "@/services";
 
-const columns: BaseTableColumn[] = [
+const entryTypeLabels: Record<StatementEntryType, string> = {
+  [StatementEntryType.Invoice]: "Invoice",
+  [StatementEntryType.Adjustment]: "Adjustment",
+  [StatementEntryType.CreditNote]: "Credit note",
+  [StatementEntryType.Payment]: "Payment",
+  [StatementEntryType.WriteOff]: "Write-off",
+};
+
+const emailStatusChip: Record<EmailStatus, { text: string; tone: "success" | "warning" | "danger" }> = {
+  [EmailStatus.Sent]: { text: "Emailed", tone: "success" },
+  [EmailStatus.Queued]: { text: "Saved, not emailed", tone: "warning" },
+  [EmailStatus.Failed]: { text: "Email failed", tone: "danger" },
+  [EmailStatus.Bounced]: { text: "Email bounced", tone: "danger" },
+};
+
+const invoiceColumns: BaseTableColumn[] = [
   { key: "number", label: "Invoice #" },
   { key: "invoiceDate", label: "Invoice Date" },
   { key: "dueDate", label: "Due Date" },
@@ -40,140 +65,263 @@ const columns: BaseTableColumn[] = [
   { key: "status", label: "Status" },
 ];
 
-const paymentColumns: BaseTableColumn[] = [
-  { key: "number", label: "Payment #" },
-  { key: "paidOn", label: "Paid On" },
-  { key: "amount", label: "Amount", align: "end" },
-  { key: "appliedTo", label: "Applied To" },
+const lineColumns: BaseTableColumn[] = [
+  { key: "entryDate", label: "Date" },
+  { key: "entry", label: "Entry" },
+  { key: "debit", label: "Charges", align: "end" },
+  { key: "credit", label: "Payments & Credits", align: "end" },
+  { key: "runningBalance", label: "Balance", align: "end" },
 ];
 
-// What a statement lists: invoices that were billed. Drafts weren't sent,
-// void ones owe nothing, and a replaced version's balance moved to its new
-// version.
-const NOT_ON_STATEMENT = [
-  InvoiceStatus.Draft,
-  InvoiceStatus.Void,
-  InvoiceStatus.Superseded,
-];
+const HISTORY_LIMIT = 10;
 
-// The period runs from the 1st of the month; anything older is in the
-// opening balance (previous dues). Dates are ISO calendar dates, so they
-// compare as strings.
-const statementInvoices = (summary: PartyAccountSummary) =>
-  (summary.type === PartyType.Shipper ? mockShipperInvoices : mockCarrierInvoices)
-    .filter((invoice) => invoice.partyId === summary.partyId)
-    .filter((invoice) => !NOT_ON_STATEMENT.includes(invoice.status))
-    .filter((invoice) => invoice.invoiceDate >= statementPeriodFrom);
-
-const statementPayments = (summary: PartyAccountSummary) =>
-  mockPayments
-    .filter((payment) => payment.partyId === summary.partyId)
-    .filter((payment) => payment.paidOn >= statementPeriodFrom);
-
-// A payment counts against the balance once it is allocated to invoices.
-const appliedToText = (payment: Payment) =>
-  payment.allocations.length
-    ? payment.allocations.map((allocation) => allocation.invoiceNumber).join(", ")
-    : "Not allocated yet, so not in the balance";
-
-const flagsText = (invoice: Invoice) =>
-  [
-    invoice.overdueDays > 0 ? `Overdue ${invoice.overdueDays}d` : "",
-    invoice.disputed ? "Disputed" : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-// One line of the exported statement: an invoice billed or a payment made
-// in the period.
-type StatementLine = {
-  id: string;
-  date: string;
-  reference: string;
-  detail: string;
-  amount: string;
-  balance: string | null;
-  currency: Currency;
+// The toast for "Email statement" and "Send latest dues": a statement is
+// saved either way, so say what happened to the email.
+const emailOutcome = (statement: PartyStatement, what: string) => {
+  const to = statement.sentTo?.join(", ");
+  switch (statement.emailStatus) {
+    case EmailStatus.Sent:
+      return toast.success(`${statement.number} ${what} emailed${to ? ` to ${to}` : ""}.`);
+    case EmailStatus.Queued:
+      return toast.warning(`${statement.number} saved; email is switched off, so it was not sent.`);
+    default:
+      return toast.error(`${statement.number} saved, but the email failed. Try again later.`);
+  }
 };
 
-const invoiceLine = (invoice: Invoice): StatementLine => ({
-  id: invoice.id,
-  date: invoice.invoiceDate,
-  reference: invoice.number,
-  detail: [`Invoice, due ${formatDate(invoice.dueDate) ?? ""}`, flagsText(invoice)]
-    .filter(Boolean)
-    .join(", "),
-  amount: invoice.total,
-  balance: invoice.balance,
-  currency: invoice.currency,
-});
+function StatementInvoices({ statement }: { statement: PartyStatement }) {
+  return (
+    <BaseTable<StatementInvoice>
+      ariaLabel={`Invoices on the statement for ${statement.partyName}`}
+      columns={invoiceColumns}
+      data={statement.invoices}
+      rowKey={(row) => `${row.entryType}-${row.id}`}
+      emptyContent="No invoices on this statement"
+      renderCell={(row, key) => {
+        switch (key) {
+          case "number":
+            return (
+              <div className="flex flex-col">
+                <span className="font-bold">{row.number ?? "No number yet"}</span>
+                {row.entryType !== StatementEntryType.Invoice && (
+                  <span className="text-gray-500">{entryTypeLabels[row.entryType]}</span>
+                )}
+              </div>
+            );
+          case "invoiceDate":
+            return <span className="whitespace-nowrap">{formatDate(row.invoiceDate)}</span>;
+          case "dueDate":
+            return row.dueDate ? (
+              <span className="whitespace-nowrap">{formatDate(row.dueDate)}</span>
+            ) : (
+              <span className="text-gray-400">—</span>
+            );
+          case "total":
+            return <Money amount={row.total} currency={row.currency} />;
+          case "balance":
+            return <Money amount={row.balance} currency={row.currency} className="font-semibold" />;
+          case "status":
+            return (
+              <div className="flex flex-col items-start gap-1">
+                {row.paymentStatus === PaymentStatus.Paid ? (
+                  <StatusChip text="Paid" tone="success" />
+                ) : row.paymentStatus === PaymentStatus.Unpaid ? (
+                  <StatusChip text="Unpaid" tone="warning" />
+                ) : null}
+                {row.previousDue && <StatusChip text="Previous due" tone="neutral" />}
+                <InvoiceFlags overdueDays={row.overdueDays} disputed={false} />
+              </div>
+            );
+          default:
+            return null;
+        }
+      }}
+    />
+  );
+}
 
-const paymentLine = (payment: Payment): StatementLine => ({
-  id: payment.id,
-  date: payment.paidOn,
-  reference: payment.number,
-  detail: `Payment, applied to: ${appliedToText(payment)}`,
-  amount: payment.amount,
-  balance: null,
-  currency: payment.currency,
-});
+function StatementActivity({ statement }: { statement: PartyStatement }) {
+  const { currency } = statement;
+  return (
+    <BaseTable<StatementLine>
+      ariaLabel={`Activity on the statement for ${statement.partyName}`}
+      columns={lineColumns}
+      data={statement.lines}
+      rowKey={(row) => `${row.entryType}-${row.sourceId}-${row.entryDate}`}
+      emptyContent="No activity in this period"
+      renderCell={(row, key) => {
+        switch (key) {
+          case "entryDate":
+            return <span className="whitespace-nowrap">{formatDate(row.entryDate)}</span>;
+          case "entry":
+            return (
+              <div className="flex flex-col">
+                <span className="font-semibold">
+                  {entryTypeLabels[row.entryType]} {row.reference ?? row.paymentReference ?? ""}
+                </span>
+                {row.loadNumber && <span className="text-gray-500">Load {row.loadNumber}</span>}
+                {row.previousDue && <span className="text-gray-500">Previous due</span>}
+              </div>
+            );
+          case "debit":
+            return <Money amount={row.debit} currency={currency} />;
+          case "credit":
+            return <Money amount={row.credit} currency={currency} />;
+          case "runningBalance":
+            return <Money amount={row.runningBalance} currency={currency} className="font-semibold" />;
+          default:
+            return null;
+        }
+      }}
+    />
+  );
+}
 
-// One party's statement for the month to date, as of the last daily refresh
-// (`asOf`): previous dues brought forward, the invoices and payments in the
-// period, and the closing balance. Demo data until the API has statements.
+function StatementFigures({ statement }: { statement: PartyStatement }) {
+  const { currency, overdue } = statement;
+  const amount = (value: string, bold = false) => (
+    <Money amount={value} currency={currency} className={bold ? "font-semibold" : undefined} />
+  );
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 border-t-2 border-base-default pt-4">
+      <div className="flex flex-col gap-2">
+        <DetailRow label="Opening balance" value={amount(statement.openingBalance)} />
+        <DetailRow label="Invoiced in the period" value={amount(statement.invoiced)} />
+        <DetailRow label="Paid and credited" value={amount(statement.paidAndCredited)} />
+        <DetailRow label="Closing balance" value={amount(statement.closingBalance, true)} />
+        <DetailRow label="Of which previous dues" value={amount(statement.previousDues)} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <DetailRow label="Overdue 1–30 days" value={amount(overdue.days1to30)} />
+        <DetailRow label="Overdue 31–60 days" value={amount(overdue.days31to60)} />
+        <DetailRow label="Overdue 61–90 days" value={amount(overdue.days61to90)} />
+        <DetailRow label="Overdue 90+ days" value={amount(overdue.days90plus)} />
+      </div>
+    </div>
+  );
+}
+
+// One party's statement: the current one for the 7 days to today, worked
+// out live and not saved, or one of its saved statements. Shippers can be
+// emailed theirs, or sent their latest billing-period dues.
 export default function StatementModal({
   summary,
-  asOf,
   onClose,
 }: {
   summary: PartyAccountSummary;
-  asOf: string | undefined;
   onClose: () => void;
 }) {
   const { can } = useCan();
-  const invoices = statementInvoices(summary);
-  const payments = statementPayments(summary);
-  const history = findStatements(summary.partyId);
+  const { partyId, partyName } = summary;
   const isShipper = summary.type === PartyType.Shipper;
-  const opening = moneyText(summary.openingBalance, summary.currency);
-  const closing = moneyText(summary.balance, summary.currency);
-  const periodText = `${formatDate(statementPeriodFrom) ?? ""} to ${formatDateTime(asOf) ?? "the last refresh"}`;
+  const canEmail = isShipper && !!summary.statementEmail && can(Permission.ReportsSendEmail);
+  // Null: the current statement.
+  const [statementId, setStatementId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
 
-  const table: ExportTable<StatementLine> = {
-    title: `Statement - ${summary.partyName}`,
-    subtitle: `${periodText} · previous dues ${opening} · closing balance ${closing} · demo data`,
-    columns: [
-      { label: "Date", value: (row) => formatDate(row.date) ?? "" },
-      { label: "Reference", value: (row) => row.reference },
-      { label: "Detail", value: (row) => row.detail },
-      { label: "Amount", value: (row) => moneyText(row.amount, row.currency) },
-      {
-        label: "Invoice balance",
-        value: (row) => (row.balance === null ? "" : moneyText(row.balance, row.currency)),
-      },
-    ],
-    rows: [...invoices.map(invoiceLine), ...payments.map(paymentLine)].sort((a, b) =>
-      a.date.localeCompare(b.date)
-    ),
-  };
+  const current = useQuery({
+    queryKey: ["statements", "current", partyId],
+    queryFn: ({ signal }) => getCurrentStatement(partyId, signal),
+    enabled: statementId === null,
+  });
+  const saved = useQuery({
+    queryKey: ["statements", "detail", statementId],
+    queryFn: ({ signal }) => getStatement(statementId!, signal),
+    enabled: statementId !== null,
+  });
+  const shown = statementId === null ? current : saved;
+  const statement = shown.data;
+
+  const historyParams = { partyId, page: historyPage, limit: HISTORY_LIMIT };
+  const history = useQuery({
+    queryKey: ["statements", "history", historyParams],
+    queryFn: ({ signal }) => listStatementHistory(historyParams, signal),
+    placeholderData: keepPreviousData,
+  });
+
+  const queryClient = useQueryClient();
+  const sendMutation = (send: (partyId: string) => Promise<PartyStatement>, what: string) => ({
+    mutationFn: () => send(partyId),
+    onSuccess: (sent: PartyStatement) => {
+      emailOutcome(sent, what);
+      setHistoryPage(1);
+      void queryClient.invalidateQueries({ queryKey: ["statements"] });
+    },
+    onError: (error: Error) => toast.error(errorMessage(error)),
+  });
+  const email = useMutation(sendMutation(emailStatement, "statement"));
+  const dues = useMutation(sendMutation(sendLatestDues, "dues report"));
+  // Only a statement whose email did not go may be sent again; the API
+  // refuses one already sent.
+  const canResend = isShipper && can(Permission.ReportsSendEmail);
+  const resend = useMutation({
+    mutationFn: resendStatement,
+    onSuccess: (sent: PartyStatement) => {
+      emailOutcome(sent, "statement");
+      void queryClient.invalidateQueries({ queryKey: ["statements"] });
+    },
+    onError: (error: Error) => {
+      toast.error(errorMessage(error));
+      // 409: sent meanwhile, or email still off; show where it stands.
+      void queryClient.invalidateQueries({ queryKey: ["statements", "history"] });
+    },
+  });
+
+  const download = useFileDownload((format: StatementFormat) =>
+    statementId === null
+      ? downloadStatement(
+          { partyId },
+          format,
+          `Statement ${partyName} ${statement?.periodTo ?? "current"}.${format}`
+        )
+      : downloadStatement({ statementId }, format, `${statement?.number ?? "Statement"}.${format}`)
+  );
+  const downloading = (format: StatementFormat) =>
+    download.isPending && download.variables === format;
+  const status = statement?.emailStatus ? emailStatusChip[statement.emailStatus] : null;
 
   return (
     <FormModal
       isOpen
       onOpenChange={(open) => !open && onClose()}
-      title={`Statement: ${summary.partyName}`}
+      title={`Statement: ${partyName}`}
       size="5xl"
     >
       <div className="flex flex-wrap justify-between items-center gap-3">
-        <p className="text-sm text-[#707070]">{periodText} · demo data</p>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[#707070]">
+          {statement ? (
+            <>
+              <span className="font-semibold text-[#343A40]">
+                {statement.number ?? "Current statement, not saved"}
+              </span>
+              <span>
+                {formatDate(statement.periodFrom)} – {formatDate(statement.periodTo)} · as
+                of {formatDateTime(statement.asOf)}
+              </span>
+              {status && <StatusChip text={status.text} tone={status.tone} />}
+            </>
+          ) : (
+            <span>Loading the statement…</span>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
+          {statementId !== null && (
+            <BaseButton
+              text="Back to current"
+              varient="bordered"
+              className="text-base-primary rounded-xl px-3"
+              onPress={() => setStatementId(null)}
+            />
+          )}
           {can(Permission.ReportsExportPdf) && (
             <BaseButton
               text="PDF"
               varient="bordered"
               className="text-base-primary rounded-xl px-3"
               startContent={<PiFilePdf className="text-lg" />}
-              onPress={() => exportTable(table, "PDF")}
+              isDisabled={!statement}
+              isLoading={downloading("pdf")}
+              onPress={() => download.mutate("pdf")}
             />
           )}
           {can(Permission.ReportsExportCsv) && (
@@ -182,117 +330,123 @@ export default function StatementModal({
               varient="bordered"
               className="text-base-primary rounded-xl px-3"
               startContent={<PiFileXls className="text-lg" />}
-              onPress={() => exportTable(table, "Excel")}
+              isDisabled={!statement}
+              isLoading={downloading("xlsx")}
+              onPress={() => download.mutate("xlsx")}
             />
           )}
-          {isShipper && summary.statementEmail && can(Permission.ReportsSendEmail) && (
-            <BaseButton
-              text="Email statement"
-              className="rounded-xl px-3"
-              onPress={() =>
-                toast.info(
-                  `Statement to ${summary.statementEmail} — demo only, nothing was sent.`
-                )
-              }
-            />
+          {canEmail && (
+            <>
+              <BaseButton
+                text="Send latest dues"
+                varient="bordered"
+                className="text-base-primary rounded-xl px-3"
+                isLoading={dues.isPending}
+                isDisabled={email.isPending}
+                onPress={() => dues.mutate()}
+              />
+              <BaseButton
+                text="Email statement"
+                className="rounded-xl px-3"
+                isLoading={email.isPending}
+                isDisabled={dues.isPending}
+                onPress={() => email.mutate()}
+              />
+            </>
           )}
         </div>
       </div>
-
-      <DetailRow
-        label="Previous dues (opening balance)"
-        value={<Money amount={summary.openingBalance} currency={summary.currency} className="font-semibold" />}
-      />
-
-      <BaseTable<Invoice>
-        ariaLabel={`Invoices on the statement for ${summary.partyName}`}
-        columns={columns}
-        data={invoices}
-        rowKey={(row) => row.id}
-        emptyContent="No invoices billed this period"
-        renderCell={(row, key) => {
-          switch (key) {
-            case "number":
-              return <DemoInvoiceLink number={row.number} />;
-            case "invoiceDate":
-              return <span className="whitespace-nowrap">{formatDate(row.invoiceDate)}</span>;
-            case "dueDate":
-              return <span className="whitespace-nowrap">{formatDate(row.dueDate)}</span>;
-            case "total":
-              return <Money amount={row.total} currency={row.currency} />;
-            case "balance":
-              return <Money amount={row.balance} currency={row.currency} className="font-semibold" />;
-            case "status":
-              return (
-                <div className="flex flex-col items-start gap-1">
-                  <InvoiceStatusChip status={row.status} />
-                  <InvoiceFlags overdueDays={row.overdueDays} disputed={row.disputed} />
-                </div>
-              );
-            default:
-              return null;
-          }
-        }}
-      />
-
-      {payments.length > 0 && (
-        <BaseTable<Payment>
-          ariaLabel={`Payments on the statement for ${summary.partyName}`}
-          columns={paymentColumns}
-          data={payments}
-          rowKey={(row) => row.id}
-          renderCell={(row, key) => {
-            switch (key) {
-              case "number":
-                return <span className="font-bold">{row.number}</span>;
-              case "paidOn":
-                return <span className="whitespace-nowrap">{formatDate(row.paidOn)}</span>;
-              case "amount":
-                return <Money amount={row.amount} currency={row.currency} />;
-              case "appliedTo":
-                return row.allocations.length ? (
-                  <DemoInvoiceLinks
-                    numbers={row.allocations.map((allocation) => allocation.invoiceNumber)}
-                  />
-                ) : (
-                  <span className="text-gray-500">{appliedToText(row)}</span>
-                );
-              default:
-                return null;
-            }
-          }}
-        />
+      {statement?.sentTo && statement.sentTo.length > 0 && (
+        <p className="text-sm text-[#707070]">To {statement.sentTo.join(", ")}</p>
       )}
 
-      <div className="flex flex-col gap-2 border-t-2 border-base-default pt-4">
-        <DetailRow
-          label="Closing balance"
-          value={<Money amount={summary.balance} currency={summary.currency} className="font-semibold" />}
+      {shown.isError ? (
+        <ErrorState
+          message="We couldn't load this statement. Please try again."
+          onAction={() => void shown.refetch()}
         />
-        <DetailRow
-          label="Of which overdue"
-          value={<Money amount={summary.overdue} currency={summary.currency} />}
-        />
-      </div>
+      ) : statement ? (
+        <>
+          <StatementInvoices statement={statement} />
+          <StatementFigures statement={statement} />
+          <div className="flex flex-col gap-2">
+            <h3 className="text-base-primary font-semibold">Activity</h3>
+            <StatementActivity statement={statement} />
+          </div>
+        </>
+      ) : null}
 
-      {history.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-base-primary font-semibold">Statements sent</h3>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-base-primary font-semibold">Saved statements</h3>
+        {history.isError ? (
+          <ErrorState
+            message="We couldn't load the saved statements. Please try again."
+            onAction={() => void history.refetch()}
+          />
+        ) : history.data?.items.length === 0 ? (
+          <p className="text-sm text-gray-500">None yet.</p>
+        ) : (
           <ul className="flex flex-col gap-1 text-sm text-[#343A40]">
-            {history.map((statement) => (
-              <li key={statement.id} className="flex flex-wrap justify-between gap-2">
-                <span>
-                  {statement.id} ·{" "}
-                  {statement.kind === StatementRunKind.MonthEndEmail ? "Month-end" : "Friday"} ·{" "}
-                  {formatDate(statement.periodFrom)} – {formatDate(statement.periodTo)} · sent{" "}
-                  {formatDateTime(statement.sentAt)}
-                </span>
-                <Money amount={statement.closingBalance} currency={summary.currency} />
-              </li>
-            ))}
+            {history.data?.items.map((item) => {
+              const chip = item.emailStatus ? emailStatusChip[item.emailStatus] : null;
+              return (
+                <li
+                  key={item.statementId}
+                  className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 pb-1"
+                >
+                  <button
+                    type="button"
+                    className={`text-left hover:underline ${
+                      item.statementId === statementId ? "font-semibold text-base-primary" : ""
+                    }`}
+                    onClick={() => setStatementId(item.statementId)}
+                  >
+                    {item.id} · {formatDate(item.periodFrom)} – {formatDate(item.periodTo)} ·{" "}
+                    {formatDateTime(item.sentAt)}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {chip && <StatusChip text={chip.text} tone={chip.tone} />}
+                    {canResend &&
+                      (item.emailStatus === EmailStatus.Failed ||
+                        item.emailStatus === EmailStatus.Queued) && (
+                        <BaseButton
+                          text="Resend"
+                          varient="bordered"
+                          className="text-base-primary rounded-full px-3 h-7 min-w-0"
+                          isLoading={resend.isPending && resend.variables === item.statementId}
+                          isDisabled={resend.isPending}
+                          onPress={() => resend.mutate(item.statementId)}
+                        />
+                      )}
+                    <Money amount={item.closingBalance} currency={item.currency} />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
-        </div>
-      )}
+        )}
+        {history.data && history.data.meta.totalPages > 1 && (
+          <div className="flex items-center gap-2 text-sm">
+            <BaseButton
+              text="Newer"
+              varient="bordered"
+              className="text-base-primary rounded-xl px-3"
+              isDisabled={historyPage <= 1}
+              onPress={() => setHistoryPage((page) => page - 1)}
+            />
+            <span>
+              Page {historyPage} of {history.data.meta.totalPages}
+            </span>
+            <BaseButton
+              text="Older"
+              varient="bordered"
+              className="text-base-primary rounded-xl px-3"
+              isDisabled={historyPage >= history.data.meta.totalPages}
+              onPress={() => setHistoryPage((page) => page + 1)}
+            />
+          </div>
+        )}
+      </div>
     </FormModal>
   );
 }

@@ -5,6 +5,27 @@ import { ApiError } from "./api-client";
 const isRetryable = (error: unknown) =>
   !(error instanceof ApiError && error.status >= 400 && error.status < 500);
 
+// Every view that shows what is owed or paid. A payment, an allocation, a
+// write-off or a credit changes all of them: balances and unapplied credit,
+// the dashboard and aging (["accounts", …]), statements, reports, reminders
+// and the invoice pages. Refresh them together, so no screen keeps an old
+// amount after a change.
+const MONEY_VIEWS = [
+  "invoices",
+  "payments",
+  "accounts",
+  "statements",
+  "report",
+  "reminders",
+  "write-offs",
+  "disputes",
+];
+
+export const refreshMoneyViews = (client: QueryClient) =>
+  MONEY_VIEWS.forEach(
+    (key) => void client.invalidateQueries({ queryKey: [key] })
+  );
+
 // One client for the app, provided in app/providers.tsx.
 //
 // Mutations are never retried (TanStack's default, kept on purpose): retrying

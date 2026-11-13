@@ -1,20 +1,24 @@
 import { Card, Tab, Tabs } from "@heroui/react";
-import { useMemo, useState } from "react";
-import { HiOutlineCurrencyDollar } from "react-icons/hi2";
-import { LuSend } from "react-icons/lu";
 import {
-  PiArrowsClockwise,
-  PiCalendarDots,
-  PiFilePdf,
-  PiFileXls,
-  PiHandCoins,
-} from "react-icons/pi";
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { HiOutlineCurrencyDollar } from "react-icons/hi2";
+import { LuCalendarClock, LuRefreshCw } from "react-icons/lu";
+import { PiFilePdf, PiFileXls, PiHandCoins } from "react-icons/pi";
 import { toast } from "sonner";
 import {
   AlertBanner,
   BaseButton,
   BaseCardWrapper,
+  BaseInput,
   BaseTable,
+  ErrorState,
+  FilterBar,
   FormModal,
   Money,
   PartyAvatar,
@@ -22,31 +26,30 @@ import {
   StatCard,
   StatusChip,
 } from "@/components/common";
-import { EyeIcon } from "@/components/icons";
+import { EyeIcon, SearchNormalSm } from "@/components/icons";
 import { useCan } from "@/components/providers/user-provider";
-import { useClientTable } from "@/hooks";
-import { Currency, PartyType, Permission, StatementRunKind } from "@/lib/enums";
-import { ExportTable } from "@/lib/export";
-import { PartyAccountSummary } from "@/lib/interfaces";
-import {
-  mockAccountSummaries,
-  mockDashboard,
-  mockStatementRuns,
-  nextMonthEndStatementRun,
-  nextWeeklyStatementRun,
-} from "@/lib/mock";
+import { useDebouncedValue, useFileDownload, useServerPaging } from "@/hooks";
+import { Currency, PartyType, Permission, StatementRunTrigger } from "@/lib/enums";
+import { CurrencyAmounts, PartyAccountSummary, StatementRun } from "@/lib/interfaces";
 import { formatMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
-import { exportTable, ExportFormat, moneyText } from "../reports/export-table";
+import {
+  ApiError,
+  errorMessage,
+  exportAccountSummaries,
+  getDashboard,
+  getStatementSchedule,
+  listAccountSummaries,
+  listStatementRuns,
+  sendWeeklyStatements,
+} from "@/services";
+import BillingPeriods from "./billing-periods";
 import StatementModal from "./statement-modal";
 
-type View = "carriers" | "shippers";
-
-const viewTitles: Record<View, string> = {
-  carriers: "Carriers (payable)",
-  shippers: "Shippers (receivable)",
-};
+type View = "carriers" | "shippers" | "billing";
+type AccountsView = Exclude<View, "billing">;
+type ListFormat = "pdf" | "xlsx";
 
 // "2026-10-16" -> "Oct 2026". A calendar date, so read in UTC (see
 // formatDate in lib/utils).
@@ -57,137 +60,138 @@ const formatMonth = (date: string) =>
     timeZone: "UTC",
   });
 
-const columnsFor = (view: View): BaseTableColumn[] => [
-  { key: "party", label: view === "carriers" ? "Carrier" : "Shipper", sortable: true, sortKey: "partyName" },
-  { key: "volume", label: "Business Volume", sortable: true, sortKey: "businessVolume", sortType: "money", align: "end" },
-  { key: "balance", label: "Remaining Balance", sortable: true, sortType: "money", align: "end" },
-  { key: "overdue", label: "Overdue", sortable: true, sortType: "money", align: "end" },
-  { key: "lastPayment", label: "Last Payment", sortable: true, sortKey: "lastPayment.paidOn", sortType: "date" },
-  { key: "averagePaymentDays", label: "Avg. Payment Days", sortable: true, sortType: "number", align: "end" },
-  ...(view === "shippers" ? [{ key: "weekly", label: "Statement Emails" }] : []),
+// The API lists accounts by name and has no other order, so nothing sorts.
+const columnsFor = (view: AccountsView): BaseTableColumn[] => [
+  { key: "party", label: view === "carriers" ? "Carrier" : "Shipper" },
+  { key: "volume", label: "Business Volume", align: "end" },
+  { key: "balance", label: "Remaining Balance", align: "end" },
+  { key: "overdue", label: "Overdue", align: "end" },
+  { key: "lastPayment", label: "Last Payment" },
+  { key: "averagePaymentDays", label: "Avg. Payment Days", align: "end" },
+  ...(view === "shippers" ? [{ key: "weekly", label: "Weekly Statement" }] : []),
   { key: "actions", label: "Actions", align: "center" },
 ];
 
-const lastPaymentText = (row: PartyAccountSummary) =>
-  row.lastPayment
-    ? `${formatMonth(row.lastPayment.paidOn)} · ${row.lastPayment.invoiceRef ?? "not allocated yet"} · ${moneyText(row.lastPayment.amount, row.currency)} (${row.lastPayment.paymentNumber})`
-    : "No payments yet";
-
-const exportFor = (
-  view: View,
-  rows: PartyAccountSummary[],
-  asOf: string | undefined
-): ExportTable<PartyAccountSummary> => ({
-  title: view === "carriers" ? "Carrier statements" : "Shipper statements",
-  subtitle: `As of ${formatDateTime(asOf) ?? "the last refresh"} · demo data`,
-  columns: [
-    { label: view === "carriers" ? "Carrier" : "Shipper", value: (row) => row.partyName },
-    { label: "Business volume", value: (row) => moneyText(row.businessVolume, row.currency) },
-    { label: "Shipments", value: (row) => String(row.shipmentCount) },
-    { label: "Remaining balance", value: (row) => moneyText(row.balance, row.currency) },
-    { label: "Overdue", value: (row) => moneyText(row.overdue, row.currency) },
-    { label: "Days past due", value: (row) => (row.oldestOverdueDays > 0 ? String(row.oldestOverdueDays) : "") },
-    { label: "Last payment", value: lastPaymentText },
-    {
-      label: "Avg. payment days",
-      value: (row) => (row.averagePaymentDays === null ? "" : String(row.averagePaymentDays)),
-    },
-    ...(view === "shippers"
-      ? [
-          {
-            label: "Statement emails",
-            value: (row: PartyAccountSummary) => (row.weeklyStatement ? "On" : "Off"),
-          },
-        ]
-      : []),
-  ],
-  rows,
+// CAD, then USD and both in CAD. A side the role may not see, or that
+// hasn't loaded, is "—", never 0.00.
+const sideCard = (amounts: CurrencyAmounts | null, inCad: string | null) => ({
+  value: (amounts && formatMoney(amounts.CAD, Currency.CAD)) ?? "—",
+  caption: amounts
+    ? `+ ${formatMoney(amounts.USD, Currency.USD) ?? "—"} · ${formatMoney(inCad, Currency.CAD) ?? "—"} in all, at invoice-date rates`
+    : "",
 });
 
-// Requirement 2: each carrier's and shipper's account, refreshed daily, the
-// overall payable and receivable, and the Friday and month-end statement
-// emails. Demo data until the API has statements; the exports are real files
-// of these figures.
+const runTitle = (run: StatementRun) =>
+  `${formatDate(run.ranAt)} · ${run.partyCount} shippers${
+    run.trigger === StatementRunTrigger.Manual ? " · sent now" : ""
+  }`;
+
+// Requirement 2: each carrier's and shipper's account, the overall payable
+// and receivable, and the Friday statement emails. Balances are live: the
+// API works every figure out when it is asked.
 export default function Statements() {
-  const [selected, setView] = useState<View>("carriers");
-  const [open, setOpen] = useState<PartyAccountSummary | null>(null);
-  const [confirmSend, setConfirmSend] = useState(false);
   const { can } = useCan();
-  const d = mockDashboard;
+  const canShippers = can(Permission.CustomerInvoicesView);
+  const canCarriers = can(Permission.CarrierInvoicesView);
+  const canSend = canShippers && can(Permission.ReportsSendEmail);
+  const [chosenView, setView] = useState<View>("carriers");
+  const view: View =
+    chosenView === "carriers" && !canCarriers ? "shippers" : chosenView;
+  // The account lists below; the Billing Periods tab has its own.
+  const accountsView: AccountsView = view === "billing" ? "shippers" : view;
+  const [open, setOpen] = useState<PartyAccountSummary | null>(null);
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const { control } = useForm<{ search: string }>({
+    defaultValues: { search: "" },
+  });
+  const search = useDebouncedValue(useWatch({ control, name: "search" }).trim());
 
-  // Only the sides the role may view, as on Reminders. Advisory only: the API
-  // decides what each role gets.
-  const canViewShipper = can(Permission.CustomerInvoicesView);
-  const canViewCarrier = can(Permission.CarrierInvoicesView);
-  const views: View[] = [
-    ...(canViewCarrier ? (["carriers"] as const) : []),
-    ...(canViewShipper ? (["shippers"] as const) : []),
-  ];
-  const view = views.includes(selected) ? selected : (views[0] ?? "carriers");
-  const canViewSide = views.includes(view);
-
-  // Newest first.
-  const lastRefresh = mockStatementRuns.find(
-    (run) => run.kind === StatementRunKind.DailyRefresh
-  )?.ranAt;
-  const emailRuns = mockStatementRuns.filter(
-    (run) => run.kind !== StatementRunKind.DailyRefresh
-  );
-  const weeklyShippers = mockAccountSummaries.filter(
-    (row) => row.type === PartyType.Shipper && row.weeklyStatement
-  ).length;
-
-  const rows = useMemo(
-    () =>
-      canViewSide
-        ? mockAccountSummaries.filter((row) =>
-            view === "carriers"
-              ? row.type === PartyType.Carrier
-              : row.type === PartyType.Shipper
-          )
-        : [],
-    [view, canViewSide]
-  );
-  const columns = useMemo(() => columnsFor(view), [view]);
-  const table = useClientTable(rows, columns, {
-    column: "balance",
-    sortKey: "balance",
-    direction: "desc",
+  const dashboard = useQuery({
+    queryKey: ["accounts", "dashboard"],
+    queryFn: ({ signal }) => getDashboard(signal),
+  });
+  // The schedule and the runs are about shipper statements.
+  const schedule = useQuery({
+    queryKey: ["statements", "schedule"],
+    queryFn: ({ signal }) => getStatementSchedule(signal),
+    enabled: canShippers,
+  });
+  const runs = useQuery({
+    queryKey: ["statements", "runs"],
+    queryFn: ({ signal }) => listStatementRuns({ page: 1, limit: 5 }, signal),
+    enabled: canShippers,
   });
 
-  const runExport = (format: ExportFormat) =>
-    exportTable(exportFor(view, rows, lastRefresh), format);
+  const type = accountsView === "carriers" ? PartyType.Carrier : PartyType.Shipper;
+  const searchQuery = search.slice(0, 100);
+  const paging = useServerPaging(JSON.stringify([accountsView, searchQuery]));
+  const params = { page: paging.page, limit: paging.limit, type, searchQuery };
+  const summaries = useQuery({
+    queryKey: ["accounts", "summaries", params],
+    queryFn: ({ signal }) => listAccountSummaries(params, signal),
+    placeholderData: keepPreviousData,
+    enabled: view !== "billing",
+  });
 
+  const queryClient = useQueryClient();
+  const sendNow = useMutation({
+    mutationFn: sendWeeklyStatements,
+    onSuccess: (run) => {
+      const queued = run.queuedCount ? `, ${run.queuedCount} saved but not emailed` : "";
+      const failed = run.failedCount ? `, ${run.failedCount} failed` : "";
+      toast.success(`Weekly statements: ${run.sentCount} sent${queued}${failed}.`);
+      void queryClient.invalidateQueries({ queryKey: ["statements"] });
+      setConfirmingSend(false);
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      // 409: a run is already going; show it.
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["statements"] });
+      }
+    },
+  });
+
+  const listName =
+    accountsView === "carriers" ? "carrier-statements" : "shipper-statements";
+  const exportList = useFileDownload((format: ListFormat) =>
+    exportAccountSummaries({ type, searchQuery }, format, `${listName}.${format}`)
+  );
+  const exporting = (format: ListFormat) =>
+    exportList.isPending && exportList.variables === format;
+
+  const d = dashboard.data;
+  const s = schedule.data;
   const cards = [
     {
       icon: <HiOutlineCurrencyDollar className="text-[#45D483]" />,
       iconBgClass: "bg-icon-lightGreen",
       name: "Overall Shipper Receivable",
-      value: formatMoney(d.receivable.CAD, Currency.CAD) ?? "—",
-      caption: `+ ${formatMoney(d.receivable.USD, Currency.USD) ?? "—"} · ${formatMoney(d.receivableInCad, Currency.CAD) ?? "—"} in all, at invoice-date rates`,
+      ...sideCard(d?.receivable ?? null, d?.receivableInCad ?? null),
     },
     {
       icon: <PiHandCoins className="text-base-primary-200" />,
       iconBgClass: "bg-icon-lightDarkBlue",
       name: "Overall Carrier Payable",
-      value: formatMoney(d.payable.CAD, Currency.CAD) ?? "—",
-      caption: `+ ${formatMoney(d.payable.USD, Currency.USD) ?? "—"} · ${formatMoney(d.payableInCad, Currency.CAD) ?? "—"} in all, at invoice-date rates`,
+      ...sideCard(d?.payable ?? null, d?.payableInCad ?? null),
     },
     {
-      icon: <PiArrowsClockwise className="text-[#BC8EF0]" />,
+      icon: <LuRefreshCw className="text-[#BC8EF0]" />,
       iconBgClass: "bg-icon-lightPurple",
-      name: "Last Balance Refresh",
-      // Date only, so the value fits one line like the amounts beside it;
-      // the time is in the caption.
-      value: formatDate(lastRefresh) ?? "Not yet",
-      caption: "Balances refresh daily at 06:00",
+      name: "Balances",
+      value: "Live",
+      caption: s
+        ? `As of ${formatDateTime(s.asOf) ?? "—"}`
+        : "Worked out each time the page loads",
     },
     {
-      icon: <PiCalendarDots className="text-[#F871A0]" />,
+      icon: <LuCalendarClock className="text-[#F871A0]" />,
       iconBgClass: "bg-icon-lightRed",
-      name: "Next Statement Emails",
-      value: formatDate(nextWeeklyStatementRun) ?? "—",
-      caption: `At 08:00 to ${weeklyShippers} shippers · month-end run ${formatDate(nextMonthEndStatementRun) ?? "—"}`,
+      name: "Next Weekly Statements",
+      value: formatDateTime(s?.nextWeeklyRun) ?? "—",
+      caption: s
+        ? `Every Friday at 08:00 to ${s.weeklyShipperCount} shippers`
+        : "Every Friday at 08:00",
     },
   ];
 
@@ -259,7 +263,9 @@ export default function Statements() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AlertBanner message="Statements run on demo data until the Accounts API has payments and statements. Exports download these demo figures." />
+      {s && !s.emailEnabled && (
+        <AlertBanner message="Email is switched off: statements are saved but not emailed." />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {cards.map((card) => (
@@ -267,161 +273,155 @@ export default function Statements() {
         ))}
       </div>
 
-      {canViewSide ? (
+      <div className="flex flex-wrap justify-between items-end gap-3">
+        <Tabs
+          aria-label="Statements view"
+          color="primary"
+          variant="underlined"
+          selectedKey={view}
+          onSelectionChange={(key) => setView(key as View)}
+          classNames={{ base: "max-w-full", cursor: "bg-base-primary" }}
+        >
+          {canCarriers && <Tab key="carriers" title="Carriers (payable)" />}
+          {canShippers && <Tab key="shippers" title="Shippers (receivable)" />}
+          {canShippers && <Tab key="billing" title="Billing Periods" />}
+        </Tabs>
+        <div className={view === "billing" ? "hidden" : "flex gap-2"}>
+          {can(Permission.ReportsExportCsv) && (
+            <BaseButton
+              text="Excel"
+              varient="bordered"
+              className="text-base-primary rounded-xl px-3"
+              startContent={<PiFileXls className="text-lg" />}
+              isLoading={exporting("xlsx")}
+              onPress={() => exportList.mutate("xlsx")}
+            />
+          )}
+          {can(Permission.ReportsExportPdf) && (
+            <BaseButton
+              text="PDF"
+              varient="bordered"
+              className="text-base-primary rounded-xl px-3"
+              startContent={<PiFilePdf className="text-lg" />}
+              isLoading={exporting("pdf")}
+              onPress={() => exportList.mutate("pdf")}
+            />
+          )}
+        </div>
+      </div>
+
+      {view === "billing" ? (
+        <BillingPeriods />
+      ) : (
         <>
-          <div className="flex flex-wrap justify-between items-end gap-3">
-            <Tabs
-              aria-label="Statements view"
-              color="primary"
-              variant="underlined"
-              selectedKey={view}
-              onSelectionChange={(key) => setView(key as View)}
-              classNames={{ base: "max-w-full", cursor: "bg-base-primary" }}
-            >
-              {views.map((key) => (
-                <Tab key={key} title={viewTitles[key]} />
-              ))}
-            </Tabs>
-            <div className="flex gap-2">
-              {can(Permission.ReportsExportCsv) && (
-                <BaseButton
-                  text="Excel"
-                  varient="bordered"
-                  className="text-base-primary rounded-xl px-3"
-                  startContent={<PiFileXls className="text-lg" />}
-                  onPress={() => runExport("Excel")}
-                />
-              )}
-              {can(Permission.ReportsExportPdf) && (
-                <BaseButton
-                  text="PDF"
-                  varient="bordered"
-                  className="text-base-primary rounded-xl px-3"
-                  startContent={<PiFilePdf className="text-lg" />}
-                  onPress={() => runExport("PDF")}
-                />
-              )}
-            </div>
-          </div>
+          <FilterBar>
+            <BaseInput
+              name="search"
+              control={control}
+              className="max-w-sm"
+              classNames={{ inputWrapper: "bg-[#FFFFFF66] h-12 border-1 rounded-lg" }}
+              placeholder={
+                accountsView === "carriers" ? "Search carriers by name" : "Search shippers by name"
+              }
+              endContent={<SearchNormalSm />}
+            />
+          </FilterBar>
 
           <Card>
-            <BaseTable<PartyAccountSummary>
-              ariaLabel={view === "carriers" ? "Carrier statements" : "Shipper statements"}
-              columns={columns}
-              data={table.pageRows}
-              rowKey={(row) => row.partyId}
-              renderCell={renderCell}
-              meta={table.meta}
-              setMeta={table.setMeta}
-              sort={table.sort}
-              onSortChange={table.onSortChange}
-              bottomContent={view === "carriers" ? "Carriers" : "Shippers"}
-            />
+            {summaries.isError ? (
+              <ErrorState
+                message="We couldn't load the accounts. Please try again."
+                onAction={() => void summaries.refetch()}
+              />
+            ) : (
+              <BaseTable<PartyAccountSummary>
+                ariaLabel={
+                  accountsView === "carriers" ? "Carrier statements" : "Shipper statements"
+                }
+                columns={columnsFor(accountsView)}
+                data={summaries.data?.items ?? []}
+                loading={summaries.isPending}
+                refreshing={summaries.isPlaceholderData}
+                rowKey={(row) => row.partyId}
+                renderCell={renderCell}
+                meta={paging.tableMeta(summaries.data?.meta)}
+                setMeta={paging.setMeta}
+                bottomContent={accountsView === "carriers" ? "Carriers" : "Shippers"}
+                emptyContent={searchQuery ? "No accounts match this search" : "No accounts yet"}
+              />
+            )}
           </Card>
         </>
-      ) : (
-        <Card className="p-4">
-          <p className="text-sm text-gray-500">
-            Your role can&apos;t view shipper or carrier invoices, so there are
-            no statements to show.
-          </p>
-        </Card>
       )}
 
-      {/* Only shippers are emailed statements, so the schedule belongs to
-          their tab. */}
-      {canViewSide && view === "shippers" && (
+      {canShippers && (
         <BaseCardWrapper
-          heading="Statement Emails"
+          heading="Weekly Shipper Statements"
           action={
-            can(Permission.ReportsSendEmail) && (
+            canSend && (
               <BaseButton
-                text="Send statements now"
+                text="Send now"
                 className="rounded-xl px-4"
-                startContent={<LuSend />}
-                isDisabled={weeklyShippers === 0}
-                onPress={() => setConfirmSend(true)}
+                onPress={() => setConfirmingSend(true)}
               />
             )
           }
         >
           <p className="text-sm text-[#343A40] mb-4">
-            Emailed at 08:00 (Toronto time) every Friday and on the last
-            weekday of each month to the {weeklyShippers} shippers with
-            statement emails on. Each covers the month to date and opens with
-            the previous dues brought forward. Next Friday run{" "}
-            <strong>{formatDateTime(nextWeeklyStatementRun)}</strong>; next
-            month-end run <strong>{formatDateTime(nextMonthEndStatementRun)}</strong>.
+            Emailed every Friday at 08:00 (Toronto time) to the{" "}
+            {s?.weeklyShipperCount ?? "—"} shippers with weekly statements on.
+            Next run <strong>{formatDateTime(s?.nextWeeklyRun) ?? "—"}</strong>.
           </p>
-          <ul className="flex flex-col gap-2">
-            {emailRuns.map((run) => (
-              <li
-                key={run.id}
-                className="flex flex-wrap justify-between items-center gap-2 text-sm border-b border-gray-100 pb-2"
-              >
-                <span>
-                  {formatDate(run.ranAt)} ·{" "}
-                  {run.kind === StatementRunKind.MonthEndEmail ? "Month-end" : "Friday"} ·{" "}
-                  {run.partyCount} shippers
-                </span>
-                <div className="flex gap-1">
-                  <StatusChip text={`${run.sentCount ?? 0} sent`} tone="success" />
-                  {!!run.failedCount && (
-                    <StatusChip text={`${run.failedCount} failed`} tone="danger" />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          {runs.isError ? (
+            <ErrorState
+              message="We couldn't load the statement runs. Please try again."
+              onAction={() => void runs.refetch()}
+            />
+          ) : runs.data?.items.length === 0 ? (
+            <p className="text-sm text-gray-500">No weekly runs yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {runs.data?.items.map((run) => (
+                <li
+                  key={run.id}
+                  className="flex flex-wrap justify-between items-center gap-2 text-sm border-b border-gray-100 pb-2"
+                >
+                  <span>{runTitle(run)}</span>
+                  <div className="flex flex-wrap gap-1">
+                    <StatusChip text={`${run.sentCount} sent`} tone="success" />
+                    {run.queuedCount > 0 && (
+                      <StatusChip text={`${run.queuedCount} saved, not emailed`} tone="warning" />
+                    )}
+                    {run.skippedCount > 0 && (
+                      <StatusChip text={`${run.skippedCount} already sent`} tone="neutral" />
+                    )}
+                    {run.failedCount > 0 && (
+                      <StatusChip text={`${run.failedCount} failed`} tone="danger" />
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </BaseCardWrapper>
       )}
 
-      {open && (
-        <StatementModal summary={open} asOf={lastRefresh} onClose={() => setOpen(null)} />
-      )}
-      {confirmSend && (
-        <SendStatementsModal
-          shipperCount={weeklyShippers}
-          onClose={() => setConfirmSend(false)}
-        />
-      )}
-    </div>
-  );
-}
+      <FormModal
+        isOpen={confirmingSend}
+        onOpenChange={(isOpen) => !isOpen && setConfirmingSend(false)}
+        title="Send Weekly Statements"
+        confirmText="Send now"
+        onConfirm={() => sendNow.mutate()}
+        isConfirming={sendNow.isPending}
+      >
+        <p className="text-sm">
+          This week&apos;s statement goes now to the{" "}
+          {s?.weeklyShipperCount ?? "—"} shippers with weekly statements on,
+          including any that already had Friday&apos;s.
+        </p>
+      </FormModal>
 
-// Runs the statement email outside the schedule: the same month-to-date
-// statement the Friday run sends, to the same shippers. The schedule itself
-// doesn't change.
-function SendStatementsModal({
-  shipperCount,
-  onClose,
-}: {
-  shipperCount: number;
-  onClose: () => void;
-}) {
-  return (
-    <FormModal
-      isOpen
-      onOpenChange={(open) => !open && onClose()}
-      title="Send Statements Now"
-      confirmText="Send Now"
-      onConfirm={() => {
-        toast.info(
-          `Statements to ${shipperCount} shippers — demo only, nothing was sent.`
-        );
-        onClose();
-      }}
-    >
-      <p className="text-sm">
-        Emails each of the {shipperCount} shippers with statement emails on
-        their statement for the month to date, now instead of at the next
-        scheduled run ({formatDateTime(nextWeeklyStatementRun) ?? "—"}).
-      </p>
-      <p className="text-sm text-[#707070]">
-        The Friday and month-end runs still go out as scheduled. To send one
-        shipper&apos;s statement, open it from the table and use Email
-        statement.
-      </p>
-    </FormModal>
+      {open && <StatementModal summary={open} onClose={() => setOpen(null)} />}
+    </div>
   );
 }

@@ -5,7 +5,9 @@ import {
   StatementScope,
 } from "../enums";
 import { AutomationRule } from "../interfaces";
-import { REMINDER_DAYS_BEFORE_DUE } from "./accounts";
+
+// Days before the due date a reminder goes out (the requirement: 7).
+const REMINDER_DAYS_BEFORE_DUE = 7;
 
 // The company's default for each automated message, which a shipper or
 // carrier uses until staff customise it. Demo values: no API serves these

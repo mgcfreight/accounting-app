@@ -105,6 +105,30 @@ type Revision = {
 export type CustomerRevision = Revision & { acknowledgeReview?: boolean };
 export type CarrierRevision = Revision & { carrierInvoiceNumber?: string };
 
+// An adjustment (an extra charge) or a credit note (money off) on an
+// invoice. It gets the next letter on the number and is taxed at the
+// original invoice date's rates. A credit note can't take off more than the
+// invoice billed, less its earlier credit notes.
+export type Correction = {
+  parentInvoiceId: string;
+  // 3-255 characters; shown on the new invoice.
+  reason: string;
+  // Before tax, all positive; 1-50.
+  lines: Charge[];
+};
+
+// Carriers: the carrier's credit memo or extra bill number.
+export type CarrierCorrection = Correction & { carrierInvoiceNumber?: string };
+
+// Void for a cancelled load. An optional cancellation fee, before tax, is
+// billed on a new draft invoice with the next letter (230 -> 230a).
+export type VoidInvoice = {
+  version: number;
+  // 3-255 characters.
+  reason: string;
+  cancellationFee?: string;
+};
+
 // The API rejects empty query values, so leave out unset ones.
 const listQuery = (params: InvoiceListParams) => ({
   page: params.page,
@@ -154,6 +178,15 @@ export const getCustomerInvoice = (invoiceId: string, signal?: AbortSignal) =>
     .get("/invoice/customer", { params: { invoiceId }, signal })
     .then((res) => parseBody(customerInvoice, res.data).data);
 
+// By its number (sin_EGP9wr_230), with its lines.
+export const getCustomerInvoiceByNumber = (
+  invoiceNumber: string,
+  signal?: AbortSignal
+) =>
+  apiClient
+    .get("/invoice/customer/by-number", { params: { invoiceNumber }, signal })
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
 // Every version of the invoice, superseded ones included.
 export const getCustomerInvoiceVersions = (
   invoiceId: string,
@@ -195,6 +228,22 @@ export const reviseCustomerInvoice = (
     .post("/invoice/customer/revise", revision, { params: { invoiceId } })
     .then((res) => parseBody(customerInvoice, res.data).data);
 
+// On an issued invoice that isn't a credit note; made as a DRAFT, issued
+// like any other.
+export const createCustomerCorrection = (
+  kind: "adjustment" | "credit-note",
+  body: Correction
+) =>
+  apiClient
+    .post(`/invoice/customer/${kind}`, body)
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
+// A draft or issued invoice nothing has been applied to.
+export const voidCustomerInvoice = (invoiceId: string, body: VoidInvoice) =>
+  apiClient
+    .put("/invoice/customer/void", body, { params: { invoiceId } })
+    .then((res) => parseBody(customerInvoice, res.data).data);
+
 // -------------------------------------------------------------- carrier
 
 export const listCarrierInvoices = (
@@ -219,6 +268,15 @@ export const listCarrierInvoices = (
 export const getCarrierInvoice = (invoiceId: string, signal?: AbortSignal) =>
   apiClient
     .get("/invoice/carrier", { params: { invoiceId }, signal })
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// By our number (cin_EGP9wr_230), with its lines.
+export const getCarrierInvoiceByNumber = (
+  invoiceNumber: string,
+  signal?: AbortSignal
+) =>
+  apiClient
+    .get("/invoice/carrier/by-number", { params: { invoiceNumber }, signal })
     .then((res) => parseBody(carrierInvoice, res.data).data);
 
 export const getCarrierInvoiceVersions = (
@@ -264,4 +322,20 @@ export const reviseCarrierInvoice = (
 ) =>
   apiClient
     .post("/invoice/carrier/revise", revision, { params: { invoiceId } })
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// The carrier's extra charge or credit on a received, on-hold or approved
+// bill; recorded as RECEIVED, to be approved like any bill.
+export const createCarrierCorrection = (
+  kind: "adjustment" | "credit-note",
+  body: CarrierCorrection
+) =>
+  apiClient
+    .post(`/invoice/carrier/${kind}`, body)
+    .then((res) => parseBody(carrierInvoice, res.data).data);
+
+// A carrier invoice nothing has been paid on.
+export const voidCarrierInvoice = (invoiceId: string, body: VoidInvoice) =>
+  apiClient
+    .put("/invoice/carrier/void", body, { params: { invoiceId } })
     .then((res) => parseBody(carrierInvoice, res.data).data);

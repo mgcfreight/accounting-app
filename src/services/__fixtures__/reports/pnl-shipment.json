@@ -1,0 +1,79 @@
+{
+  "message": "Success",
+  "data": {
+    "items": [
+      {
+        "shipmentId": "shp_c9C553ntdR",
+        "mgcShipmentId": "LOCAL-SEED-SHP-8",
+        "loadNumber": "DEMO008",
+        "shipperId": "pty_61pcfGJq23",
+        "shipperName": "Demo Great Lakes Supply",
+        "carrierId": "pty_C6mPvzYY8F",
+        "carrierName": "Demo Day & Ross",
+        "revenue": "5617.00",
+        "carrierCost": "3000.00",
+        "grossMargin": "2617.00",
+        "marginPercent": "46.6"
+      },
+      {
+        "shipmentId": "shp_xQ80HUkJK2",
+        "mgcShipmentId": "LOCAL-SEED-SHP-5",
+        "loadNumber": "DEMO005",
+        "shipperId": "pty_zTHfVGL7GD",
+        "shipperName": "Demo Maple Leaf Foods",
+        "carrierId": "pty_xRUEk0Hfuu",
+        "carrierName": "Demo Manitoulin Transport",
+        "revenue": "3200.00",
+        "carrierCost": "2500.00",
+        "grossMargin": "700.00",
+        "marginPercent": "21.9"
+      },
+      {
+        "shipmentId": "shp_nNWi2xhSKm",
+        "mgcShipmentId": "LOCAL-SEED-SHP-9",
+        "loadNumber": "DEMO009",
+        "shipperId": "pty_61pcfGJq23",
+        "shipperName": "Demo Great Lakes Supply",
+        "carrierId": null,
+        "carrierName": null,
+        "revenue": "3151.00",
+        "carrierCost": "0.00",
+        "grossMargin": "3151.00",
+        "marginPercent": "100.0"
+      },
+      {
+        "shipmentId": "shp_vWysZrVmeJ",
+        "mgcShipmentId": "LOCAL-SEED-SHP-7",
+        "loadNumber": "DEMO007",
+        "shipperId": "pty_zTHfVGL7GD",
+        "shipperName": "Demo Maple Leaf Foods",
+        "carrierId": "pty_C6mPvzYY8F",
+        "carrierName": "Demo Day & Ross",
+        "revenue": "2750.00",
+        "carrierCost": "0.00",
+        "grossMargin": "2750.00",
+        "marginPercent": "100.0"
+      },
+      {
+        "shipmentId": "shp_Ba6fJeS1eZ",
+        "mgcShipmentId": "LOCAL-SEED-SHP-2",
+        "loadNumber": "DEMO002",
+        "shipperId": "pty_pYM2Ft3Kyc",
+        "shipperName": "Demo Northwind Distribution",
+        "carrierId": "pty_xRUEk0Hfuu",
+        "carrierName": "Demo Manitoulin Transport",
+        "revenue": "2200.00",
+        "carrierCost": "1780.00",
+        "grossMargin": "420.00",
+        "marginPercent": "19.1"
+      }
+    ],
+    "meta": {
+      "totalItems": 10,
+      "itemCount": 5,
+      "itemsPerPage": 5,
+      "totalPages": 2,
+      "currentPage": 1
+    }
+  }
+}

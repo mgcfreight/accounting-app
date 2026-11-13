@@ -29,6 +29,8 @@ export enum Permission {
   CustomerInvoicesVoid = "customer_invoices.void",
   CustomerInvoicesExportPdf = "customer_invoices.export_pdf",
   CustomerInvoicesSendEmail = "customer_invoices.send_email",
+  // Write a balance off as bad debt.
+  CustomerInvoicesWriteOff = "customer_invoices.write_off",
 
   CarrierInvoicesView = "carrier_invoices.view",
   // Adjustments and credit notes.
@@ -117,13 +119,36 @@ export enum PaymentDirection {
   Out = "OUT",
 }
 
+// The Accounts API's methods.
 export enum PaymentMethod {
   Card = "CARD",
   ETransfer = "E_TRANSFER",
   Eft = "EFT",
+  Ach = "ACH",
   Cheque = "CHEQUE",
   Wire = "WIRE",
   Cash = "CASH",
+  Other = "OTHER",
+}
+
+// A recorded payment stays POSTED until it is reversed (bounced cheque,
+// wrong party); a reversed one keeps its record.
+export enum PaymentRecordStatus {
+  Posted = "POSTED",
+  Reversed = "REVERSED",
+}
+
+// Where a USD rate to CAD came from: the Bank of Canada's daily rate, or
+// typed by staff.
+export enum FxRateSource {
+  BankOfCanada = "BANK_OF_CANADA",
+  Manual = "MANUAL",
+}
+
+export enum PaymentSortBy {
+  PaymentDate = "paymentDate",
+  Amount = "amount",
+  Unapplied = "unappliedAmount",
 }
 
 export enum MatchStatus {
@@ -137,10 +162,19 @@ export enum ReviewKind {
   AmountChange = "AMOUNT_CHANGE",
 }
 
-export enum SyncRunStatus {
-  Success = "SUCCESS",
+// One TMS event in the Accounts API's sync inbox. SKIPPED: older than what
+// is already held for the same record. FAILED: held until its cause is
+// fixed; tried again on each run.
+export enum SyncInboxStatus {
+  Received = "RECEIVED",
+  Applied = "APPLIED",
+  Skipped = "SKIPPED",
   Failed = "FAILED",
-  Running = "RUNNING",
+}
+
+export enum SyncTrigger {
+  Schedule = "SCHEDULE",
+  Manual = "MANUAL",
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +269,10 @@ export enum InvoiceReviewFlag {
   // Set by the Accounts API's TMS sync.
   TmsChanged = "TMS_CHANGED",
   TmsCancelled = "TMS_CANCELLED",
+  // No longer sent (accounting#59 dropped it); kept so older rows still read.
   UnknownCharge = "UNKNOWN_CHARGE",
+  // A synced invoice copies the TMS total as tax-included (accounting#59).
+  TaxUnconfirmed = "TAX_UNCONFIRMED",
 }
 
 // Invoice list sort columns (the API's InvoiceSortBy).
@@ -252,28 +289,77 @@ export enum SortOrder {
   Desc = "DESC",
 }
 
-// Statements, reminders, allocation, installments and disputes: no API yet;
-// the screens read lib/mock.
+// What made a statement: the Friday run (WEEKLY), a person ("Send now",
+// "Email statement", "Send latest dues": MANUAL), or the billing-period
+// notices job (SCHEDULED).
+export enum StatementTrigger {
+  Scheduled = "SCHEDULED",
+  Manual = "MANUAL",
+  Weekly = "WEEKLY",
+}
 
-export enum StatementRunKind {
-  DailyRefresh = "DAILY_REFRESH",
-  // Shipper statements every Friday, and on the last weekday of each month.
-  WeeklyEmail = "WEEKLY_EMAIL",
-  MonthEndEmail = "MONTH_END_EMAIL",
+// What started a weekly run: the Friday job, or "Send now".
+export enum StatementRunTrigger {
+  Scheduled = "SCHEDULED",
+  Manual = "MANUAL",
+}
+
+// A shipper's billing period: OPEN while it runs, NOTIFIED once its notice
+// went out, CLOSED after it ends.
+export enum BillingPeriodStatus {
+  Open = "OPEN",
+  Notified = "NOTIFIED",
+  Closed = "CLOSED",
+}
+
+export enum StatementEntryType {
+  Invoice = "INVOICE",
+  Adjustment = "ADJUSTMENT",
+  CreditNote = "CREDIT_NOTE",
+  Payment = "PAYMENT",
+  WriteOff = "WRITE_OFF",
+}
+
+// QUEUED: saved, not emailed (email is switched off).
+export enum EmailStatus {
+  Queued = "QUEUED",
+  Sent = "SENT",
+  Failed = "FAILED",
+  Bounced = "BOUNCED",
 }
 
 export enum ReminderChannel {
-  // Emailed to the shipper's accounts department.
+  // Emailed to the shipper's contacts.
   CustomerEmail = "CUSTOMER_EMAIL",
   // An alert to MGC's accounts team that a carrier bill falls due.
   TeamAlert = "TEAM_ALERT",
 }
 
+// SKIPPED includes reminders cancelled because the due date passed first.
 export enum ReminderStatus {
   Scheduled = "SCHEDULED",
   Sent = "SENT",
   Skipped = "SKIPPED",
 }
+
+// BEFORE_DUE, or OVERDUE (shippers, 7 and 30 days past due).
+export enum ReminderKind {
+  BeforeDue = "BEFORE_DUE",
+  Overdue = "OVERDUE",
+  InvoiceNotReceived = "INVOICE_NOT_RECEIVED",
+}
+
+export enum ReminderSkipReason {
+  Paid = "PAID",
+  Void = "VOID",
+  NoContact = "NO_CONTACT",
+  // The agreement in force has reminders off.
+  RemindersOff = "REMINDERS_OFF",
+  // Staff skipped it and said why.
+  Manual = "MANUAL",
+}
+
+// Installments and disputes: no API yet; the screens read lib/mock.
 
 export enum AllocationRule {
   InvoiceNumber = "INVOICE_NUMBER",
@@ -291,6 +377,36 @@ export enum InstallmentStatus {
 export enum DisputeStatus {
   Open = "OPEN",
   Resolved = "RESOLVED",
+}
+
+// What a file on an invoice is. Staff upload POD, BOL, RATE_CONFIRMATION,
+// CARRIER_INVOICE and OTHER; the rest the app makes.
+export enum DocumentKind {
+  Pod = "POD",
+  Bol = "BOL",
+  RateConfirmation = "RATE_CONFIRMATION",
+  CarrierInvoice = "CARRIER_INVOICE",
+  InvoicePdf = "INVOICE_PDF",
+  StatementPdf = "STATEMENT_PDF",
+  CsvReport = "CSV_REPORT",
+  ZipBundle = "ZIP_BUNDLE",
+  Other = "OTHER",
+}
+
+// UPLOAD by staff, GENERATED by the app (a PDF that was emailed), MGC from
+// the TMS.
+export enum DocumentSource {
+  Mgc = "MGC",
+  Upload = "UPLOAD",
+  Generated = "GENERATED",
+}
+
+// How a dispute ended. Money moves only through a credit note, or a write-off
+// (shippers only).
+export enum DisputeOutcome {
+  CreditNote = "CREDIT_NOTE",
+  PaysInFull = "PAYS_IN_FULL",
+  WriteOff = "WRITE_OFF",
 }
 
 // The automated messages a shipper or carrier can have, each set up on the

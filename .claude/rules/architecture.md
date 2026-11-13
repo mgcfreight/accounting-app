@@ -20,10 +20,17 @@ Last reviewed: 2026-10-20
 Sign-in (with 2FA and password reset), My Account, Users, Roles &
 Permissions, Sessions, the Audit Report, Settings (company, notifications,
 tax rates, charge types), Shippers and Carriers (with agreements),
-Shipments, and Shipper and Carrier Invoices (with versions) run on the
-Accounts API. The dashboard, Payments, Reports, Needs Review and Sync Status
-still read from `src/lib/mock/`, and their actions (record payment, export)
-show a "demo only" toast.
+Shipments, Shipper and Carrier Invoices (with versions), Payments (record,
+allocate, reverse), the Dashboard, Statements (with their PDF and Excel
+downloads, via `getFile` and `useFileDownload`), Reminders (send now,
+skip), Disputes (Needs Review, and "Flag as disputed" on an invoice),
+Reports (with the API's Excel and PDF of each), the invoice page's PDF,
+email, adjustments and credit notes, void, documents and write-offs, and
+Sync Status (`/sync/status`, `/sync/run`, `/sync/events`) run on the
+Accounts API.
+Installment plans and Needs Review's MGC changes (they come with the TMS
+sync) still read from `src/lib/mock/`, and their actions (new plan, the
+accountant export) show a "demo only" toast.
 
 The API sends party ids, not names, on shipments and carrier invoices:
 look them up with `usePartyNames` (`containers/parties`), and show the id
