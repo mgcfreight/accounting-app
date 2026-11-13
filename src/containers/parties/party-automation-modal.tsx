@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { CheckboxGroup } from "@heroui/react";
-import { FormModal } from "@/components/common";
+import { AlertBanner, FormModal } from "@/components/common";
 import {
   BaseCheckbox,
   BaseInput,
@@ -16,6 +16,7 @@ import {
   StatementScope,
 } from "@/lib/enums";
 import { AutomationRule } from "@/lib/interfaces";
+import { errorMessage } from "@/services";
 import {
   AutomationSpec,
   ContactsState,
@@ -26,7 +27,6 @@ import {
   unknownPlaceholders,
   WEEKDAYS,
 } from "./automation-rules";
-import { companyAutomationDefaults } from "@/lib/mock/automation";
 
 // ---------------------------------------------------------------------------
 // Select options
@@ -137,6 +137,7 @@ const fromForm = (
 export default function AutomationRuleModal({
   rule,
   spec,
+  defaults,
   contacts,
   unavailable,
   onSave,
@@ -144,13 +145,18 @@ export default function AutomationRuleModal({
 }: {
   rule: AutomationRule;
   spec: AutomationSpec;
+  // The company default for this message (its days from Settings).
+  defaults: AutomationRule;
   contacts: ContactsState;
   // Why the rule can't be switched on, or null when it can.
   unavailable: string | null;
-  onSave: (updated: AutomationRule) => void;
+  // Resolves once saved. On failure the modal stays open with what was
+  // typed, and says why.
+  onSave: (updated: AutomationRule) => Promise<void>;
   onClose: () => void;
 }) {
-  const defaults = companyAutomationDefaults[rule.kind];
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isCountDown = rule.kind === AutomationKind.BeforeDue;
   const activeContacts =
     contacts.status === "success" ? contacts.contacts.filter((c) => c.isActive) : [];
@@ -176,9 +182,23 @@ export default function AutomationRuleModal({
       onOpenChange={(open) => !open && onClose()}
       title={spec.label}
       confirmText="Save"
-      onConfirm={handleSubmit((values) => onSave(fromForm(values, rule, spec)))}
+      onConfirm={handleSubmit(async (values) => {
+        setSaving(true);
+        setSaveError(null);
+        try {
+          await onSave(fromForm(values, rule, spec));
+        } catch (error) {
+          setSaveError(errorMessage(error));
+        } finally {
+          setSaving(false);
+        }
+      })}
+      isConfirming={saving}
       size="2xl"
     >
+      {saveError && (
+        <AlertBanner message={`Not saved: ${saveError} Your changes are still here.`} />
+      )}
       <p className="text-xs text-content-5">{spec.help}</p>
 
       <BaseSwitch

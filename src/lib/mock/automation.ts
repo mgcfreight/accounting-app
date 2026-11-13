@@ -10,9 +10,11 @@ import { AutomationRule } from "../interfaces";
 const REMINDER_DAYS_BEFORE_DUE = 7;
 
 // The company's default for each automated message, which a shipper or
-// carrier uses until staff customise it. Demo values: no API serves these
-// yet. The before-due and overdue days match what the Accounts API does
-// today (7 days before; 7 and 30 days past due).
+// carrier uses until staff customise it. No API serves the texts and most
+// days yet, so they are built in here; the billing-notice and carrier-alert
+// days come from Settings (companyDefault in automation-rules.ts). The
+// before-due and overdue days match what the Accounts API does today (7 days
+// before; 7 and 30 days past due).
 
 export const DEFAULT_SEND_HOUR = 9;
 export const DEFAULT_SKIP_WEEKENDS = true;

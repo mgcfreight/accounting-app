@@ -10,6 +10,7 @@ import {
   AgreementView,
   AutomationRule,
   ContactView,
+  NoticeSettings,
   PartyAutomation,
 } from "@/lib/interfaces";
 import { EMAIL_SHAPE } from "@/lib/constants";
@@ -274,11 +275,62 @@ export function describeRule(rule: AutomationRule, spec: AutomationSpec): string
   }
 }
 
+// The days Settings holds (GET /settings/notices) for this party's
+// defaults: the billing-period notice for its payment terms, and the carrier
+// "payment due soon" alert. Null where Settings has none.
+export type SettingsDays = {
+  billingNoticeDays: number | null;
+  carrierAlertDays: number | null;
+};
+
+export const settingsDays = (
+  settings: NoticeSettings | undefined,
+  agreement: AgreementView | undefined
+): SettingsDays => {
+  const terms = agreement?.paymentTerms as string | undefined;
+  const byTerms = settings?.defaultNoticeDays as Record<string, number> | undefined;
+  return {
+    billingNoticeDays:
+      terms && byTerms && terms in byTerms ? byTerms[terms] : null,
+    carrierAlertDays: settings?.carrierAlertDaysBefore ?? null,
+  };
+};
+
+// The company default for one message. Its days come from Settings where
+// Settings has them, so a party never shows, or saves, other days than the
+// company's; the rest are built-in defaults.
+export function companyDefault(
+  kind: AutomationKind,
+  days: SettingsDays
+): AutomationRule {
+  const rule = { ...companyAutomationDefaults[kind] };
+  if (kind === AutomationKind.BillingNotice && days.billingNoticeDays !== null) {
+    rule.steps = [days.billingNoticeDays];
+  }
+  if (kind === AutomationKind.CarrierBillDue && days.carrierAlertDays !== null) {
+    rule.steps = [days.carrierAlertDays];
+  }
+  return rule;
+}
+
+// Where a default rule's settings come from. Only the billing-notice and
+// carrier-alert days can come from Settings, and only when Settings has them
+// (no billing-notice days for COD, PREPAID or NET_90, for instance); the rest
+// of every default, its texts included, is built into the app.
+export function defaultSource(kind: AutomationKind, days: SettingsDays): "settings" | "built-in" {
+  if (kind === AutomationKind.BillingNotice && days.billingNoticeDays !== null) return "settings";
+  if (kind === AutomationKind.CarrierBillDue && days.carrierAlertDays !== null) return "settings";
+  return "built-in";
+}
+
 // The rule in force: the company default unless customised. On/off is the
 // party's own either way.
-export function effectiveRule(rule: AutomationRule): AutomationRule {
+export function effectiveRule(
+  rule: AutomationRule,
+  days: SettingsDays
+): AutomationRule {
   if (rule.custom) return rule;
-  return { ...companyAutomationDefaults[rule.kind], enabled: rule.enabled };
+  return { ...companyDefault(rule.kind, days), enabled: rule.enabled };
 }
 
 // Why a message can't be switched on for this party, or null when it can.
@@ -301,10 +353,11 @@ export function unavailableReason(
 // in force (the real data); days set on the agreement count as customised.
 export function seedAutomation(
   type: PartyType,
-  agreement: AgreementView | undefined
+  agreement: AgreementView | undefined,
+  days: SettingsDays
 ): PartyAutomation {
   const rules = automationKinds(type).map((kind): AutomationRule => {
-    const rule = { ...companyAutomationDefaults[kind] };
+    const rule = companyDefault(kind, days);
     if (unavailableReason(kind, agreement)) rule.enabled = false;
     if (!agreement) return rule;
     switch (kind) {
@@ -353,3 +406,23 @@ export function seedAutomation(
 export const isPaused = (automation: PartyAutomation, today: string) =>
   automation.paused &&
   (automation.pausedUntil === null || automation.pausedUntil >= today);
+
+// What the card shows: the saved settings, or the seeded ones until there
+// are any. Rows always follow automationKinds(type), each filled from its
+// saved rule, so a kind missing from what was saved (added later, or not in
+// the response) still has a row, seeded like a new party's.
+export function automationFor(
+  type: PartyType,
+  agreement: AgreementView | undefined,
+  saved: PartyAutomation | null,
+  days: SettingsDays
+): PartyAutomation {
+  const seeded = seedAutomation(type, agreement, days);
+  if (!saved) return seeded;
+  return {
+    ...saved,
+    rules: seeded.rules.map(
+      (rule) => saved.rules.find((item) => item.kind === rule.kind) ?? rule
+    ),
+  };
+}

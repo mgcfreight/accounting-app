@@ -7,12 +7,14 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "@/lib/enums";
+import { PartyAutomation } from "@/lib/interfaces";
 import { apiClient, parseBody } from "./api-client";
 import {
   agreementSchema,
   contactSchema,
   envelope,
   paginated,
+  partyAutomationViewSchema,
   partySchema,
 } from "./schemas";
 
@@ -129,6 +131,26 @@ export const createContact = (contact: NewContact) =>
   apiClient
     .post("/party/contact", contact)
     .then((res) => parseBody(envelope(contactSchema), res.data).data);
+
+// The party's Notifications & Automation settings; `automation` is null until
+// saved. Saving (parties.edit) replaces them whole. Stored only: nothing is
+// sent from them yet.
+export const getAutomation = (partyId: string, signal?: AbortSignal) =>
+  apiClient
+    .get("/party/automation", { params: { partyId }, signal })
+    .then((res) => parseBody(envelope(partyAutomationViewSchema), res.data).data);
+
+// `expectedUpdatedAt`: the updatedAt the save was made from (null when none
+// was saved). Newer settings on the server answer 409: someone else saved
+// first, and the card reloads (accounting#77).
+export const saveAutomation = (
+  partyId: string,
+  automation: PartyAutomation,
+  expectedUpdatedAt: string | null
+) =>
+  apiClient
+    .put("/party/automation", { ...automation, expectedUpdatedAt }, { params: { partyId } })
+    .then((res) => parseBody(envelope(partyAutomationViewSchema), res.data).data);
 
 export const updateContact = (contactId: string, changes: ContactChanges) =>
   apiClient

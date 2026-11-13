@@ -30,6 +30,8 @@ import { formatDate, torontoToday } from "@/lib/utils";
 import {
   ApiError,
   errorMessage,
+  getAutomation,
+  getNoticeSettings,
   getParty,
   listCarrierInvoices,
   listContacts,
@@ -41,7 +43,7 @@ import {
   AgreementFormModal,
   ContactFormModal,
 } from "./party-modals";
-import { ContactsState } from "./automation-rules";
+import { ContactsState, settingsDays } from "./automation-rules";
 import PartyAutomationCard from "./party-automation";
 
 const invoiceColumns: BaseTableColumn[] = [
@@ -82,6 +84,18 @@ export default function PartyDetail({ type }: { type: PartyType }) {
   const party = useQuery({
     queryKey: ["parties", "detail", id],
     queryFn: ({ signal }) => getParty(id!, signal),
+    enabled: !!id,
+  });
+  // The automation card's data starts loading with the party, not after it
+  // (same keys as PartyAutomationContacts, which reads them).
+  useQuery({
+    queryKey: ["parties", "automation", id],
+    queryFn: ({ signal }) => getAutomation(id!, signal),
+    enabled: !!id,
+  });
+  useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
     enabled: !!id,
   });
 
@@ -485,9 +499,10 @@ function ProfileContacts({ party, canEdit }: { party: PartyView; canEdit: boolea
   );
 }
 
-// Loads contacts then renders the automation card, seeded from the agreement
-// in force; a different agreement re-seeds it.
-function PartyAutomationContacts({
+// Loads the party's saved automation settings and its contacts, then renders
+// the automation card: from the saved settings, or seeded from the agreement
+// in force until there are any (a different agreement re-seeds it).
+export function PartyAutomationContacts({
   partyId,
   type,
   agreement,
@@ -507,11 +522,54 @@ function PartyAutomationContacts({
     : contacts.isPending
       ? { status: "pending" }
       : { status: "success", contacts: contacts.data.filter((c) => c.isActive) };
+  const automation = useQuery({
+    queryKey: ["parties", "automation", partyId],
+    queryFn: ({ signal }) => getAutomation(partyId, signal),
+  });
+  // The company's days for the defaults (billing notice, carrier alert).
+  const notices = useQuery({
+    queryKey: ["settings", "notices"],
+    queryFn: ({ signal }) => getNoticeSettings(signal),
+  });
+
+  // A failed refetch keeps the last good data beside the error: the card
+  // stays, with what is being edited. The error shows only with no data.
+  // The message is the failed query's: the other may hold an older error
+  // beside good data.
+  const automationFailed = automation.isError && !automation.data;
+  const noticesFailed = notices.isError && !notices.data;
+  if (automationFailed || noticesFailed) {
+    return (
+      <BaseCardWrapper heading="Notifications & Automation">
+        <ErrorState
+          message={errorMessage(automationFailed ? automation.error : notices.error)}
+          onAction={() => {
+            void automation.refetch();
+            void notices.refetch();
+          }}
+        />
+      </BaseCardWrapper>
+    );
+  }
+  // The card starts from what it's given, so it waits for both.
+  if (!automation.data || !notices.data) {
+    return (
+      <BaseCardWrapper heading="Notifications & Automation">
+        <TableSkeleton />
+      </BaseCardWrapper>
+    );
+  }
   return (
     <PartyAutomationCard
+      // Only a different agreement re-seeds it; newer saved settings are
+      // taken in by the card itself, without a remount.
       key={agreement?.id ?? "none"}
+      partyId={partyId}
       type={type}
       agreement={agreement}
+      saved={automation.data.automation}
+      savedAt={automation.data.updatedAt}
+      days={settingsDays(notices.data, agreement)}
       canEdit={canEdit}
       contacts={contactsState}
     />
