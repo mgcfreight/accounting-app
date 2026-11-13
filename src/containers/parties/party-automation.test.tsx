@@ -5,6 +5,7 @@ import { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AutomationKind, PartyType } from "@/lib/enums";
 import { ContactView, PartyAutomation } from "@/lib/interfaces";
+import { ApiError } from "@/services";
 import { seedAutomation, SettingsDays } from "./automation-rules";
 import PartyAutomationCard from "./party-automation";
 
@@ -129,7 +130,7 @@ describe("PartyAutomationCard after the PR #41 re-review", () => {
       </QueryClientProvider>
     );
     const view = render(card({}));
-    return { ...view, update: (more: Props) => view.rerender(card(more)) };
+    return { ...view, client, update: (more: Props) => view.rerender(card(more)) };
   };
 
   const sent = (call = 0) => saveAutomation.mock.calls[call][1] as PartyAutomation;
@@ -259,5 +260,29 @@ describe("PartyAutomationCard after the PR #41 re-review", () => {
     const buttons = screen.getAllByRole("button", { name: "Customise" });
     expect(buttons).toHaveLength(before);
     buttons.forEach((button) => expect(button).toBeDisabled());
+  });
+
+  it("saves from the settings it read, so a later save by someone else is refused", async () => {
+    saveAutomation.mockImplementation(async (_id: string, next: PartyAutomation) => answer(next));
+    const saved = seedAutomation(PartyType.Shipper, undefined, NO_DAYS);
+    mount({ saved, savedAt: "2026-11-11T10:00:00.123Z" });
+    await userEvent.click(reminders());
+    await waitFor(() => expect(saveAutomation).toHaveBeenCalled());
+    expect(saveAutomation.mock.calls[0][2]).toBe("2026-11-11T10:00:00.123Z");
+  });
+
+  it("closes the form and reloads when someone else saved first (accounts, Q12)", async () => {
+    saveAutomation.mockRejectedValueOnce(
+      new ApiError("These settings were changed by someone else.", 409)
+    );
+    const { client } = mount();
+    const refetch = vi.spyOn(client, "invalidateQueries");
+    const row = reminders().closest("div.flex.flex-wrap") as HTMLElement;
+    await userEvent.click(within(row).getByRole("button", { name: "Customise" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(refetch).toHaveBeenCalledWith({ queryKey: ["parties", "automation", "pty_1"] });
   });
 });

@@ -140,9 +140,16 @@ export const getAutomation = (partyId: string, signal?: AbortSignal) =>
     .get("/party/automation", { params: { partyId }, signal })
     .then((res) => parseBody(envelope(partyAutomationViewSchema), res.data).data);
 
-export const saveAutomation = (partyId: string, automation: PartyAutomation) =>
+// `expectedUpdatedAt`: the updatedAt the save was made from (null when none
+// was saved). Newer settings on the server answer 409: someone else saved
+// first, and the card reloads (accounting#77).
+export const saveAutomation = (
+  partyId: string,
+  automation: PartyAutomation,
+  expectedUpdatedAt: string | null
+) =>
   apiClient
-    .put("/party/automation", automation, { params: { partyId } })
+    .put("/party/automation", { ...automation, expectedUpdatedAt }, { params: { partyId } })
     .then((res) => parseBody(envelope(partyAutomationViewSchema), res.data).data);
 
 export const updateContact = (contactId: string, changes: ContactChanges) =>

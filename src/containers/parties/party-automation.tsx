@@ -8,7 +8,7 @@ import { BaseInput, BaseSelect, BaseTextArea } from "@/components/common/form";
 import { AutomationKind, PartyType } from "@/lib/enums";
 import { AgreementView, AutomationRule, PartyAutomation } from "@/lib/interfaces";
 import { torontoToday } from "@/lib/utils";
-import { errorMessage, saveAutomation } from "@/services";
+import { ApiError, errorMessage, saveAutomation } from "@/services";
 import {
   automationFor,
   AutomationSpec,
@@ -383,7 +383,7 @@ export default function PartyAutomationCard({
     // back into the cache when it lands.
     onMutate: () => queryClient.cancelQueries({ queryKey }),
     mutationFn: ({ next }: { next: PartyAutomation; what: string }) =>
-      saveAutomation(partyId, next),
+      saveAutomation(partyId, next, seenSavedAt),
     onSuccess: async (view, { what }) => {
       // And one that started during the save (a refetch on focus, say).
       await queryClient.cancelQueries({ queryKey });
@@ -396,6 +396,18 @@ export default function PartyAutomationCard({
     },
     onError: (error) => {
       setAutomation(confirmed);
+      // Someone else saved first (accounts, 13 Nov 2026: stop the second
+      // save and reload). An open form was built from the older settings,
+      // so it closes; the newer ones are fetched and taken in.
+      if (error instanceof ApiError && error.status === 409) {
+        setEditingKind(null);
+        setEditingPause(false);
+        toast.error(
+          "Someone else changed these settings while you were working. They have been reloaded: check them, then make your change again."
+        );
+        void queryClient.invalidateQueries({ queryKey });
+        return;
+      }
       toast.error(errorMessage(error));
     },
   });
