@@ -26,6 +26,7 @@ export * from "./payments";
 export { queryClient, refreshMoneyViews } from "./query-client";
 export * from "./reminders";
 export * from "./reports";
+export * from "./reviews";
 export * from "./roles";
 export * from "./settings";
 export * from "./shipments";

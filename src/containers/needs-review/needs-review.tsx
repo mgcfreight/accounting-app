@@ -38,7 +38,6 @@ import {
   ReviewKind,
 } from "@/lib/enums";
 import { Dispute, ReviewItem } from "@/lib/interfaces";
-import { mockReviewItems } from "@/lib/mock";
 import { formatMoney } from "@/lib/money";
 import { BaseTableColumn } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -48,24 +47,28 @@ import {
   errorMessage,
   listCustomerInvoices,
   listDisputes,
+  listReviewItems,
   refreshMoneyViews,
   resolveDispute,
+  resolveReviewItem,
 } from "@/services";
-import { DemoInvoiceLink } from "../invoices/demo-invoice-link";
 import { invoiceListHref } from "../invoices/invoice-view";
+import { changeAction, changedText } from "./review-actions";
 
 type View = "changes" | "disputes";
 type Filters = { status: string; side: string; search: string };
 
 const ALL = "ALL";
 
+// The API lists changes newest first; nothing else sorts.
 const columns: BaseTableColumn[] = [
   { key: "kind", label: "Change" },
   { key: "shipment", label: "Shipment" },
   { key: "invoice", label: "Invoice" },
-  { key: "party", label: "Shipper" },
-  { key: "previous", label: "Amount Before", align: "end" },
-  { key: "next", label: "Amount Now", align: "end" },
+  { key: "party", label: "Party" },
+  { key: "side", label: "Side" },
+  { key: "previous", label: "On the Invoice", align: "end" },
+  { key: "next", label: "In MGC Freight Now", align: "end" },
   { key: "detectedAt", label: "Detected" },
   { key: "actions", label: "Actions" },
 ];
@@ -95,31 +98,42 @@ const outcomeLabels: Record<DisputeOutcome, string> = {
   [DisputeOutcome.WriteOff]: "Written off",
 };
 
-const isReceivable = (dispute: Dispute) =>
+const isReceivable = (dispute: { direction: InvoiceDirection }) =>
   dispute.direction === InvoiceDirection.Receivable;
 
-const invoiceHref = (dispute: Dispute) =>
-  `${invoiceListHref(dispute.direction)}view/?id=${encodeURIComponent(dispute.invoiceId)}`;
+const invoiceHref = (item: { direction: InvoiceDirection; invoiceId: string }) =>
+  `${invoiceListHref(item.direction)}view/?id=${encodeURIComponent(item.invoiceId)}`;
 
 const invoiceLabel = (dispute: Dispute) =>
   dispute.invoiceNumber ?? "No number yet";
 
-// Design §6.2 steps 4–5: MGC changes that touch issued invoices, resolved
-// with a note. They arrive with the TMS sync, so that tab is still demo
-// data. And the invoices a shipper or carrier disputes (requirement 3),
-// listed and resolved through the API.
+// Design §6.2 steps 4–5: invoices the TMS changed or cancelled after they
+// were invoiced. The sync flags them, and already updates a draft or
+// expected bill nobody edited. Staff act on the invoice -- change a draft's
+// amounts, revise it, a credit or debit note, void it -- or, for a carrier
+// bill in but not approved, just note it; then resolve the change here. And the invoices a shipper or carrier
+// disputes (requirement 3). Both run on the API.
 export default function NeedsReview() {
   const [view, setView] = useState<View>("disputes");
   const [resolving, setResolving] = useState<Dispute | null>(null);
-  const resolve = (what: string) =>
-    toast.info(`${what} — demo only, nothing was saved.`);
-  // A credit or debit note is a new adjustment (create); keeping the fee or
-  // dismissing resolves the invoice without one (edit).
+  const [resolvingChange, setResolvingChange] = useState<ReviewItem | null>(null);
   const { can } = useCan();
-  const canNote = can(Permission.CustomerInvoicesCreate);
-  const canResolveChange = can(Permission.CustomerInvoicesEdit);
+  const canResolveChange = (item: ReviewItem) =>
+    can(
+      item.direction === InvoiceDirection.Receivable
+        ? Permission.CustomerInvoicesEdit
+        : Permission.CarrierInvoicesEdit
+    );
   const canViewShipper = can(Permission.CustomerInvoicesView);
   const canViewCarrier = can(Permission.CarrierInvoicesView);
+
+  const changesPaging = useServerPaging("changes");
+  const changes = useQuery({
+    queryKey: ["reviews", "list", changesPaging.page, changesPaging.limit],
+    queryFn: ({ signal }) =>
+      listReviewItems({ page: changesPaging.page, limit: changesPaging.limit }, signal),
+    placeholderData: keepPreviousData,
+  });
 
   // Only the sides the role may view, and a side filter only when both.
   const sideOptions = [
@@ -163,36 +177,90 @@ export default function NeedsReview() {
     switch (key) {
       case "kind":
         return item.kind === ReviewKind.Cancellation ? (
-          <StatusChip text="Cancelled in MGC" tone="danger" />
+          <StatusChip text="Cancelled in MGC Freight" tone="danger" />
         ) : (
-          <StatusChip text="Amount changed" tone="warning" />
+          <div className="flex flex-col items-start gap-1">
+            <StatusChip text="Changed in MGC Freight" tone="warning" />
+            {item.changes.length > 0 && (
+              <span className="text-xs text-content-5">{changedText(item)}</span>
+            )}
+          </div>
         );
       case "shipment":
-        return <span className="font-mono">{item.shipmentId}</span>;
-      // Demo invoices aren't in the API, so their numbers link only in
-      // development (DemoInvoiceLink).
+        return <span className="font-mono">{item.loadNumber}</span>;
       case "invoice":
-        return <DemoInvoiceLink number={item.invoiceNumber} />;
+        return (
+          <Link to={invoiceHref(item)} className="font-bold text-base-primary-300 whitespace-nowrap">
+            {item.invoiceNumber ?? "No number yet"}
+          </Link>
+        );
+      // As on the Disputes tab: the side's colour and a Shipper/Carrier chip.
       case "party":
-        return <PartyAvatar name={item.partyName} tone="success" />;
-      case "previous":
-        return <Money amount={item.previousAmount} currency={item.currency} />;
-      case "next":
-        return <Money amount={item.newAmount} currency={item.currency} className="font-semibold" />;
-      case "detectedAt":
-        return <span className="whitespace-nowrap">{formatDateTime(item.detectedAt)}</span>;
-      case "actions":
-        return item.kind === ReviewKind.Cancellation ? (
-          <div className="flex gap-2">
-            {canNote && <BaseButton text="Approve Credit Note" className="rounded-full px-3" onPress={() => resolve("Credit note approved")} />}
-            {canResolveChange && <BaseButton text="Keep Cancellation Fee" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Cancellation fee kept")} />}
-          </div>
+        return (
+          <PartyAvatar
+            name={item.partyName}
+            tone={isReceivable(item) ? "success" : "primary"}
+          />
+        );
+      case "side":
+        return isReceivable(item) ? (
+          <StatusChip text="Shipper" tone="success" />
         ) : (
-          <div className="flex gap-2">
-            {canNote && <BaseButton text="Issue Debit Note" className="rounded-full px-3" onPress={() => resolve("Debit note issued")} />}
-            {canResolveChange && <BaseButton text="Dismiss" varient="bordered" className="rounded-full px-3 text-base-primary" onPress={() => resolve("Dismissed")} />}
+          <StatusChip text="Carrier" tone="primary" />
+        );
+      // The amount on the invoice now, with what it was before when the
+      // sync updated it (accounts, 13 Nov 2026).
+      case "previous":
+        return (
+          <div className="flex flex-col items-end">
+            <Money amount={item.currentAmount} currency={item.currency} />
+            {item.previousAmount !== item.currentAmount && (
+              <span className="text-xs text-content-5 whitespace-nowrap">
+                was <Money amount={item.previousAmount} currency={item.currency} />
+              </span>
+            )}
+            {item.updatedFromTms && (
+              <span className="text-xs text-content-5 whitespace-nowrap">
+                Updated from MGC Freight
+              </span>
+            )}
           </div>
         );
+      case "next":
+        return <Money amount={item.newAmount} currency={item.tmsCurrency} className="font-semibold" />;
+      case "detectedAt":
+        return <span className="whitespace-nowrap">{formatDateTime(item.detectedAt)}</span>;
+      // The invoice page holds the fixes (revise, credit or debit note, void
+      // with or without a cancellation fee); Resolve records what was done.
+      case "actions": {
+        const canAct = canResolveChange(item);
+        const action = changeAction(item, canAct);
+        return (
+          <div className="flex gap-2">
+            {action.link && (
+              <BaseButton
+                as={Link}
+                to={invoiceHref(item)}
+                text={action.link}
+                varient={canAct ? "solid" : "bordered"}
+                className={`rounded-full px-3 whitespace-nowrap ${
+                  canAct ? "" : "text-base-primary"
+                }`}
+              />
+            )}
+            {canAct && (
+              <BaseButton
+                text={action.resolve}
+                varient={action.link ? "bordered" : "solid"}
+                className={`rounded-full px-3 whitespace-nowrap ${
+                  action.link ? "text-base-primary" : ""
+                }`}
+                onPress={() => setResolvingChange(item)}
+              />
+            )}
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -306,20 +374,47 @@ export default function NeedsReview() {
             </div>
           }
         />
-        <Tab key="changes" title={`MGC changes (${mockReviewItems.length})`} />
+        <Tab
+          key="changes"
+          title={
+            <div className="flex items-center gap-2">
+              MGC changes
+              {/* Not after a failed refetch: the count would be stale. */}
+              {changes.data && !changes.isError && (
+                <StatusChip
+                  text={`${changes.data.meta.totalItems}`}
+                  tone="warning"
+                  className="px-2 py-0"
+                />
+              )}
+            </div>
+          }
+        />
       </Tabs>
       {view === "changes" ? (
         <>
-          <AlertBanner message="Issued invoices are never changed. Each change below is resolved with a credit or debit note, which is emailed with the invoice and logged in the audit trail. Demo data: these arrive with the TMS sync." />
+          <AlertBanner message="MGC Freight changed or cancelled these loads after they were invoiced. A draft or expected bill nobody had edited is already updated: check it and confirm. Change any other draft's amounts, or revise, credit or void an issued invoice, from its page. A carrier bill that is in but not approved keeps the carrier's amount: just add a note. Each is resolved here with a note, kept in the audit trail." />
           <Card>
-            <BaseTable
-              ariaLabel="Needs review"
-              columns={columns}
-              data={mockReviewItems}
-              rowKey={(row) => row.id}
-              renderCell={renderCell}
-              emptyContent="Nothing needs review"
-            />
+            {changes.isError ? (
+              <ErrorState
+                message="We couldn't load the MGC changes. Please try again."
+                onAction={() => void changes.refetch()}
+              />
+            ) : (
+              <BaseTable<ReviewItem>
+                ariaLabel="Needs review"
+                columns={columns}
+                data={changes.data?.items ?? []}
+                loading={changes.isPending}
+                refreshing={changes.isPlaceholderData}
+                rowKey={(row) => `${row.direction}-${row.invoiceId}`}
+                renderCell={renderCell}
+                meta={changesPaging.tableMeta(changes.data?.meta)}
+                setMeta={changesPaging.setMeta}
+                bottomContent="Changes"
+                emptyContent="Nothing needs review"
+              />
+            )}
           </Card>
         </>
       ) : (
@@ -382,7 +477,93 @@ export default function NeedsReview() {
       {resolving && (
         <ResolveDisputeModal dispute={resolving} onClose={() => setResolving(null)} />
       )}
+      {resolvingChange && (
+        <ResolveChangeModal
+          item={resolvingChange}
+          onClose={() => setResolvingChange(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// Clears an invoice's MGC change with a note on what was done about it.
+function ResolveChangeModal({
+  item,
+  onClose,
+}: {
+  item: ReviewItem;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { control, handleSubmit } = useForm<{ note: string }>({
+    defaultValues: { note: "" },
+  });
+  const resolve = useMutation({
+    mutationFn: (note: string) => resolveReviewItem(item, note.trim()),
+    onSuccess: () => {
+      toast.success(`Change on ${item.invoiceNumber ?? "the invoice"} resolved.`);
+      // Reviews and invoices, and the dashboard's Needs Review count
+      // (["accounts"]); the resolve is in the invoice's audit trail too.
+      refreshMoneyViews(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["audit"] });
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(errorMessage(error));
+      // Changed by someone else, or already resolved: refetch and close, so
+      // a retry starts from the refreshed row and its current version.
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ["reviews"] });
+        onClose();
+      }
+    },
+  });
+
+  return (
+    <FormModal
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title="Resolve MGC Change"
+      confirmText="Resolve"
+      isConfirming={resolve.isPending}
+      onConfirm={handleSubmit((values) => resolve.mutate(values.note))}
+    >
+      <p className="text-sm text-[#707070]">
+        {item.invoiceNumber ?? "No number yet"} · {item.partyName} ·{" "}
+        {item.kind === ReviewKind.Cancellation ? (
+          <>
+            Cancelled in MGC Freight · on the invoice{" "}
+            <Money amount={item.currentAmount} currency={item.currency} />
+          </>
+        ) : (
+          <>
+            {item.changes.length > 0 && <>Changed: {changedText(item)} · </>}
+            MGC Freight now <Money amount={item.newAmount} currency={item.tmsCurrency} /> ·
+            on the invoice <Money amount={item.currentAmount} currency={item.currency} />
+            {item.updatedFromTms && (
+              <>
+                {" "}(updated from{" "}
+                <Money amount={item.previousAmount} currency={item.currency} />)
+              </>
+            )}
+          </>
+        )}
+      </p>
+      <BaseTextArea
+        name="note"
+        control={control}
+        label="What was done"
+        placeholder="e.g. Credit note issued for the lower rate, or no change needed"
+        rules={{
+          validate: (value: string) => {
+            const note = value.trim();
+            if (!note) return "Say what was done";
+            return note.length <= 500 || "At most 500 characters";
+          },
+        }}
+      />
+    </FormModal>
   );
 }
 

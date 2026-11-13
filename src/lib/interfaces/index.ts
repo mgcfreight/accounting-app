@@ -30,6 +30,7 @@ import {
   ReminderKind,
   ReminderSkipReason,
   ReminderStatus,
+  ReviewChange,
   ReviewKind,
   SessionEndReason,
   SessionStatus,
@@ -340,15 +341,31 @@ export interface AllocationSuggestion {
   leftOver: string;
 }
 
+// GET /invoice/review: a live invoice the TMS changed or cancelled after it
+// was invoiced (accounting#65). currentAmount is on the invoice now, in
+// `currency`; previousAmount what it was before the change (the same unless
+// `updatedFromTms`: the sync already updated this untouched draft or expected
+// bill); newAmount the TMS's figure now, in `tmsCurrency` (0.00 for a
+// cancellation). `changes` says what MGC Freight changed.
 export interface ReviewItem {
-  id: string;
+  invoiceId: string;
+  direction: InvoiceDirection;
   kind: ReviewKind;
+  // Null for a draft without a number yet.
+  invoiceNumber: string | null;
+  invoiceStatus: string;
+  version: number;
   shipmentId: string;
-  invoiceNumber: string;
+  loadNumber: string;
+  partyId: string;
   partyName: string;
   currency: Currency;
+  currentAmount: string;
   previousAmount: string;
   newAmount: string;
+  tmsCurrency: Currency;
+  updatedFromTms: boolean;
+  changes: ReviewChange[];
   detectedAt: string;
 }
 

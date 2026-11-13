@@ -159,7 +159,19 @@ export enum MatchStatus {
 
 export enum ReviewKind {
   Cancellation = "CANCELLATION",
-  AmountChange = "AMOUNT_CHANGE",
+  // Any other change MGC Freight made; `changes` says what.
+  TmsChange = "TMS_CHANGE",
+}
+
+// What MGC Freight changed on an invoiced load (accounting#65).
+export enum ReviewChange {
+  Total = "TOTAL",
+  Currency = "CURRENCY",
+  Shipper = "SHIPPER",
+  References = "REFERENCES",
+  Addresses = "ADDRESSES",
+  ChargeLines = "CHARGE_LINES",
+  Carrier = "CARRIER",
 }
 
 // One TMS event in the Accounts API's sync inbox. SKIPPED: older than what
