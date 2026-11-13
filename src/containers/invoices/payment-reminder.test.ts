@@ -37,7 +37,7 @@ const agreement = {
 };
 
 const settings = {
-  defaultNoticeDays: { NET_7: 2, NET_15: 4, NET_30: 7, NET_60: 7 },
+  defaultNoticeDays: { NET_7: 2, NET_15: 4, NET_30: 7, NET_60: 7, NET_90: 7 },
   carrierAlertDaysBefore: 3,
 };
 
@@ -53,6 +53,21 @@ describe("paymentReminder", () => {
     expect(
       paymentReminder(shipperInvoice({ paymentTerms: PaymentTerms.Net15 }), agreement, settings, today)
     ).toEqual({ remindOn: "2026-11-26", daysBefore: 4 });
+  });
+
+  it("uses Settings' Net 90 days for a Net 90 shipper", () => {
+    const net90 = {
+      ...settings,
+      defaultNoticeDays: { ...settings.defaultNoticeDays, NET_90: 14 },
+    };
+    expect(
+      paymentReminder(
+        shipperInvoice({ paymentTerms: PaymentTerms.Net90, dueDate: "2027-01-28" }),
+        agreement,
+        net90,
+        today
+      )
+    ).toEqual({ remindOn: "2027-01-14", daysBefore: 14 });
   });
 
   it("prefers the shipper agreement's own days, even 0", () => {

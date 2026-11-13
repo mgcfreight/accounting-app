@@ -233,6 +233,7 @@ export const noticeSettingsSchema: z.ZodType<NoticeSettings> = z.object({
     NET_15: noticeDays,
     NET_30: noticeDays,
     NET_60: noticeDays,
+    NET_90: noticeDays,
   }),
   carrierAlertDaysBefore: z.number().int().min(0).max(60).nullable(),
   updatedAt: timestamp.nullable(),

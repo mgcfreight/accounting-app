@@ -6,6 +6,7 @@ import {
   TaxBasis,
   TaxTreatment,
 } from "../enums";
+import type { NoticeTerms } from "../interfaces";
 
 export const LOGIN_PATH = "/login/";
 export const HOME_PATH = "/dashboard/";
@@ -86,16 +87,17 @@ export const paymentTermsLabels: Record<PaymentTerms, string> = {
   [PaymentTerms.Net60]: "Net 60",
   [PaymentTerms.Net90]: "Net 90",
 };
-// Net 90 is shown but can't be saved yet: the Accounts API doesn't take it.
-// Forms that send terms use `paymentTermsOptions`, which leaves it out; the
-// agreement form offers it as a credit period and refuses it on save.
-export const PAYMENT_TERMS_NOT_IN_API: ReadonlySet<string> = new Set([
-  PaymentTerms.Net90,
-]);
-export const allPaymentTermsOptions = optionsFrom(paymentTermsLabels);
-export const paymentTermsOptions = allPaymentTermsOptions.filter(
-  (option) => !PAYMENT_TERMS_NOT_IN_API.has(option.value)
-);
+export const paymentTermsOptions = optionsFrom(paymentTermsLabels);
+
+// The one place that says COD and prepaid get no notice (NoticeTerms is the
+// type of the rest).
+export const isNoticeTerms = (terms: PaymentTerms): terms is NoticeTerms =>
+  terms !== PaymentTerms.COD && terms !== PaymentTerms.Prepaid;
+
+// Every term with a notice default, in the enum's order (Net 7 to Net 90):
+// derived, so a new payment term can't be left out.
+export const noticeTermsList: NoticeTerms[] =
+  Object.values(PaymentTerms).filter(isNoticeTerms);
 
 export const creditStatusLabels: Record<CreditStatus, string> = {
   [CreditStatus.Allowed]: "Credit allowed",
